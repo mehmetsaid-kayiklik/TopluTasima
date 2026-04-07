@@ -1,0 +1,439 @@
+package com.example.toplutasima.ui
+
+/**
+ * Centralized translatable strings for the app.
+ * All UI-facing text should come from here.
+ */
+object S {
+    private fun m(l: AppLanguage, tr: String, de: String, en: String) = when (l) {
+        AppLanguage.TR -> tr; AppLanguage.DE -> de; AppLanguage.EN -> en
+    }
+
+    // ── Navigation ──
+    fun navRecord(l: AppLanguage) = m(l, "Kayıt", "Aufnahme", "Record")
+    fun navSummary(l: AppLanguage) = m(l, "Özet", "Übersicht", "Summary")
+    fun navSettings(l: AppLanguage) = m(l, "Ayarlar", "Einstellungen", "Settings")
+
+
+    // ── RmvLogScreen — Header ──
+    fun logHeader(l: AppLanguage) = m(l, "🚌  RMV Kayıt", "🚌  RMV Aufnahme", "🚌  RMV Record")
+    fun logSubheader(l: AppLanguage) = m(l, "Yolculuk bilgilerini kaydet", "Reiseinformationen speichern", "Save trip information")
+    fun manualLogTitle(l: AppLanguage) = m(l, "✏️ Manuel Kayıt", "✏️ Manuelle Aufnahme", "✏️ Manual Record")
+    fun manualLogSubheader(l: AppLanguage) = m(l, "Bilgileri kendiniz girin", "Informationen manuell eingeben", "Enter info manually")
+    fun modeAuto(l: AppLanguage) = m(l, "Otomatik", "Automatisch", "Auto")
+    fun modeManual(l: AppLanguage) = m(l, "Manuel", "Manuell", "Manual")
+    fun directionLabel(l: AppLanguage) = m(l, "Yön", "Richtung", "Direction")
+
+    // ── Stop Selection ──
+    fun stopSelection(l: AppLanguage) = m(l, "📍  Durak Seçimi", "📍  Haltestellenauswahl", "📍  Stop Selection")
+    fun boardingStop(l: AppLanguage) = m(l, "Biniş durağı", "Einstiegshaltestelle", "Boarding stop")
+    fun alightingStop(l: AppLanguage) = m(l, "İniş durağı", "Ausstiegshaltestelle", "Alighting stop")
+    fun clear(l: AppLanguage) = m(l, "Temizle", "Löschen", "Clear")
+    fun search(l: AppLanguage) = m(l, "🔍  Ara", "🔍  Suchen", "🔍  Search")
+    fun selected(l: AppLanguage) = m(l, "✅ Seçildi", "✅ Ausgewählt", "✅ Selected")
+
+    // ── Date & Time ──
+    fun dateTime(l: AppLanguage) = m(l, "🕐  Tarih & Saat", "🕐  Datum & Zeit", "🕐  Date & Time")
+    fun date(l: AppLanguage) = m(l, "Tarih", "Datum", "Date")
+    fun time(l: AppLanguage) = m(l, "Saat", "Zeit", "Time")
+    fun fetchTimes(l: AppLanguage) = m(l, "🔄  Saatleri Getir", "🔄  Zeiten abrufen", "🔄  Fetch Times")
+
+    // ── Departures ──
+    fun departures(l: AppLanguage) = m(l, "🚏  Kalkışlar", "🚏  Abfahrten", "🚏  Departures")
+
+    // ── Planned Route ──
+    fun plannedRoute(l: AppLanguage) = m(l, "📋  Planlanan Güzergah", "📋  Geplante Route", "📋  Planned Route")
+    fun editDone(l: AppLanguage) = m(l, "✅ Bitti", "✅ Fertig", "✅ Done")
+    fun editEdit(l: AppLanguage) = m(l, "✏️ Düzenle", "✏️ Bearbeiten", "✏️ Edit")
+    fun departure(l: AppLanguage) = m(l, "Kalkış", "Abfahrt", "Departure")
+    fun arrival(l: AppLanguage) = m(l, "Varış", "Ankunft", "Arrival")
+    fun duration(l: AppLanguage) = m(l, "Süre", "Dauer", "Duration")
+    fun minutesShort(l: AppLanguage) = m(l, "dk", "Min", "min")
+    fun stops(l: AppLanguage) = m(l, "durak", "Haltestellen", "stops")
+    fun noRouteYet(l: AppLanguage) = m(l, "Henüz güzergah yok", "Noch keine Route", "No route yet")
+    fun transferDirect(l: AppLanguage) = m(l, "Aktarmasız", "Direkt", "Direct")
+    fun transferCount(n: Int, l: AppLanguage) = m(l, "$n aktarmalı", "$n Umstieg" + if (n > 1) "e" else "", "$n transfer" + if (n > 1) "s" else "")
+
+    // ── Additional Info ──
+    fun additionalInfo(l: AppLanguage) = m(l, "📝  Ek Bilgiler", "📝  Zusatzinfos", "📝  Additional Info")
+    fun weatherLabel(l: AppLanguage) = m(l, "Hava", "Wetter", "Weather")
+    fun seatedToggle(l: AppLanguage) = m(l, "💺  Oturabildim mi?", "💺  Sitzplatz bekommen?", "💺  Got a seat?")
+    fun ticketControl(l: AppLanguage) = m(l, "🎫  Bilet Kontrolü", "🎫  Fahrkartenkontrolle", "🎫  Ticket Control")
+    fun noteOptional(l: AppLanguage) = m(l, "Not (opsiyonel)", "Notiz (optional)", "Note (optional)")
+
+    // ── Weather items (internal key → display) ──
+    val weatherOptions = listOf(
+        "Bilinmiyor" to "❓",
+        "Bilinmiyor / Gece" to "🌙",
+        "Güneşli" to "☀️",
+        "Parçalı Bulutlu" to "⛅",
+        "Bulutlu" to "☁️",
+        "Yağmurlu" to "🌧️",
+        "Karlı" to "❄️",
+        "Fırtınalı" to "⛈️",
+        "Sisli" to "🌫️",
+        "Rüzgarlı" to "💨"
+    )
+
+    fun weatherName(key: String, l: AppLanguage): String = when (key) {
+        "Bilinmiyor" -> m(l, "Bilinmiyor", "Unbekannt", "Unknown")
+        "Bilinmiyor / Gece" -> m(l, "Gece", "Nacht", "Night")
+        "Güneşli" -> m(l, "Güneşli", "Sonnig", "Sunny")
+        "Parçalı Bulutlu" -> m(l, "Parçalı Bulutlu", "Teilweise bewölkt", "Partly Cloudy")
+        "Bulutlu" -> m(l, "Bulutlu", "Bewölkt", "Cloudy")
+        "Yağmurlu" -> m(l, "Yağmurlu", "Regnerisch", "Rainy")
+        "Karlı" -> m(l, "Karlı", "Schnee", "Snowy")
+        "Fırtınalı" -> m(l, "Fırtınalı", "Stürmisch", "Stormy")
+        "Sisli" -> m(l, "Sisli", "Neblig", "Foggy")
+        "Rüzgarlı" -> m(l, "Rüzgarlı", "Windig", "Windy")
+        else -> key
+    }
+
+    // ── Save / Actions ──
+    fun saveToSheets(l: AppLanguage) = m(l, "💾  Kaydet", "💾  Speichern", "💾  Save")
+    fun updateRecord(l: AppLanguage) = m(l, "✏️ Güncelle", "✏️ Aktualisieren", "✏️ Update")
+
+    // ── Actual Times ──
+    fun actualTimes(l: AppLanguage) = m(l, "⏱️  Gerçek Saatler", "⏱️  Tatsächliche Zeiten", "⏱️  Actual Times")
+    fun now(l: AppLanguage) = m(l, "Şu an", "Jetzt", "Now")
+    fun boarded(l: AppLanguage) = m(l, "🚏 Bindim", "🚏 Eingestiegen", "🚏 Boarded")
+    fun alighted(l: AppLanguage) = m(l, "🏁 İndim", "🏁 Ausgestiegen", "🏁 Alighted")
+
+    // ── Status ──
+    fun statusLabel(l: AppLanguage) = m(l, "Durum", "Status", "Status")
+
+    // ── All Stops (temporary) ──
+    fun allStopsTemp(l: AppLanguage) = m(l, "🗺️  Tüm Duraklar (Geçici)", "🗺️  Alle Haltestellen (Temp.)", "🗺️  All Stops (Temp.)")
+    fun lineStops(line: String, l: AppLanguage) = m(l, "$line durağı:", "$line Haltestellen:", "$line stops:")
+
+    // ── Summary Screen ──
+    fun allStopsTitle(l: AppLanguage) = m(l, "Tüm Duraklar", "Alle Haltestellen", "All Stops")
+    fun totalTrips(l: AppLanguage) = m(l, "Toplam Sefer", "Gesamtfahrten", "Total Trips")
+    fun seated(l: AppLanguage) = m(l, "oturma", "Sitzplatz", "seated")
+    fun control(l: AppLanguage) = m(l, "kontrol", "Kontrolle", "control")
+    fun vehicleTypes(l: AppLanguage) = m(l, "🚏  Araç Türleri", "🚏  Fahrzeugtypen", "🚏  Vehicle Types")
+    fun tripsByDay(l: AppLanguage) = m(l, "📅  Günlere Göre Sefer", "📅  Fahrten nach Wochentag", "📅  Trips by Day")
+    fun tripsByLine(l: AppLanguage) = m(l, "🚏  Hatlara Göre Sefer", "🚏  Fahrten nach Linie", "🚏  Trips by Line")
+    fun personalRecords(l: AppLanguage) = m(l, "🏆  Kişisel Rekorlar", "🏆  Persönliche Rekorde", "🏆  Personal Records")
+    fun recordLongestDay(l: AppLanguage) = m(l, "⏳  En Uzun Yolculuk Günü", "⏳  Längster Reisetag", "⏳  Longest Travel Day")
+    fun recordMostTripsDay(l: AppLanguage) = m(l, "📊  En Çok Sefer Yapılan Gün", "📊  Tag mit den meisten Fahrten", "📊  Most Trips Day")
+    fun tripsCount(l: AppLanguage) = m(l, "sefer", "Fahrten", "trips")
+    fun recordMostDelayed(l: AppLanguage) = m(l, "⚠️  Tek Seferde En Çok Geciken Hat", "⚠️  Größte Einzelverspätung", "⚠️  Largest Single Delay")
+    fun recordTotalDelayed(l: AppLanguage) = m(l, "📊  Toplamda En Geciken Hat", "📊  Meiste Gesamtverspätung", "📊  Most Total Delay")
+    fun recordFreqLine(l: AppLanguage) = m(l, "🔄  En Sık Kullanılan Hat", "🔄  Meistgenutzte Linie", "🔄  Most Used Line")
+    fun recordFreqFrom(l: AppLanguage) = m(l, "📍  En Sık Biniş Durağı", "📍  Häufigste Einstiegshaltestelle", "📍  Most Used Boarding Stop")
+    fun punctualityRates(l: AppLanguage) = m(l, "⏱️  Dakiklik Oranları", "⏱️  Pünktlichkeitsraten", "⏱️  Punctuality Rates")
+    fun totalPlanned(l: AppLanguage) = m(l, "📋  Planlanan Toplam Süre", "📋  Geplante Gesamtdauer", "📋  Total Planned Duration")
+    fun totalActual(l: AppLanguage) = m(l, "✅  Gerçek Toplam Süre", "✅  Tatsächliche Gesamtdauer", "✅  Total Actual Duration")
+    fun totalDelay(l: AppLanguage) = m(l, "🕐  Toplam Gecikme", "🕐  Gesamtverspätung", "🕐  Total Delay")
+    fun minutes(l: AppLanguage) = m(l, "Dakika", "Minuten", "Minutes")
+    fun avgDelay(l: AppLanguage) = m(l, "📈  Ortalama Gecikme", "📈  Durchschnittliche Verspätung", "📈  Average Delay")
+    fun refreshing(l: AppLanguage) = m(l, "⟳  Yenileniyor...", "⟳  Wird aktualisiert...", "⟳  Refreshing...")
+    fun refreshData(l: AppLanguage) = m(l, "🔄  Verileri Yenile", "🔄  Daten aktualisieren", "🔄  Refresh Data")
+    fun weatherStats(l: AppLanguage) = m(l, "🌤️  Hava Durumu", "🌤️  Wetter", "🌤️  Weather")
+    fun totalDistance(l: AppLanguage) = m(l, "📏  Toplam Mesafe", "📏  Gesamtentfernung", "📏  Total Distance")
+    fun tabTripsRecords(l: AppLanguage) = m(l, "🚌  Yolculuk & Rekorlar", "🚌  Fahrten & Rekorde", "🚌  Trips & Records")
+    fun tabDurationDelay(l: AppLanguage) = m(l, "⏱️  Süre & Gecikme", "⏱️  Dauer & Verspätung", "⏱️  Duration & Delay")
+
+    // ── Vehicle type display names ──
+    fun vehicleTypeName(key: String, l: AppLanguage): String = when (key) {
+        "Otobüs" -> m(l, "Otobüs", "Bus", "Bus")
+        "Straßenbahn" -> m(l, "Tramvay", "Straßenbahn", "Tram")
+        "Fernzug" -> m(l, "Hızlı Tren", "Fernzug", "High-speed Train")
+        else -> key // S-Bahn, U-Bahn, Re/Rb stay the same
+    }
+
+    // ── Day names (internal key → display) ──
+    fun dayName(key: String, l: AppLanguage): String = when (key) {
+        "Pazartesi" -> m(l, "Pazartesi", "Montag", "Monday")
+        "Salı" -> m(l, "Salı", "Dienstag", "Tuesday")
+        "Çarşamba" -> m(l, "Çarşamba", "Mittwoch", "Wednesday")
+        "Perşembe" -> m(l, "Perşembe", "Donnerstag", "Thursday")
+        "Cuma" -> m(l, "Cuma", "Freitag", "Friday")
+        "Cumartesi" -> m(l, "Cumartesi", "Samstag", "Saturday")
+        "Pazar" -> m(l, "Pazar", "Sonntag", "Sunday")
+        else -> key
+    }
+
+    // ── Sheet name translation ──
+    fun sheetAll(l: AppLanguage) = m(l, "Tümü", "Alle", "All")
+
+    // ── Month names (internal Turkish key → localized display) ──
+    fun monthName(key: String, l: AppLanguage): String = when (key) {
+        "Ocak" -> m(l, "Ocak", "Januar", "January")
+        "Şubat" -> m(l, "Şubat", "Februar", "February")
+        "Mart" -> m(l, "Mart", "März", "March")
+        "Nisan" -> m(l, "Nisan", "April", "April")
+        "Mayıs" -> m(l, "Mayıs", "Mai", "May")
+        "Haziran" -> m(l, "Haziran", "Juni", "June")
+        "Temmuz" -> m(l, "Temmuz", "Juli", "July")
+        "Ağustos" -> m(l, "Ağustos", "August", "August")
+        "Eylül" -> m(l, "Eylül", "September", "September")
+        "Ekim" -> m(l, "Ekim", "Oktober", "October")
+        "Kasım" -> m(l, "Kasım", "November", "November")
+        "Aralık" -> m(l, "Aralık", "Dezember", "December")
+        else -> key
+    }
+
+    // ── Settings Screen ──
+    fun settingsTitle(l: AppLanguage) = m(l, "⚙️  Ayarlar", "⚙️  Einstellungen", "⚙️  Settings")
+    fun themeTitle(l: AppLanguage) = m(l, "🎨  Tema", "🎨  Design", "🎨  Theme")
+    fun darkThemeActive(l: AppLanguage) = m(l, "Koyu tema aktif", "Dunkles Design aktiv", "Dark theme active")
+    fun lightThemeActive(l: AppLanguage) = m(l, "Açık tema aktif", "Helles Design aktiv", "Light theme active")
+    fun colorSettings(l: AppLanguage) = m(l, "🎨  Renk Ayarları", "🎨  Farbeinstellungen", "🎨  Color Settings")
+    fun bgColorHex(l: AppLanguage) = m(l, "Arka Plan (HEX)", "Hintergrund (HEX)", "Background (HEX)")
+    fun btnColorHex(l: AppLanguage) = m(l, "Buton Rengi (HEX)", "Buttonfarbe (HEX)", "Button Color (HEX)")
+    fun saveColors(l: AppLanguage) = m(l, "💾  Renkleri Kaydet", "💾  Farben speichern", "💾  Save Colors")
+    fun restartHint(l: AppLanguage) = m(l, "Renk değişikliği için uygulamayı yeniden başlatın", "App neustarten für Farbänderung", "Restart app for color changes")
+    fun languageTitle(l: AppLanguage) = m(l, "🌍  Dil", "🌍  Sprache", "🌍  Language")
+    fun clearFormButton(l: AppLanguage) = m(l, "🗑️ Temizle", "🗑️ Löschen", "🗑️ Clear")
+
+    // ── ViewModel Status Messages ──
+    fun statusReady(l: AppLanguage) = m(l, "Hazır", "Bereit", "Ready")
+    fun statusSearchingFrom(l: AppLanguage) = m(l, "Biniş durağı aranıyor...", "Einstiegshaltestelle wird gesucht...", "Searching boarding stop...")
+    fun statusFromNoResult(l: AppLanguage) = m(l, "Biniş: sonuç yok", "Einstieg: keine Ergebnisse", "Boarding: no results")
+    fun statusFromReady(l: AppLanguage) = m(l, "Biniş: seçenekler hazır ✅", "Einstieg: Optionen bereit ✅", "Boarding: options ready ✅")
+    fun statusSearchingTo(l: AppLanguage) = m(l, "İniş durağı aranıyor...", "Ausstiegshaltestelle wird gesucht...", "Searching alighting stop...")
+    fun statusToNoResult(l: AppLanguage) = m(l, "İniş: sonuç yok", "Ausstieg: keine Ergebnisse", "Alighting: no results")
+    fun statusToReady(l: AppLanguage) = m(l, "İniş: seçenekler hazır ✅", "Ausstieg: Optionen bereit ✅", "Alighting: options ready ✅")
+    fun statusFetchingDepartures(l: AppLanguage) = m(l, "Kalkışlar getiriliyor...", "Abfahrten werden abgerufen...", "Fetching departures...")
+    fun errorSelectStops(l: AppLanguage) = m(l, "Biniş ve iniş durağı seçmelisin", "Wähle Ein- und Ausstiegshaltestelle", "Select boarding and alighting stops")
+    fun statusNoDepartures(l: AppLanguage) = m(l, "Kalkış bulunamadı", "Keine Abfahrten gefunden", "No departures found")
+    fun statusDeparturesReady(count: Int, l: AppLanguage) = m(l, "Kalkışlar geldi ✅ ($count sefer)", "Abfahrten bereit ✅ ($count Fahrten)", "Departures ready ✅ ($count trips)")
+    fun statusFetchingPlan(l: AppLanguage) = m(l, "RMV'den plan çekiliyor...", "Plan wird von RMV abgerufen...", "Fetching plan from RMV...")
+    fun errorSelectFromList(l: AppLanguage) = m(l, "Listeden durak seçmelisin", "Wähle eine Haltestelle aus der Liste", "Select a stop from the list")
+    fun statusPlanReady(count: Int, l: AppLanguage) = m(l, "Plan geldi ✅ ($count araç)", "Plan bereit ✅ ($count Fahrzeuge)", "Plan ready ✅ ($count vehicles)")
+    fun statusSavingSheets(l: AppLanguage) = m(l, "Kaydediliyor...", "Wird gespeichert...", "Saving...")
+    fun errorGetPlanFirst(l: AppLanguage) = m(l, "Önce plan çek", "Zuerst Plan abrufen", "Get plan first")
+    fun errorSaveFailed(l: AppLanguage) = m(l, "Kayıt hatası", "Speicherfehler", "Save error")
+    fun statusSaved(l: AppLanguage) = m(l, "Kaydedildi ✅", "Gespeichert ✅", "Saved ✅")
+    fun statusSaving(l: AppLanguage) = m(l, "Kaydediliyor...", "Wird gespeichert...", "Saving...")
+    fun statusBoarded(time: String, l: AppLanguage) = m(l, "Bindim ✅ ($time)", "Eingestiegen ✅ ($time)", "Boarded ✅ ($time)")
+    fun statusAlighted(time: String, l: AppLanguage) = m(l, "İndim ✅ ($time)", "Ausgestiegen ✅ ($time)", "Alighted ✅ ($time)")
+    fun errorPrefix(l: AppLanguage) = m(l, "Hata", "Fehler", "Error")
+    fun unknownError(l: AppLanguage) = m(l, "Bilinmeyen Hata", "Unbekannter Fehler", "Unknown Error")
+
+    // ── formatMin localized ──
+    fun dayUnit(l: AppLanguage) = m(l, "Gün", "Tage", "Days")
+    fun hourUnit(l: AppLanguage) = m(l, "Saat", "Std", "Hrs")
+
+    // ── Change Stop Dialog ──
+    fun changeStop(l: AppLanguage) = m(l, "✏️ Durak Değiştir", "✏️ Haltestelle ändern", "✏️ Change Stop")
+    fun changeBoardingStop(l: AppLanguage) = m(l, "📥 Biniş Durağını Değiştir", "📥 Einstieg ändern", "📥 Change Boarding Stop")
+    fun changeAlightingStop(l: AppLanguage) = m(l, "📤 İniş Durağını Değiştir", "📤 Ausstieg ändern", "📤 Change Alighting Stop")
+    fun selectNewStop(l: AppLanguage) = m(l, "Yeni durak seçin:", "Neue Haltestelle wählen:", "Select new stop:")
+    fun oldValue(l: AppLanguage) = m(l, "Eski", "Alt", "Old")
+    fun newValue(l: AppLanguage) = m(l, "Yeni", "Neu", "New")
+    fun confirmChange(l: AppLanguage) = m(l, "✅ Onayla", "✅ Bestätigen", "✅ Confirm")
+    fun cancelChange(l: AppLanguage) = m(l, "İptal", "Abbrechen", "Cancel")
+    fun stopUpdated(l: AppLanguage) = m(l, "Durak güncellendi ✅", "Haltestelle aktualisiert ✅", "Stop updated ✅")
+    fun stopUpdateFailed(l: AppLanguage) = m(l, "Durak güncellenemedi", "Aktualisierung fehlgeschlagen", "Stop update failed")
+    fun savingStopChange(l: AppLanguage) = m(l, "Durak güncelleniyor...", "Haltestelle wird aktualisiert...", "Updating stop...")
+
+
+
+    // ── Restore Record ──
+    fun restoreRecord(l: AppLanguage) = m(l, "🔄 Geri Yükle", "🔄 Wiederherstellen", "🔄 Restore")
+
+    // ── Records Screen ──
+    fun navRecords(l: AppLanguage) = m(l, "Kayıtlar", "Einträge", "Records")
+    fun recordsTitle(l: AppLanguage) = m(l, "📋  Kayıtlar", "📋  Einträge", "📋  Records")
+    fun filterMonth(l: AppLanguage) = m(l, "Ay", "Monat", "Month")
+    fun filterType(l: AppLanguage) = m(l, "Tür", "Typ", "Type")
+    fun filterAll(l: AppLanguage) = m(l, "Tümü", "Alle", "All")
+    fun sortNewest(l: AppLanguage) = m(l, "Yeni → Eski", "Neu → Alt", "New → Old")
+    fun sortOldest(l: AppLanguage) = m(l, "Eski → Yeni", "Alt → Neu", "Old → New")
+    fun colDate(l: AppLanguage) = m(l, "Tarih", "Datum", "Date")
+    fun colDay(l: AppLanguage) = m(l, "Gün", "Tag", "Day")
+    fun colType(l: AppLanguage) = m(l, "Tür", "Typ", "Type")
+    fun colLine(l: AppLanguage) = m(l, "Hat", "Linie", "Line")
+    fun colDirection(l: AppLanguage) = m(l, "Yön", "Richtung", "Direction")
+    fun colBoardingStop(l: AppLanguage) = m(l, "Biniş Durağı", "Einstieg", "Boarding Stop")
+    fun colPlannedDep(l: AppLanguage) = m(l, "Plan. Biniş", "Plan. Abf.", "Plan. Dep.")
+    fun colActualDep(l: AppLanguage) = m(l, "Gerçek Biniş", "Tats. Abf.", "Act. Dep.")
+    fun colDelay(l: AppLanguage) = m(l, "Gecikme", "Versp.", "Delay")
+    fun colAlightingStop(l: AppLanguage) = m(l, "İniş Durağı", "Ausstieg", "Alighting Stop")
+    fun colPlannedArr(l: AppLanguage) = m(l, "Plan. İniş", "Plan. Ank.", "Plan. Arr.")
+    fun colActualArr(l: AppLanguage) = m(l, "Gerçek İniş", "Tats. Ank.", "Act. Arr.")
+    fun colDayType(l: AppLanguage) = m(l, "Gün Tipi", "Tagestyp", "Day Type")
+    fun colWeather(l: AppLanguage) = m(l, "Hava", "Wetter", "Weather")
+    fun colSeated(l: AppLanguage) = m(l, "Oturma", "Sitzplatz", "Seated")
+    fun colPlannedDuration(l: AppLanguage) = m(l, "Plan. Süre", "Plan. Dauer", "Plan. Dur.")
+    fun colActualDuration(l: AppLanguage) = m(l, "Gerçek Süre", "Tats. Dauer", "Act. Dur.")
+    fun colNote(l: AppLanguage) = m(l, "Not", "Notiz", "Note")
+    fun colTicketControl(l: AppLanguage) = m(l, "Bilet K.", "Fahrk.", "Ticket")
+    fun colDistance(l: AppLanguage) = m(l, "Mesafe", "Entf.", "Dist.")
+    fun colStops(l: AppLanguage) = m(l, "Durak", "Halt.", "Stops")
+    fun colId(l: AppLanguage) = m(l, "ID", "ID", "ID")
+    fun plannedDurationLabel(l: AppLanguage) = m(l, "Planlanan Süre", "Geplante Dauer", "Planned Duration")
+    fun actualDurationLabel(l: AppLanguage) = m(l, "Gerçek süre", "Tatsächliche Dauer", "Actual Duration")
+    fun editRecord(l: AppLanguage) = m(l, "Kaydı Düzenle", "Eintrag bearbeiten", "Edit Record")
+    fun deleteRecord(l: AppLanguage) = m(l, "🗑️ Sil", "🗑️ Löschen", "🗑️ Delete")
+    fun deleteConfirm(l: AppLanguage) = m(l, "Bu kaydı silmek istediğinize emin misiniz?", "Möchten Sie diesen Eintrag wirklich löschen?", "Are you sure you want to delete this record?")
+    fun save(l: AppLanguage) = m(l, "💾 Kaydet", "💾 Speichern", "💾 Save")
+    fun cancel(l: AppLanguage) = m(l, "İptal", "Abbrechen", "Cancel")
+    fun noRecords(l: AppLanguage) = m(l, "Kayıt bulunamadı", "Keine Einträge gefunden", "No records found")
+    fun recordDeleted(l: AppLanguage) = m(l, "Kayıt silindi ✅", "Eintrag gelöscht ✅", "Record deleted ✅")
+    fun recordUpdated(l: AppLanguage) = m(l, "Kayıt güncellendi ✅", "Eintrag aktualisiert ✅", "Record updated ✅")
+    fun yes(l: AppLanguage) = m(l, "Evet", "Ja", "Yes")
+    fun no(l: AppLanguage) = m(l, "Hayır", "Nein", "No")
+    fun happened(l: AppLanguage) = m(l, "Oldu", "Ja", "Yes")
+    fun didNotHappen(l: AppLanguage) = m(l, "Olmadı", "Nein", "No")
+
+    // ── Time Migration ──
+    fun stripSecondsButton(l: AppLanguage) = m(l, "⏰ Saatlerden Saniyeleri Temizle", "⏰ Sekunden aus Uhrzeiten entfernen", "⏰ Strip Seconds from Times")
+    fun stripSecondsConfirmTitle(l: AppLanguage) = m(l, "Saniyeleri Temizle", "Sekunden entfernen", "Strip Seconds")
+    fun stripSecondsConfirmText(l: AppLanguage) = m(l, "Tüm kayıtlardaki saat alanlarından saniyeler kaldırılacak (ör: 07:17:00 → 07:17). Devam etmek istiyor musunuz?", "Sekunden werden aus allen Zeitfeldern entfernt (z.B. 07:17:00 → 07:17). Fortfahren?", "Seconds will be stripped from all time fields (e.g. 07:17:00 → 07:17). Continue?")
+    fun stripSecondsRunning(l: AppLanguage) = m(l, "Saniyeler temizleniyor...", "Sekunden werden entfernt...", "Stripping seconds...")
+    fun stripSecondsDone(count: Int, l: AppLanguage) = m(l, "✅ $count kayıt güncellendi", "✅ $count Einträge aktualisiert", "✅ $count records updated")
+    fun stripSecondsFailed(l: AppLanguage) = m(l, "❌ Hata oluştu", "❌ Fehler aufgetreten", "❌ An error occurred")
+
+    // ── Yol Suresi Migration ──
+    fun migrateYolSuresiButton(l: AppLanguage) = m(l, "⏱️ Eksik Süreleri Hesapla", "⏱️ Fehlende Dauer berechnen", "⏱️ Calculate Missing Durations")
+    fun migrateYolSuresiConfirmTitle(l: AppLanguage) = m(l, "Süreleri Hesapla", "Dauer berechnen", "Calculate Durations")
+    fun migrateYolSuresiConfirmText(l: AppLanguage) = m(l, "Veritabanındaki tüm eski kayıtlar için planlanan ve gerçek yolculuk süreleri tekrar hesaplanacak. Devam etmek istiyor musunuz?", "Für alle alten Einträge in der Datenbank werden die geplante und tatsächliche Fahrzeit neu berechnet. Fortfahren?", "Planned and actual trip durations will be recalculated for all old records in the database. Continue?")
+    fun migrateYolSuresiRunning(l: AppLanguage) = m(l, "Süreler hesaplanıyor...", "Dauer wird berechnet...", "Calculating durations...")
+    fun migrateYolSuresiDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
+
+    // ── YearMonth Migration ──
+    fun migrateYearMonthButton(l: AppLanguage) = m(l, "📅 Eski Kayıtları Ay Alanıyla Güncelle", "📅 Alte Einträge mit Monatsfeld aktualisieren", "📅 Backfill Month Field on Old Records")
+    fun migrateYearMonthConfirmTitle(l: AppLanguage) = m(l, "Ay Alanını Ekle", "Monatsfeld hinzufügen", "Add Month Field")
+    fun migrateYearMonthConfirmText(l: AppLanguage) = m(l, "yearMonth alanı olmayan eski kayıtlara 'YYYY-MM' formatında ay bilgisi eklenecek. Bu işlem bir kez yapılması yeterlidir. Devam etmek istiyor musunuz?", "Alte Einträge ohne yearMonth-Feld erhalten das Format 'YYYY-MM'. Dieser Vorgang muss nur einmal durchgeführt werden. Fortfahren?", "Old records missing the yearMonth field will be updated with 'YYYY-MM' format. This only needs to be done once. Continue?")
+    fun migrateYearMonthRunning(l: AppLanguage) = m(l, "Ay alanı ekleniyor...", "Monatsfeld wird hinzugefügt...", "Adding month field...")
+    fun migrateYearMonthDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
+
+    // ── SortDate Migration ──
+    fun migrateSortDateButton(l: AppLanguage) = m(l, "📆 Eski Kayıtlara Sıralama Alanı Ekle", "📆 Sortierfeld auf alte Einträge anwenden", "📆 Backfill Sort Date on Old Records")
+    fun migrateSortDateConfirmTitle(l: AppLanguage) = m(l, "Sıralama Alanı Ekle", "Sortierfeld hinzufügen", "Add Sort Date Field")
+    fun migrateSortDateConfirmText(l: AppLanguage) = m(l, "Eski kayıtlara 'YYYY-MM-DD' formatında sortDate alanı eklenecek. Bu alan sayesinde kayıtlar kronolojik sırada listelenir. Bu işlem bir kez yapılması yeterlidir. Devam?", "Alte Einträge erhalten ein 'YYYY-MM-DD' sortDate-Feld für korrekte chronologische Sortierung. Nur einmal erforderlich. Fortfahren?", "Old records will receive a 'YYYY-MM-DD' sortDate field for correct chronological ordering. Only needs to be done once. Continue?")
+    fun migrateSortDateRunning(l: AppLanguage) = m(l, "Sıralama alanı ekleniyor...", "Sortierfeld wird hinzugefügt...", "Adding sort date field...")
+    fun migrateSortDateDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
+
+    // ── Favorites ──
+    fun favoritesTitle(l: AppLanguage) = m(l, "⭐ Favori Duraklar", "⭐ Lieblingshaltestellen", "⭐ Favorite Stops")
+    fun favBoardingStops(l: AppLanguage) = m(l, "Biniş Favorileri", "Einstieg-Favoriten", "Boarding Favorites")
+    fun favAlightingStops(l: AppLanguage) = m(l, "İniş Favorileri", "Ausstieg-Favoriten", "Alighting Favorites")
+    fun addToFavorites(l: AppLanguage) = m(l, "Favorilere Ekle", "Zu Favoriten", "Add to Favorites")
+    fun favLabel(l: AppLanguage) = m(l, "Etiket", "Bezeichnung", "Label")
+    fun favLabelHint(l: AppLanguage) = m(l, "Ev, İş, Okul...", "Zuhause, Arbeit, Schule...", "Home, Work, School...")
+    fun favUsageType(l: AppLanguage) = m(l, "Kullanım Türü", "Nutzungsart", "Usage Type")
+    fun favUsageBoarding(l: AppLanguage) = m(l, "Biniş", "Einstieg", "Boarding")
+    fun favUsageAlighting(l: AppLanguage) = m(l, "İniş", "Ausstieg", "Alighting")
+    fun favUsageBoth(l: AppLanguage) = m(l, "Her İkisi", "Beides", "Both")
+    fun favAdded(l: AppLanguage) = m(l, "✅ Favoriye eklendi", "✅ Zu Favoriten hinzugefügt", "✅ Added to favorites")
+    fun favRemoved(l: AppLanguage) = m(l, "Silindi", "Entfernt", "Removed")
+    fun favEmpty(l: AppLanguage) = m(l, "Henüz favori durak yok", "Noch keine Lieblingshaltestellen", "No favorite stops yet")
+    fun favManage(l: AppLanguage) = m(l, "Favori Yönetimi", "Favoritenverwaltung", "Manage Favorites")
+    fun favRename(l: AppLanguage) = m(l, "Yeniden Adlandır", "Umbenennen", "Rename")
+    fun favDelete(l: AppLanguage) = m(l, "Sil", "Löschen", "Delete")
+    fun favDeleteConfirm(l: AppLanguage) = m(l, "Bu favoriyi silmek istediğinize emin misiniz?", "Diesen Favoriten wirklich löschen?", "Are you sure you want to delete this favorite?")
+    fun favEditTitle(l: AppLanguage) = m(l, "Favoriyi Düzenle", "Favorit bearbeiten", "Edit Favorite")
+
+    // ── Nearby Stops ──
+    fun nearbyStopsTitle(l: AppLanguage) = m(l, "📍 Yakındaki Duraklar", "📍 Nahegelegene Haltestellen", "📍 Nearby Stops")
+    fun nearbyLoading(l: AppLanguage) = m(l, "Konum alınıyor...", "Standort wird ermittelt...", "Getting location...")
+    fun nearbyNone(l: AppLanguage) = m(l, "Yakında durak bulunamadı", "Keine Haltestellen in der Nähe", "No stops found nearby")
+    fun nearbyRefreshHint(l: AppLanguage) = m(l, "Yakındaki durakları görmek için Yenile'ye bas", "Tippe auf Aktualisieren, um nahegelegene Haltestellen zu laden", "Tap Refresh to load nearby stops")
+    fun nearbyPermissionNeeded(l: AppLanguage) = m(l, "Konum izni gerekli", "Standortberechtigung erforderlich", "Location permission required")
+    fun nearbyUse(l: AppLanguage) = m(l, "Seç", "Wählen", "Select")
+    fun nearbyMeters(dist: Int, l: AppLanguage) = m(l, "${dist}m", "${dist}m", "${dist}m")
+    fun nearbyRefresh(l: AppLanguage) = m(l, "Yenile", "Aktualisieren", "Refresh")
+
+    // ── Theme Modes ──
+    fun themeModeSystem(l: AppLanguage) = m(l, "Sistem", "System", "System")
+    fun themeModeLight(l: AppLanguage) = m(l, "Açık", "Hell", "Light")
+    fun themeModeDark(l: AppLanguage) = m(l, "Koyu", "Dunkel", "Dark")
+
+    // ── General ──
+    fun add(l: AppLanguage) = m(l, "Ekle", "Hinzufügen", "Add")
+
+    // ── Favorite Restore ──
+    fun favRestoreButton(l: AppLanguage) = m(l, "☁️ Favorileri Geri Yükle", "☁️ Favoriten wiederherstellen", "☁️ Restore Favorites")
+    fun favRestoreConfirmTitle(l: AppLanguage) = m(l, "Favorileri Geri Yükle", "Favoriten wiederherstellen", "Restore Favorites")
+    fun favRestoreConfirmText(l: AppLanguage) = m(l, "Firebase'deki favori duraklar lokale birleştirilecek. Mevcut favorileriniz korunur. Devam etmek istiyor musunuz?", "Favoriten aus Firebase werden mit lokalen zusammengeführt. Ihre bestehenden Favoriten bleiben erhalten. Fortfahren?", "Favorite stops from Firebase will be merged with local ones. Your existing favorites will be preserved. Continue?")
+    fun favRestoreRunning(l: AppLanguage) = m(l, "Geri yükleniyor...", "Wird wiederhergestellt...", "Restoring...")
+    fun favRestoreDone(count: Int, l: AppLanguage) = m(l, "✅ $count yeni favori eklendi", "✅ $count neue Favoriten hinzugefügt", "✅ $count new favorites added")
+    fun favRestoreEmpty(l: AppLanguage) = m(l, "Firebase'de favori bulunamadı", "Keine Favoriten in Firebase gefunden", "No favorites found in Firebase")
+    fun favRestoreFailed(l: AppLanguage) = m(l, "❌ Geri yükleme başarısız oldu", "❌ Wiederherstellung fehlgeschlagen", "❌ Restore failed")
+
+    // ── Maintenance Screen ──
+    fun maintenanceButton(l: AppLanguage) = m(l, "🔧 Veri Bakımı", "🔧 Datenwartung", "🔧 Data Maintenance")
+    fun maintenanceTitle(l: AppLanguage) = m(l, "🔧  Veri Bakımı", "🔧  Datenwartung", "🔧  Data Maintenance")
+    fun maintenanceBack(l: AppLanguage) = m(l, "← Geri", "← Zurück", "← Back")
+
+    // ── Record Filters ──
+    fun filterTitle(l: AppLanguage) = m(l, "🔍 Filtreler", "🔍 Filter", "🔍 Filters")
+    fun filterSearchHint(l: AppLanguage) = m(l, "Hat, durak, yön ara...", "Linie, Haltestelle, Richtung...", "Search line, stop, direction...")
+    fun filterVehicleType(l: AppLanguage) = m(l, "Araç Türü", "Fahrzeugtyp", "Vehicle Type")
+    fun filterWeather(l: AppLanguage) = m(l, "Hava Durumu", "Wetter", "Weather")
+    fun filterSeated(l: AppLanguage) = m(l, "Oturma", "Sitzplatz", "Seated")
+    fun filterSeatedYes(l: AppLanguage) = m(l, "Oturdu", "Sitzplatz", "Seated")
+    fun filterSeatedNo(l: AppLanguage) = m(l, "Ayakta", "Stehplatz", "Standing")
+    fun filterTicket(l: AppLanguage) = m(l, "Bilet Kontrolü", "Fahrkartenkontrolle", "Ticket Control")
+    fun filterTicketYes(l: AppLanguage) = m(l, "Kontrol Oldu", "Kontrolliert", "Checked")
+    fun filterTicketNo(l: AppLanguage) = m(l, "Kontrol Olmadı", "Nicht kontrolliert", "Not Checked")
+    fun filterDelayRange(l: AppLanguage) = m(l, "Gecikme Aralığı", "Verspätungsbereich", "Delay Range")
+    fun filterDelayMin(l: AppLanguage) = m(l, "Min (dk)", "Min (Min)", "Min (min)")
+    fun filterDelayMax(l: AppLanguage) = m(l, "Max (dk)", "Max (Min)", "Max (min)")
+    fun filterStopName(l: AppLanguage) = m(l, "Durak Adı", "Haltestellenname", "Stop Name")
+    fun filterStopNameHint(l: AppLanguage) = m(l, "Biniş veya iniş durağı...", "Ein- oder Ausstieg...", "Boarding or alighting stop...")
+    fun filterClearAll(l: AppLanguage) = m(l, "Filtreleri Temizle", "Filter zurücksetzen", "Clear Filters")
+    fun filterResultCount(count: Int, l: AppLanguage) = m(l, "$count kayıt bulundu", "$count Einträge gefunden", "$count records found")
+    fun filterNoResults(l: AppLanguage) = m(l, "Filtrelere uygun kayıt bulunamadı", "Keine passenden Einträge gefunden", "No records match the filters")
+    fun filterNoResultsHint(l: AppLanguage) = m(l, "Farklı filtreler deneyin veya filtreleri temizleyin", "Versuche andere Filter oder setze sie zurück", "Try different filters or clear them")
+    fun filterShow(l: AppLanguage) = m(l, "Filtrele", "Filtern", "Filter")
+    fun filterHide(l: AppLanguage) = m(l, "Gizle", "Ausblenden", "Hide")
+    fun filterActiveCount(count: Int, l: AppLanguage) = m(l, "$count aktif filtre", "$count aktive Filter", "$count active filters")
+
+    // ── Data Export ──
+    fun exportTitle(l: AppLanguage) = m(l, "📤 Dışa Aktar", "📤 Exportieren", "📤 Export")
+    fun exportCsv(l: AppLanguage) = m(l, "CSV (Tablo)", "CSV (Tabelle)", "CSV (Table)")
+    fun exportJson(l: AppLanguage) = m(l, "JSON (Geliştirici)", "JSON (Entwickler)", "JSON (Developer)")
+    fun exportPdf(l: AppLanguage) = m(l, "PDF (Rapor)", "PDF (Bericht)", "PDF (Report)")
+    fun exportChooseFormat(l: AppLanguage) = m(l, "Format Seçin", "Format wählen", "Choose Format")
+    fun exportSuccess(l: AppLanguage) = m(l, "✅ Dışa aktarma hazır", "✅ Export bereit", "✅ Export ready")
+    fun exportFailed(l: AppLanguage) = m(l, "❌ Dışa aktarma başarısız", "❌ Export fehlgeschlagen", "❌ Export failed")
+    fun exportShare(l: AppLanguage) = m(l, "Paylaş", "Teilen", "Share")
+
+    // ── Incomplete Records ──
+    fun incompleteTitle(l: AppLanguage) = m(l, "⚠️ Eksik Kayıtlar", "⚠️ Unvollständige Einträge", "⚠️ Incomplete Records")
+    fun incompleteCount(count: Int, l: AppLanguage) = m(l, "$count eksik", "$count unvollständig", "$count incomplete")
+    fun incompleteDesc(l: AppLanguage) = m(l, "Gerçek biniş veya iniş saati eksik", "Tatsächliche Ein-/Ausstiegszeit fehlt", "Actual boarding or alighting time missing")
+    fun incompleteMissingDep(l: AppLanguage) = m(l, "Gerçek biniş eksik", "Tatsächliche Abfahrt fehlt", "Actual departure missing")
+    fun incompleteMissingArr(l: AppLanguage) = m(l, "Gerçek iniş eksik", "Tatsächliche Ankunft fehlt", "Actual arrival missing")
+    fun incompleteMissingBoth(l: AppLanguage) = m(l, "Her iki saat eksik", "Beide Zeiten fehlen", "Both times missing")
+    fun incompleteTapToComplete(l: AppLanguage) = m(l, "Tamamlamak için dokun", "Zum Vervollständigen tippen", "Tap to complete")
+    fun incompleteShowAll(l: AppLanguage) = m(l, "Tümünü Göster", "Alle anzeigen", "Show All")
+    fun incompleteHide(l: AppLanguage) = m(l, "Gizle", "Ausblenden", "Hide")
+
+    // ── Data Health ──
+    fun dataHealthTitle(l: AppLanguage) = m(l, "🩺 Veri Sağlığı", "🩺 Datengesundheit", "🩺 Data Health")
+    fun dataHealthRun(l: AppLanguage) = m(l, "Kontrol Et", "Prüfen", "Run Check")
+    fun dataHealthRunning(l: AppLanguage) = m(l, "Kontrol ediliyor...", "Wird geprüft...", "Checking...")
+    fun dataHealthNoIssues(l: AppLanguage) = m(l, "✅ Sorun bulunamadı!", "✅ Keine Probleme gefunden!", "✅ No issues found!")
+    fun dataHealthIssuesFound(count: Int, l: AppLanguage) = m(l, "⚠️ $count sorun bulundu", "⚠️ $count Probleme gefunden", "⚠️ $count issues found")
+    fun healthDuplicate(l: AppLanguage) = m(l, "🔁 Yinelenen Kayıtlar", "🔁 Duplikate", "🔁 Duplicates")
+    fun healthMissingField(l: AppLanguage) = m(l, "⛔ Eksik Alanlar", "⛔ Fehlende Felder", "⛔ Missing Fields")
+    fun healthBadDate(l: AppLanguage) = m(l, "📅 Bozuk Tarih", "📅 Ungültiges Datum", "📅 Bad Date")
+    fun healthBadTime(l: AppLanguage) = m(l, "⏰ Bozuk Saat", "⏰ Ungültige Zeit", "⏰ Bad Time")
+    fun healthInconsistentDuration(l: AppLanguage) = m(l, "⏱️ Tutarsız Süre", "⏱️ Inkonsistente Dauer", "⏱️ Inconsistent Duration")
+    fun healthMissingDerived(l: AppLanguage) = m(l, "🔗 Eksik Türetilmiş Alan", "🔗 Fehlende abgeleitete Felder", "🔗 Missing Derived Fields")
+    fun healthAbnormalDelay(l: AppLanguage) = m(l, "⚠️ Anormal Gecikme", "⚠️ Abnormale Verspätung", "⚠️ Abnormal Delay")
+
+    // ── Monthly Comparison ──
+    fun tabComparison(l: AppLanguage) = m(l, "📊 Karşılaştırma", "📊 Vergleich", "📊 Comparison")
+    fun comparisonTitle(l: AppLanguage) = m(l, "Aylık Karşılaştırma", "Monatsvergleich", "Monthly Comparison")
+    fun comparisonPrevMonth(l: AppLanguage) = m(l, "Önceki Ay", "Vorheriger Monat", "Previous Month")
+    fun comparisonCurrentMonth(l: AppLanguage) = m(l, "Bu Ay", "Dieser Monat", "This Month")
+    fun comparisonNoData(l: AppLanguage) = m(l, "Karşılaştırma için önceki ay verisi yok", "Keine Vormonatsdaten zum Vergleichen", "No previous month data for comparison")
+    fun comparisonLoading(l: AppLanguage) = m(l, "Önceki ay yükleniyor...", "Vormonat wird geladen...", "Loading previous month...")
+
+    // ── Heatmap / Streak ──
+    fun heatmapTitle(l: AppLanguage) = m(l, "📅 Aktivite Haritası", "📅 Aktivitätskarte", "📅 Activity Map")
+    fun streakCurrent(l: AppLanguage) = m(l, "🔥 Mevcut Seri", "🔥 Aktuelle Serie", "🔥 Current Streak")
+    fun streakLongest(l: AppLanguage) = m(l, "🏆 En Uzun Seri", "🏆 Längste Serie", "🏆 Longest Streak")
+    fun streakActiveDays(l: AppLanguage) = m(l, "📅 Aktif Gün", "📅 Aktive Tage", "📅 Active Days")
+    fun streakDays(l: AppLanguage) = m(l, "gün", "Tage", "days")
+    fun streakNone(l: AppLanguage) = m(l, "Henüz seri yok", "Noch keine Serie", "No streak yet")
+
+}
