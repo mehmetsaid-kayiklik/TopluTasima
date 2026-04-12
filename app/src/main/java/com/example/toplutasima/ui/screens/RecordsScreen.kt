@@ -45,6 +45,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.model.PersonalTrip
+import com.example.toplutasima.ui.components.PersonalTripCard
+import com.example.toplutasima.viewmodel.PersonalTripViewModel
+import com.example.toplutasima.viewmodel.PersonalTripUiState
+import androidx.compose.foundation.lazy.items
 
 // ── Vehicle type → emoji mapping ──
 private fun typeEmoji(type: String): String = when (type) {
@@ -67,24 +72,37 @@ fun RecordsScreen(
     val state by viewModel.uiState.collectAsState()
     val lang = LocaleManager.currentLanguage
     val context = LocalContext.current
+    val personalViewModel: PersonalTripViewModel = koinViewModel()
+    val personalState by personalViewModel.uiState.collectAsState()
+    var showPersonal by remember { mutableStateOf(false) }
 
     // Edit dialog state
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // Fix Bug 1: Handle physical back button
-    BackHandler(enabled = state.selectedMonth != null) {
+    // Physical back button: Kişisel moddan çık, sonra ay seçimini kapat
+    BackHandler(enabled = showPersonal) { showPersonal = false }
+    BackHandler(enabled = !showPersonal && state.selectedMonth != null) {
         viewModel.clearSelectedMonth()
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (state.selectedMonth == null) {
+        if (showPersonal) {
+            // ── KİŞİSEL KAYITLAR MODU ──
+            PersonalRecordsContent(
+                uiState = personalState,
+                lang = lang,
+                viewModel = personalViewModel,
+                onBack = { showPersonal = false }
+            )
+        } else if (state.selectedMonth == null) {
             // ── LEVEL 1: Month List ──
             MonthListScreen(
                 summaries = state.monthSummaries,
                 isLoading = state.isLoading,
                 errorMsg = state.errorMsg,
                 lang = lang,
-                onMonthClick = { viewModel.selectMonth(it) }
+                onMonthClick = { viewModel.selectMonth(it) },
+                onTogglePersonal = { showPersonal = true }
             )
         } else {
             // ── LEVEL 2: Day/Trip List ──
@@ -117,8 +135,8 @@ fun RecordsScreen(
             )
         }
 
-        // ── Status bar ──
-        if (state.saveMsg.isNotBlank()) {
+        // ── Status bar (only in transit mode) ──
+        if (!showPersonal && state.saveMsg.isNotBlank()) {
             Text(
                 state.saveMsg,
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -179,15 +197,32 @@ fun MonthListScreen(
     isLoading: Boolean,
     errorMsg: String,
     lang: com.example.toplutasima.ui.AppLanguage,
-    onMonthClick: (com.example.toplutasima.network.FirestoreService.MonthSummary) -> Unit
+    onMonthClick: (com.example.toplutasima.network.FirestoreService.MonthSummary) -> Unit,
+    onTogglePersonal: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            S.recordsTitle(lang),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-        )
+        // Title + Kişisel toggle
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                S.recordsTitle(lang),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            TextButton(
+                onClick = onTogglePersonal,
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("🚗 ${S.modePersonal(lang)}", fontWeight = FontWeight.Bold)
+            }
+        }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
@@ -1330,4 +1365,134 @@ private fun EditRecordDialog(
             TextButton(onClick = onDismiss) { Text(S.cancel(lang)) }
         }
     )
+}
+
+// ── Kişisel Kayıtlar İçeriği (RecordsScreen içinde gösterilir) ───────────────
+@Composable
+fun PersonalRecordsContent(
+    uiState: PersonalTripUiState,
+    lang: com.example.toplutasima.ui.AppLanguage,
+    viewModel: PersonalTripViewModel,
+    onBack: () -> Unit
+) {
+    val trips = uiState.trips
+    val months = remember(trips) {
+        trips.map { it.yearMonth }.filter { it.isNotBlank() }.distinct().sortedDescending()
+    }
+    val doneTrips = remember(trips) { trips.filter { it.durum == PersonalTrip.DURUM_TAMAMLANDI } }
+    val totalDist = remember(doneTrips) {
+        doneTrips.sumOf { t -> t.mesafe.replace(" km","").replace(",",".").toDoubleOrNull() ?: 0.0 }
+    }
+    val topVehicle = remember(doneTrips) {
+        doneTrips.groupingBy { it.aracTuru }.eachCount().maxByOrNull { it.value }?.key ?: "—"
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Geri", modifier = Modifier.rotate(-90f))
+            }
+            Text(
+                S.personalTitle(lang),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Divider()
+
+        // Body
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            when {
+                uiState.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                trips.isEmpty() -> Text(
+                    "🚗  ${S.noRecords(lang)}",
+                    modifier = Modifier.align(Alignment.Center).padding(32.dp),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Ay filtreleri
+                        if (months.size > 1) {
+                            item {
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                                ) {
+                                    item {
+                                        FilterChip(
+                                            selected = uiState.selectedYearMonth == null,
+                                            onClick = { viewModel.setMonthFilter(null) },
+                                            label = { Text(S.all(lang), fontSize = 12.sp) }
+                                        )
+                                    }
+                                    items(months) { ym ->
+                                        FilterChip(
+                                            selected = uiState.selectedYearMonth == ym,
+                                            onClick = { viewModel.setMonthFilter(ym) },
+                                            label = { Text(ym, fontSize = 12.sp) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Özet şerit
+                        if (doneTrips.isNotEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceEvenly
+                                    ) {
+                                        PersonalStatChip(label = S.personalSummaryTotal(lang), value = "${trips.size}")
+                                        PersonalStatChip(label = S.personalSummaryTopType(lang), value = topVehicle)
+                                        PersonalStatChip(
+                                            label = S.personalSummaryTotalDist(lang),
+                                            value = if (totalDist > 0) String.format("%.0f km", totalDist) else "—"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Kayıt kartları
+                        items(trips, key = { it.id }) { trip ->
+                            PersonalTripCard(
+                                trip = trip,
+                                liveDistanceKm = if (trip.durum == PersonalTrip.DURUM_AKTIF) uiState.liveDistanceKm else 0.0,
+                                lang = lang,
+                                viewModel = viewModel
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonalStatChip(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    }
 }

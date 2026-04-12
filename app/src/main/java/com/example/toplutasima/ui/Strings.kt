@@ -436,4 +436,50 @@ object S {
     fun streakDays(l: AppLanguage) = m(l, "gün", "Tage", "days")
     fun streakNone(l: AppLanguage) = m(l, "Henüz seri yok", "Noch keine Serie", "No streak yet")
 
+    // ── Ortak Yardımcı İfadeler ──
+    fun delete(l: AppLanguage) = m(l, "Sil", "Löschen", "Delete")
+    fun all(l: AppLanguage) = m(l, "Tümü", "Alle", "All")
+
+    // ── Kişisel Araç Yolculuğu ──
+    fun modePersonal(l: AppLanguage) = m(l, "Kişisel", "Persönlich", "Personal")
+    fun personalTitle(l: AppLanguage) = m(l, "🚗 Kişisel Binişler", "🚗 Persönliche Fahrten", "🚗 Personal Trips")
+    fun personalVehicleType(l: AppLanguage) = m(l, "Araç Türü", "Fahrzeugtyp", "Vehicle Type")
+    fun personalPlate(l: AppLanguage) = m(l, "Plaka", "Kennzeichen", "Plate")
+    fun personalDriver(l: AppLanguage) = m(l, "Sürücü Ben miydim?", "War ich der Fahrer?", "Was I the driver?")
+    fun personalPassengerCount(l: AppLanguage) = m(l, "Yolcu Sayısı", "Fahrgastzahl", "Passenger Count")
+    fun personalBindim(l: AppLanguage) = m(l, "🚗 Bindim", "🚗 Eingestiegen", "🚗 Boarded")
+    fun personalIndim(l: AppLanguage) = m(l, "🏁 İndim", "🏁 Ausgestiegen", "🏁 Alighted")
+    fun personalFrom(l: AppLanguage) = m(l, "Kalkış Yeri", "Abfahrtsort", "Departure Place")
+    fun personalTo(l: AppLanguage) = m(l, "Varış Yeri", "Ankunftsort", "Arrival Place")
+    fun personalDistance(l: AppLanguage) = m(l, "Yol Mesafesi", "Wegstrecke", "Road Distance")
+    fun personalDuration(l: AppLanguage) = m(l, "Süre", "Dauer", "Duration")
+    fun personalStatusPending(l: AppLanguage) = m(l, "🟡 Beklemede", "🟡 Wartend", "🟡 Pending")
+    fun personalStatusActive(l: AppLanguage) = m(l, "🟢 Sürüş Devam Ediyor", "🟢 Fahrt läuft", "🟢 Trip Active")
+    fun personalStatusDone(l: AppLanguage) = m(l, "✅ Tamamlandı", "✅ Abgeschlossen", "✅ Completed")
+    fun personalLocating(l: AppLanguage) = m(l, "Konum alınıyor...", "Standort wird ermittelt...", "Getting location...")
+    fun personalLocationFailed(l: AppLanguage) = m(l, "Konum alınamadı", "Standort nicht verfügbar", "Location unavailable")
+    fun personalAdd(l: AppLanguage) = m(l, "Biniş Ekle", "Fahrt hinzufügen", "Add Trip")
+    fun personalSummaryTotal(l: AppLanguage) = m(l, "Toplam Biniş", "Gesamte Fahrten", "Total Trips")
+    fun personalSummaryTopType(l: AppLanguage) = m(l, "En Sık Araç", "Häufigstes Fahrzeug", "Most Used")
+    fun personalSummaryTotalDist(l: AppLanguage) = m(l, "Toplam Mesafe", "Gesamtstrecke", "Total Distance")
+    fun personalDeleteConfirm(l: AppLanguage) = m(l, "Bu kaydı silmek istediğinize emin misiniz?", "Soll dieser Eintrag gelöscht werden?", "Delete this trip record?")
+    fun personalNotifTitle(l: AppLanguage) = m(l, "🚗 Sürüş kaydediliyor", "🚗 Fahrt wird aufgezeichnet", "🚗 Recording trip")
+    fun personalWaypointInterval(l: AppLanguage) = m(l, "Waypoint Aralığı", "Wegpunkt-Intervall", "Waypoint Interval")
+    fun personalSettingsCard(l: AppLanguage) = m(l, "🚗 Kişisel Biniş Ayarları", "🚗 Persönliche Fahrteinstellungen", "🚗 Personal Trip Settings")
+    fun personalSec(l: AppLanguage) = m(l, "sn", "Sek.", "sec")
+    fun personalMin(l: AppLanguage) = m(l, "dk", "Min.", "min")
+    fun personalDepartureTime(l: AppLanguage) = m(l, "Kalkış Saati", "Abfahrtszeit", "Departure Time")
+    fun personalArrivalTime(l: AppLanguage) = m(l, "Varış Saati", "Ankunftszeit", "Arrival Time")
+    fun personalRecordsHint(l: AppLanguage) = m(l, "Geçmiş binişler \u2192 Kayıtlar sekmesindeki Kişisel butonu", "Vergangene Fahrten im Reiter Kişisel", "Past trips in Records tab")
+
+    // Araç türleri
+    val personalVehicleOptions = listOf(
+        "Otomobil" to "🚗",
+        "Motosiklet" to "🏍",
+        "Taksi" to "🚕",
+        "Uber / Bolt" to "🚗",
+        "Servis" to "🚐",
+        "Diğer" to "❓"
+    )
+
 }

@@ -33,12 +33,17 @@ object PrefsManager {
     var themeMode by mutableStateOf(ThemeMode.SYSTEM)
         private set
 
+    /** Kişisel biniş waypoint aralığı (saniye). 10 / 20 / 30 / 60 */
+    var waypointIntervalSeconds by mutableStateOf(30)
+        private set
+
     // ── Init ─────────────────────────────────────────────────────────────────
 
     fun init(sharedPrefs: SharedPreferences) {
         prefs = sharedPrefs
         favorites = loadFavorites()
         themeMode = loadThemeMode()
+        waypointIntervalSeconds = prefs.getInt("waypoint_interval_sec", 30)
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────
@@ -46,6 +51,13 @@ object PrefsManager {
     fun changeThemeMode(mode: ThemeMode) {
         themeMode = mode
         prefs.edit().putString("theme_mode", mode.name).apply()
+    }
+
+    // ── Waypoint Aralığı ─────────────────────────────────────────────────────
+
+    fun setWaypointInterval(seconds: Int) {
+        waypointIntervalSeconds = seconds
+        prefs.edit().putInt("waypoint_interval_sec", seconds).apply()
     }
 
     private fun loadThemeMode(): ThemeMode {

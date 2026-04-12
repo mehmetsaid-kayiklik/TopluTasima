@@ -30,6 +30,9 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+// ── Kayıt Modu ───────────────────────────────────────────────────────────────
+enum class LogMode { AUTO, MANUAL, PERSONAL }
+
 // ── Manuel giriş alanları ayrı bir state paketine taşındı ────────────────────
 // Böylece RmvLogUiState daha az değişken barındırır ve form state'i net ayrılır.
 data class ManualEntryState(
@@ -101,11 +104,13 @@ data class RmvLogUiState(
     val addFavLabel: String = "",
     val addFavUsageType: com.example.toplutasima.model.UsageType = com.example.toplutasima.model.UsageType.BOTH,
     val addFavMessage: String = "",
+    // ── Kayıt Modu ─────────────────────────────────────────────────────────
+    val mode: LogMode = LogMode.AUTO,
     // ── Manuel mod (ayrı state paketine taşındı) ──
     val manual: ManualEntryState = ManualEntryState()
 ) {
     // Screen kodu değişmesin diye backward-compat property'ler
-    val isManualMode get() = manual.isManualMode
+    val isManualMode get() = mode == LogMode.MANUAL
     val manualTypeTr get() = manual.typeTr
     val manualTypeMenuOpen get() = manual.typeMenuOpen
     val manualLine get() = manual.line
@@ -915,10 +920,18 @@ class RmvLogViewModel(
         }
     }
 
-    // ── Manuel mod ────────────────────────────────────────────────────────────
+    // ── Kayıt Modu Değiştirme ─────────────────────────────────────────────────
 
+    /** 3 modlu geçiş: AUTO ↔ MANUAL ↔ PERSONAL */
+    fun setMode(newMode: LogMode) {
+        _uiState.value = _uiState.value.copy(mode = newMode)
+    }
+
+    /** Backward-compat — Manuel mod toggle */
     fun setManualMode(isManual: Boolean) {
-        _uiState.value = _uiState.value.copy(manual = _uiState.value.manual.copy(isManualMode = isManual))
+        _uiState.value = _uiState.value.copy(
+            mode = if (isManual) LogMode.MANUAL else LogMode.AUTO
+        )
     }
 
     fun setManualTypeMenuOpen(open: Boolean) {

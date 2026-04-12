@@ -439,6 +439,40 @@ fun SettingsScreen(
             Text(S.maintenanceButton(lang), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         }
 
+        // ── Kişisel Araç Ayarları Card ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(S.personalSettingsCard(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+                Text(S.personalWaypointInterval(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                val intervalOptions = listOf(
+                    10  to "10 ${S.personalSec(lang)}",
+                    20  to "20 ${S.personalSec(lang)}",
+                    30  to "30 ${S.personalSec(lang)}",
+                    60  to "1 ${S.personalMin(lang)}"
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    intervalOptions.forEach { (seconds, label) ->
+                        val selected = PrefsManager.waypointIntervalSeconds == seconds
+                        FilterChip(
+                            selected = selected,
+                            onClick = { PrefsManager.setWaypointInterval(seconds) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
             RmvFooter(modifier = Modifier.padding(vertical = 8.dp))
         }
 

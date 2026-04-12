@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Kişisel Araç — Foreground Service için -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
 
     <application
         android:name=".TopluTasimaApp"
@@ -37,6 +40,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Kişisel Araç — GPS Waypoint Takip Servisi -->
+        <service
+            android:name=".service.PersonalTripForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
 
     </application>
 

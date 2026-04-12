@@ -46,9 +46,13 @@ import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.ui.components.RmvFooter
 import com.example.toplutasima.ui.components.TimeVisualTransformation
 import com.example.toplutasima.viewmodel.RmvLogViewModel
+import com.example.toplutasima.viewmodel.LogMode
+import com.example.toplutasima.viewmodel.PersonalTripViewModel
 
 @Composable
 fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koinViewModel()) {
+    val personalViewModel: PersonalTripViewModel = koinViewModel()
+    val personalState by personalViewModel.uiState.collectAsState()
     val state by viewModel.uiState.collectAsState()
     val scroll = rememberScrollState()
     val lang = LocaleManager.currentLanguage
@@ -80,19 +84,43 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text(if (state.isManualMode) S.manualLogTitle(lang) else S.logHeader(lang), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
-                    Spacer(Modifier.height(4.dp))
-                    Text(if (state.isManualMode) S.manualLogSubheader(lang) else S.logSubheader(lang), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f))
-                }
-                TextButton(
-                    onClick = { viewModel.setManualMode(!state.isManualMode) },
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White, containerColor = Color.White.copy(alpha = 0.2f))
-                ) {
                     Text(
-                        if (state.isManualMode) S.modeAuto(lang) else S.modeManual(lang),
+                        when (state.mode) {
+                            LogMode.MANUAL   -> S.manualLogTitle(lang)
+                            LogMode.PERSONAL -> S.personalTitle(lang)
+                            else             -> S.logHeader(lang)
+                        },
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
+                        color = Color.White
                     )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        when (state.mode) {
+                            LogMode.MANUAL   -> S.manualLogSubheader(lang)
+                            LogMode.PERSONAL -> "GPS · ORS"
+                            else             -> S.logSubheader(lang)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+                // [Manuel] ve [🚗 Kişisel] — yan yana iki buton
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { viewModel.setMode(if (state.mode == LogMode.MANUAL) LogMode.AUTO else LogMode.MANUAL) },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = Color.White,
+                            containerColor = if (state.mode == LogMode.MANUAL) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f)
+                        )
+                    ) { Text(S.modeManual(lang), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge) }
+                    TextButton(
+                        onClick = { viewModel.setMode(if (state.mode == LogMode.PERSONAL) LogMode.AUTO else LogMode.PERSONAL) },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = Color.White,
+                            containerColor = if (state.mode == LogMode.PERSONAL) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f)
+                        )
+                    ) { Text("🚗 ${S.modePersonal(lang)}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }
@@ -101,7 +129,13 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (state.isManualMode) {
+            if (state.mode == LogMode.PERSONAL) {
+                PersonalTripsContent(
+                    uiState = personalState,
+                    lang = lang,
+                    viewModel = personalViewModel
+                )
+            } else if (state.isManualMode) {
                 ManualLogForm(state, viewModel, lang)
             } else {
 
