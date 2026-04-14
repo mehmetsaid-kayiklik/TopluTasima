@@ -1,21 +1,29 @@
 package com.example.toplutasima.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.SuccessGreen
+import com.example.toplutasima.ui.WarningAmber
 import com.example.toplutasima.ui.components.AddPersonalTripDialog
+import com.example.toplutasima.ui.components.PersonalTripCard
 import com.example.toplutasima.viewmodel.PersonalTripUiState
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 
@@ -115,36 +123,7 @@ fun PersonalTripsContent(
                     )
                 }
 
-                // Sürücü seçimi
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(S.personalDriver(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(null to "—", true to "✅ Sürücü", false to "🪑 Yolcu").forEach { (v, lbl) ->
-                            FilterChip(
-                                selected = uiState.formSurucu == v,
-                                onClick = { viewModel.updateFormSurucu(v) },
-                                label = { Text(lbl, fontSize = 11.sp) }
-                            )
-                        }
-                    }
-                }
 
-                // Yolcu sayısı (sadece yolcu modunda)
-                AnimatedVisibility(visible = uiState.formSurucu == false) {
-                    OutlinedTextField(
-                        value = uiState.formYolcuSayisi,
-                        onValueChange = { viewModel.updateFormField("yolcuSayisi", it.filter { c -> c.isDigit() }.take(2)) },
-                        label = { Text(S.personalPassengerCount(lang)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                }
 
                 // Not
                 OutlinedTextField(
@@ -164,25 +143,48 @@ fun PersonalTripsContent(
                     contentPadding = PaddingValues(vertical = 13.dp),
                     enabled = uiState.formAracTuru.isNotBlank() && uiState.formTarih.isNotBlank()
                 ) {
-                    Text("💾  ${S.save(lang)}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(S.save(lang), fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
             }
         }
 
-        // ── Durum Mesajı ──────────────────────────────────────────────────────
-        if (uiState.statusMessage.isNotBlank()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        // ── Durum Kartı — her zaman görünür ──────────────────────────────────
+        val displayMsg = uiState.statusMessage.ifBlank { "Hazır" }
+        val dotColor = when {
+            uiState.statusMessage.isBlank()                          -> SuccessGreen
+            uiState.statusMessage.contains("✅")                     -> SuccessGreen
+            uiState.statusMessage.contains("...")                    -> WarningAmber
+            uiState.statusMessage.contains("aydedil", ignoreCase = true)
+                && !uiState.statusMessage.contains("✅")             -> MaterialTheme.colorScheme.error
+            else                                                      -> MaterialTheme.colorScheme.primary
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(uiState.statusMessage, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { viewModel.clearStatusMessage() }) { Text("✕", fontSize = 14.sp) }
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(dotColor)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        S.statusLabel(lang),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        displayMsg,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
@@ -205,13 +207,18 @@ fun PersonalTripsContent(
             }
         }
 
-        // ── Kayıtlar sekmesine yönlendirme ipucu ────────────────────────────
-        Text(
-            "📋  ${S.personalRecordsHint(lang)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-        )
+        // ── Aktif / Beklemedeki kayıtlar ─────────────────────────────────────
+        val activeTrips = uiState.trips.filter {
+            it.durum == PersonalTrip.DURUM_BEKLEMEDE || it.durum == PersonalTrip.DURUM_AKTIF
+        }
+        activeTrips.forEach { trip ->
+            PersonalTripCard(
+                trip = trip,
+                liveDistanceKm = if (trip.durum == PersonalTrip.DURUM_AKTIF) uiState.liveDistanceKm else 0.0,
+                lang = lang,
+                viewModel = viewModel
+            )
+        }
 
         Spacer(Modifier.height(24.dp))
     }

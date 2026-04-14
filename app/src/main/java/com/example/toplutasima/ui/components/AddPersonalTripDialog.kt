@@ -11,7 +11,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.toplutasima.model.PersonalTrip
@@ -62,7 +61,7 @@ fun AddPersonalTripDialog(
         ) {
             // Başlık
             Text(
-                if (isEditing) "✏️  ${S.editEdit(lang)}" else "➕  ${S.personalAdd(lang)}",
+                if (isEditing) S.editEdit(lang) else S.personalAdd(lang),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -134,43 +133,7 @@ fun AddPersonalTripDialog(
                 placeholder = { Text("GG.AA.YYYY") }
             )
 
-            // ── Sürücü ──────────────────────────────────────────────────────
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(S.personalDriver(lang), style = MaterialTheme.typography.bodyMedium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(null to "—", true to "✅", false to "🪑").forEach { (value, label) ->
-                                FilterChip(
-                                    selected = surucu == value,
-                                    onClick = { surucu = value },
-                                    label = { Text(label, fontSize = 12.sp) }
-                                )
-                            }
-                        }
-                    }
 
-                    // Yolcu sayısı — sürücü değilsem göster
-                    if (surucu == false) {
-                        OutlinedTextField(
-                            value = yolcuSayisi,
-                            onValueChange = { yolcuSayisi = it.filter { c -> c.isDigit() }.take(2) },
-                            label = { Text(S.personalPassengerCount(lang)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                    }
-                }
-            }
 
             // ── Not ─────────────────────────────────────────────────────────
             OutlinedTextField(
@@ -214,7 +177,7 @@ fun AddPersonalTripDialog(
                 enabled = aracTuru.isNotBlank() && tarih.isNotBlank()
             ) {
                 Text(
-                    if (isEditing) S.save(lang) else "💾  ${S.personalAdd(lang)}",
+                    if (isEditing) S.save(lang) else S.personalAdd(lang),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )

@@ -6,14 +6,17 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -119,67 +122,77 @@ fun PersonalTripCard(
                     }
                 }
 
-                // Durum etiketi veya menü
-                when (trip.durum) {
-                    PersonalTrip.DURUM_BEKLEMEDE -> {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFFFF3E0)
-                        ) {
-                            Text(
-                                S.personalStatusPending(lang),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFFE65100)
+                // Tamamlandı: üç nokta menüsü
+                if (trip.durum == PersonalTrip.DURUM_TAMAMLANDI) {
+                    Box {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(32.dp)
+                        ) { Text("⋮", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("✏️  ${S.editEdit(lang)}") },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.openEditDialog(trip)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("🗑️  ${S.delete(lang)}", color = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    showMenu = false
+                                    showDeleteDialog = true
+                                }
                             )
                         }
                     }
-                    PersonalTrip.DURUM_AKTIF -> {
-                        Text(
-                            S.personalStatusActive(lang),
-                            modifier = Modifier.alpha(pulse),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
-                        )
-                    }
-                    else -> {
-                        Box {
-                            IconButton(
-                                onClick = { showMenu = true },
-                                modifier = Modifier.size(32.dp)
-                            ) { Text("⋮", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("✏️  ${S.editEdit(lang)}") },
-                                    onClick = {
-                                        showMenu = false
-                                        viewModel.openEditDialog(trip)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("🗑️  ${S.delete(lang)}", color = MaterialTheme.colorScheme.error) },
-                                    onClick = {
-                                        showMenu = false
-                                        showDeleteDialog = true
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── Sürücü / Yolcu bilgisi ──────────────────────────────────────
-            if (trip.surucu != null || trip.yolcuSayisi != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (trip.surucu == true) Text("🧑‍💼 Sürücü", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (trip.surucu == false) Text("🪑 Yolcu", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (trip.yolcuSayisi != null) Text("👥 ${trip.yolcuSayisi}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+            // ── Durum Kartı (toplu taşıma tarzı) ────────────────────────────
+            val durumColor = when (trip.durum) {
+                PersonalTrip.DURUM_BEKLEMEDE -> Color(0xFFFFC107)
+                PersonalTrip.DURUM_AKTIF     -> Color(0xFF4CAF50)
+                else                          -> Color(0xFF4CAF50)
+            }
+            val durumText = when (trip.durum) {
+                PersonalTrip.DURUM_BEKLEMEDE -> S.personalStatusPending(lang)
+                PersonalTrip.DURUM_AKTIF     -> S.personalStatusActive(lang)
+                else                          -> "✅ Tamamlandı"
+            }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(durumColor)
+                            .alpha(if (trip.durum == PersonalTrip.DURUM_AKTIF) pulse else 1f)
+                    )
+                    Column {
+                        Text(
+                            S.statusLabel(lang),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            durumText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
 
             // ── Konum & zaman bilgisi ────────────────────────────────────────
             when (trip.durum) {

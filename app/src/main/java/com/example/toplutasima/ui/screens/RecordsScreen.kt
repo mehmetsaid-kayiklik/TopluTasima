@@ -220,7 +220,7 @@ fun MonthListScreen(
                 ),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("🚗 ${S.modePersonal(lang)}", fontWeight = FontWeight.Bold)
+                Text("🚗", fontWeight = FontWeight.Bold)
             }
         }
 
@@ -1375,7 +1375,7 @@ fun PersonalRecordsContent(
     viewModel: PersonalTripViewModel,
     onBack: () -> Unit
 ) {
-    val trips = uiState.trips
+    val trips = uiState.trips.filter { it.durum == PersonalTrip.DURUM_TAMAMLANDI }
     val months = remember(trips) {
         trips.map { it.yearMonth }.filter { it.isNotBlank() }.distinct().sortedDescending()
     }
