@@ -29,6 +29,12 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 object RmvApiService {
+    // ── Debug-only logging helpers ─────────────────────────────────────────
+    private fun logD(tag: String, msg: String) { if (BuildConfig.DEBUG) Log.d(tag, msg) }
+    private fun logE(tag: String, msg: String, t: Throwable? = null) {
+        if (BuildConfig.DEBUG) { if (t != null) Log.e(tag, msg, t) else Log.e(tag, msg) }
+    }
+
     private const val RMV_BASE = "https://www.rmv.de/hapi"
     private val RMV_ACCESS_ID = BuildConfig.RMV_ACCESS_ID
     private val ORS_API_KEY = BuildConfig.ORS_API_KEY
@@ -92,7 +98,7 @@ object RmvApiService {
                 }
                 stops
             } catch (e: Exception) {
-                Log.e("RmvApi", "searchStopOptions error: ${e.message}")
+                logE("RmvApi", "searchStopOptions error: ${e.message}")
                 emptyList()
             }
         }
@@ -155,10 +161,10 @@ object RmvApiService {
                     }
                 }
 
-                Log.d("RmvApi", "searchNearbyStops: found ${stops.size} stops")
+                logD("RmvApi", "searchNearbyStops: found ${stops.size} stops")
                 stops.sortedBy { it.distanceMeters }
             } catch (e: Exception) {
-                Log.e("RmvApi", "searchNearbyStops error: ${e.message}", e)
+                logE("RmvApi", "searchNearbyStops error: ${e.message}", e)
                 emptyList()
             }
         }
@@ -205,7 +211,7 @@ object RmvApiService {
                         break
                     }
                 }
-                Log.d("DepartureBoard", "Valid line+direction combos: $validLineDirections")
+                logD("DepartureBoard", "Valid line+direction combos: $validLineDirections")
             } catch (_: Exception) { /* proceed without filtering */ }
         }
 
@@ -220,7 +226,7 @@ object RmvApiService {
                 time = time
             )
         } catch (e: Exception) {
-            Log.e("RmvApi", "fetchDepartureBoard error: ${e.message}")
+            logE("RmvApi", "fetchDepartureBoard error: ${e.message}")
             return@withContext emptyList()
         }
 
@@ -270,7 +276,7 @@ object RmvApiService {
                 val normalizedLine = normalizeLineCode(line)
                 val validDirs = validLineDirections[normalizedLine]
                 if (validDirs == null) {
-                    Log.d("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' — line not in valid set")
+                    logD("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' — line not in valid set")
                     continue
                 }
                 if (validDirs.isNotEmpty() && direction.isNotBlank()) {
@@ -280,11 +286,11 @@ object RmvApiService {
                         validDir.contains(direction, ignoreCase = true)
                     }
                     if (!dirMatch) {
-                        Log.d("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' — direction mismatch")
+                        logD("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' — direction mismatch")
                         continue
                     }
                 }
-                Log.d("DepartureBoard", "KEEP '$normalizedLine' dir='$direction'")
+                logD("DepartureBoard", "KEEP '$normalizedLine' dir='$direction'")
             }
 
             val typeTr = mapTypeTrKtx(product, line)
@@ -297,7 +303,7 @@ object RmvApiService {
             departures += Departure(cleanLine, direction, depTime, track, typeTr, journeyDetailRef)
         }
 
-        departures.forEach { Log.d("DEBUG_BOARD", "time: ${it.time}, ref: ${it.journeyDetailRef}") }
+        departures.forEach { logD("DEBUG_BOARD", "time: ${it.time}, ref: ${it.journeyDetailRef}") }
         departures
     }
 
@@ -315,7 +321,7 @@ object RmvApiService {
         val req = Request.Builder().url(url).get().build()
         ApiClient.http.newCall(req).execute().use { res ->
             val body = res.body?.string().orEmpty()
-            Log.d("JourneyDiag", "journeyDetail HTTP ${res.code}, body(500)=${body.take(500)}")
+            logD("JourneyDiag", "journeyDetail HTTP ${res.code}, bodyLen=${body.length}")
             if (!res.isSuccessful) return@withContext JourneySegment(0, emptyList())
             val json = JSONObject(body)
 
@@ -345,7 +351,7 @@ object RmvApiService {
                             stopList.add(StopInfo(name, lat, lon, dt, extId))
                         } else {
                             filteredOutCount++
-                            Log.d("JourneyDiag", "FILTERED OUT stop[$i]: name='$name' lat=$lat lon=$lon")
+                            logD("JourneyDiag", "FILTERED OUT stop[$i]: name='$name'")
                         }
                     }
                 }
@@ -362,13 +368,13 @@ object RmvApiService {
                         stopList.add(StopInfo(name, lat, lon, dt, extId))
                     } else {
                         filteredOutCount++
-                        Log.d("JourneyDiag", "FILTERED OUT single stop: name='$name' lat=$lat lon=$lon")
+                        logD("JourneyDiag", "FILTERED OUT single stop: name='$name'")
                     }
                 }
-                null -> Log.d("JourneyDiag", "stopsRaw is NULL — no stops found in JSON")
-                else -> Log.d("JourneyDiag", "stopsRaw unexpected type: ${stopsRaw::class.simpleName}")
+                null -> logD("JourneyDiag", "stopsRaw is NULL — no stops found in JSON")
+                else -> logD("JourneyDiag", "stopsRaw unexpected type: ${stopsRaw::class.simpleName}")
             }
-            Log.d("JourneyDiag", "totalStops=$totalStopsBeforeFilter filteredOut=$filteredOutCount remaining=${stopList.size}")
+            logD("JourneyDiag", "totalStops=$totalStopsBeforeFilter filteredOut=$filteredOutCount remaining=${stopList.size}")
 
             if (stopList.isEmpty()) return@withContext JourneySegment(0, emptyList(), emptyList(), emptyList())
 
@@ -380,7 +386,7 @@ object RmvApiService {
 
             val fromExtId = extractExtId(fromId)
             val toExtId = extractExtId(toId)
-            Log.d("JourneyDiag", "fromId='$fromId' fromExtId='$fromExtId' toId='$toId' toExtId='$toExtId'")
+            logD("JourneyDiag", "fromExtId='$fromExtId' toExtId='$toExtId'")
 
             for (i in stopList.indices) {
                 val s = stopList[i]
@@ -428,7 +434,7 @@ object RmvApiService {
             val start = if (fromIdx != -1) fromIdx else 0
             val end = if (toIdx != -1 && toIdx >= start) toIdx else stopList.size - 1
             val segmentStops = stopList.subList(start, end + 1)
-            Log.d("JourneyDiag", "RETURN fromIdx=$fromIdx toIdx=$toIdx segmentStops=${segmentStops.size}")
+            logD("JourneyDiag", "RETURN fromIdx=$fromIdx toIdx=$toIdx segmentStops=${segmentStops.size}")
             JourneySegment(maxOf(0, segmentStops.size - 1), segmentStops.map { Pair(it.lat, it.lon) }, segmentStops.map { it.name }, segmentStops.map { it.depTime })
         }
     }
@@ -460,7 +466,7 @@ object RmvApiService {
                         meters / 1000.0
                     } else 0.0
                 }
-            } catch (e: Exception) { Log.e("ORSDiag", "ORS EXCEPTION: ${e.message}"); 0.0 }
+            } catch (e: Exception) { logE("ORSDiag", "ORS EXCEPTION: ${e.message}"); 0.0 }
         }
     }
 
@@ -483,7 +489,7 @@ object RmvApiService {
                         }
                     }
                 }
-            } catch (e: Exception) { Log.d("RailDist", "Multi-waypoint failed: ${e.message}") }
+            } catch (e: Exception) { logD("RailDist", "Multi-waypoint failed: ${e.message}") }
 
             // Fallback: pairwise
             var totalMeters = 0.0
@@ -717,15 +723,18 @@ object RmvApiService {
     }
 
     private fun diffMinutesFlexible(dep: String, arr: String): Int {
-        fun parse(t: String): LocalTime {
+        fun parse(t: String): LocalTime? {
             val tt = t.trim()
-            return when {
-                tt.length >= 8 -> LocalTime.parse(tt.substring(0, 8))
-                tt.length >= 5 -> LocalTime.parse(tt.substring(0, 5))
-                else -> throw IllegalArgumentException("Saat formatı hatalı: $t")
-            }
+            return try {
+                when {
+                    tt.length >= 8 -> LocalTime.parse(tt.substring(0, 8))
+                    tt.length >= 5 -> LocalTime.parse(tt.substring(0, 5))
+                    else -> null
+                }
+            } catch (_: Exception) { null }
         }
-        val d = parse(dep); val a = parse(arr)
+        val d = parse(dep) ?: return 0
+        val a = parse(arr) ?: return 0
         var diff = java.time.Duration.between(d, a).toMinutes().toInt()
         if (diff < 0) diff += 24 * 60
         return diff

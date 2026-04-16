@@ -1,6 +1,7 @@
 package com.example.toplutasima.network
 
 import android.util.Log
+import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.SummaryData
@@ -11,6 +12,10 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 object FirestoreService {
+
+    // ── Debug-only logging helpers ─────────────────────────────────────────
+    private fun logD(tag: String, msg: String) { if (BuildConfig.DEBUG) Log.d(tag, msg) }
+    private fun logW(tag: String, msg: String) { if (BuildConfig.DEBUG) Log.w(tag, msg) }
 
     data class MonthSummary(
         val monthName: String,
@@ -108,7 +113,7 @@ object FirestoreService {
             fun toMinutes(time: String): Int {
                 val p = time.trim().split(":")
                 if (p.size < 2) return 0
-                return p[0].toInt() * 60 + p[1].toInt()
+                return (p[0].toIntOrNull() ?: 0) * 60 + (p[1].toIntOrNull() ?: 0)
             }
             var diff = toMinutes(gercekBinis) - toMinutes(planlananBinis)
             // Handle midnight crossing (e.g. planned 23:50, actual 00:05 → 15 min delay)
@@ -127,7 +132,7 @@ object FirestoreService {
             fun toMinutes(time: String): Int {
                 val p = time.trim().split(":")
                 if (p.size < 2) return 0
-                return p[0].toInt() * 60 + p[1].toInt()
+                return (p[0].toIntOrNull() ?: 0) * 60 + (p[1].toIntOrNull() ?: 0)
             }
             var diff = toMinutes(inis) - toMinutes(binis)
             if (diff < 0) diff += 24 * 60
@@ -606,7 +611,7 @@ object FirestoreService {
 
     // ── Update trip by Firestore document ID ──
     suspend fun updateTrip(docId: String, fields: Map<String, Any?>): Boolean {
-        Log.d("FirestoreUpdate", "docId='$docId' isEmpty=${docId.isBlank()}")
+        logD("FirestoreUpdate", "docId='$docId' isEmpty=${docId.isBlank()}")
         return try {
             val docRef = db.collection(COLLECTION).document(docId)
             val cleanFields = fields.filterValues { it != null }.mapValues { it.value!! }
@@ -861,7 +866,7 @@ object FirestoreService {
                 )
             ).await()
         } catch (e: Exception) {
-            Log.w("FirestoreFav", "saveFavorite failed: ${e.message}")
+            logW("FirestoreFav", "saveFavorite failed: ${e.message}")
         }
     }
 
@@ -869,7 +874,7 @@ object FirestoreService {
         try {
             db.collection(FAV_COLLECTION).document(favId).delete().await()
         } catch (e: Exception) {
-            Log.w("FirestoreFav", "deleteFavorite failed: ${e.message}")
+            logW("FirestoreFav", "deleteFavorite failed: ${e.message}")
         }
     }
 
@@ -893,7 +898,7 @@ object FirestoreService {
                 )
             }
         } catch (e: Exception) {
-            Log.w("FirestoreFav", "fetchAllFavorites failed: ${e.message}")
+            logW("FirestoreFav", "fetchAllFavorites failed: ${e.message}")
             throw e
         }
     }
