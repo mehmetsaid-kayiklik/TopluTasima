@@ -37,6 +37,14 @@ object PrefsManager {
     var waypointIntervalSeconds by mutableStateOf(30)
         private set
 
+    /** Toplu taşıma bildirimleri açık/kapalı */
+    var transitNotificationsEnabled by mutableStateOf(true)
+        private set
+
+    /** Hatırlatma offset'i (dakika). 0 = tam iniş saatinde, negatif = önce, pozitif = sonra */
+    var reminderOffsetMinutes by mutableStateOf(0)
+        private set
+
     // ── Init ─────────────────────────────────────────────────────────────────
 
     fun init(sharedPrefs: SharedPreferences) {
@@ -44,6 +52,8 @@ object PrefsManager {
         favorites = loadFavorites()
         themeMode = loadThemeMode()
         waypointIntervalSeconds = prefs.getInt("waypoint_interval_sec", 30)
+        transitNotificationsEnabled = prefs.getBoolean("transit_notif_enabled", true)
+        reminderOffsetMinutes = prefs.getInt("reminder_offset_min", 0)
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────
@@ -58,6 +68,18 @@ object PrefsManager {
     fun setWaypointInterval(seconds: Int) {
         waypointIntervalSeconds = seconds
         prefs.edit().putInt("waypoint_interval_sec", seconds).apply()
+    }
+
+    // ── Toplu Taşıma Bildirim Ayarları ───────────────────────────────────────
+
+    fun changeTransitNotifications(enabled: Boolean) {
+        transitNotificationsEnabled = enabled
+        prefs.edit().putBoolean("transit_notif_enabled", enabled).apply()
+    }
+
+    fun changeReminderOffset(minutes: Int) {
+        reminderOffsetMinutes = minutes
+        prefs.edit().putInt("reminder_offset_min", minutes).apply()
     }
 
     private fun loadThemeMode(): ThemeMode {

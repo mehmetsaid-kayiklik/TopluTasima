@@ -785,13 +785,30 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
             }
 
             // --- KAYDET & TEMİZLE ---
+
+            // Bildirim izni launcher'ı (Android 13+)
+            val notifPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted ->
+                // İzin verilsin veya verilmesin, kaydı yap
+                // (izin verilmediyse bildirim gösterilmez ama kayıt başarısız olmaz)
+                viewModel.saveToSheets()
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
                     enabled = (state.trip != null),
-                    onClick = { viewModel.saveToSheets() },
+                    onClick = {
+                        // Android 13+ ve izin verilmemişse önce iste
+                        if (viewModel.needsNotificationPermission()) {
+                            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            viewModel.saveToSheets()
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
                     contentPadding = PaddingValues(vertical = 14.dp)
@@ -975,7 +992,11 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                seg.stopNames.forEachIndexed { idx, name ->
+                                // Sadece biniş→iniş arasındaki durakları göster
+                                val fromIdx = seg.stopFromIdx.coerceIn(0, seg.stopNames.lastIndex)
+                                val toIdx = if (seg.stopToIdx >= fromIdx) seg.stopToIdx.coerceAtMost(seg.stopNames.lastIndex)
+                                            else seg.stopNames.lastIndex
+                                seg.stopNames.subList(fromIdx, toIdx + 1).forEachIndexed { idx, name ->
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),

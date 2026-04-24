@@ -33,49 +33,74 @@ import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.viewmodel.SummaryViewModel
 
 @Composable
-fun SummaryScreen(modifier: Modifier = Modifier, viewModel: SummaryViewModel = koinViewModel()) {
+fun SummaryScreen(
+    modifier: Modifier = Modifier,
+    viewModel: SummaryViewModel = koinViewModel(),
+    showPersonal: Boolean = false,
+    onTogglePersonal: (Boolean) -> Unit = {}
+) {
     val state by viewModel.uiState.collectAsState()
     val lang = LocaleManager.currentLanguage
 
     // Translate sheet display name (month names + "Tümü")
     fun displaySheet(name: String): String {
         if (name == "Tümü") return S.sheetAll(lang)
-        // "MonthName Year" → translate the month name part
         val parts = name.split(" ", limit = 2)
         return if (parts.size >= 2) "${S.monthName(parts[0], lang)} ${parts[1]}"
         else S.monthName(name, lang)
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Ay seçici
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            FilledTonalButton(
-                onClick = { viewModel.setSheetMenuOpen(true) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("📅  ${displaySheet(state.selectedSheet)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            }
-            DropdownMenu(
-                expanded = state.sheetMenuOpen,
-                onDismissRequest = { viewModel.setSheetMenuOpen(false) }
-            ) {
-                state.sheetNames.forEach { name ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                displaySheet(name),
-                                fontWeight = if (name == state.selectedSheet) FontWeight.Bold else FontWeight.Normal,
-                                color = if (name == state.selectedSheet) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface
-                            )
-                        },
-                        onClick = { viewModel.loadData(name) }
-                    )
+        // Ay seçici + Kişisel butonu
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Ay seçici (~75%)
+            Box(modifier = Modifier.weight(3f)) {
+                FilledTonalButton(
+                    onClick = { if (!showPersonal) viewModel.setSheetMenuOpen(true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !showPersonal
+                ) {
+                    Text("📅  ${displaySheet(state.selectedSheet)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                }
+                DropdownMenu(
+                    expanded = state.sheetMenuOpen,
+                    onDismissRequest = { viewModel.setSheetMenuOpen(false) }
+                ) {
+                    state.sheetNames.forEach { name ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    displaySheet(name),
+                                    fontWeight = if (name == state.selectedSheet) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (name == state.selectedSheet) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
+                                )
+                            },
+                            onClick = { viewModel.loadData(name) }
+                        )
+                    }
                 }
             }
+            // Kişisel butonu (~25%)
+            FilledTonalButton(
+                onClick = { onTogglePersonal(!showPersonal) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = if (showPersonal) ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ) else ButtonDefaults.filledTonalButtonColors()
+            ) {
+                Text("🚗", style = MaterialTheme.typography.titleSmall)
+            }
         }
-
+        if (showPersonal) {
+            // ── KİŞİSEL ÖZET ──
+            PersonalSummaryContent(lang = lang)
+        } else {
         // Modern tab row
         val tabCount = if (state.selectedSheet != "T\u00fcm\u00fc") 3 else 2
         TabRow(
@@ -516,6 +541,7 @@ fun SummaryScreen(modifier: Modifier = Modifier, viewModel: SummaryViewModel = k
                 }
             }
         }
+        } // else (transit summary)
     }
 }
 

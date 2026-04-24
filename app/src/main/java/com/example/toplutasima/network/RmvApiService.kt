@@ -43,7 +43,10 @@ object RmvApiService {
         val stopCount: Int,
         val coords: List<Pair<Double, Double>>,
         val stopNames: List<String> = emptyList(),
-        val stopTimes: List<String> = emptyList()
+        val stopTimes: List<String> = emptyList(),
+        // Tüm hat listesi içinde kullanıcının biniş/iniş indeksleri
+        val fromIdx: Int = 0,
+        val toIdx: Int = -1
     )
 
     fun formatTimeDigits(digits: String): String {
@@ -426,16 +429,26 @@ object RmvApiService {
                 }
             }
 
-            if (fromIdx == -1 && toIdx == -1) {
-                val coords = stopList.map { Pair(it.lat, it.lon) }
-                return@withContext JourneySegment(maxOf(0, stopList.size - 1), coords, stopList.map { it.name }, stopList.map { it.depTime })
-            }
+            val resolvedFrom = if (fromIdx != -1) fromIdx else 0
+            val resolvedTo = if (toIdx != -1 && toIdx >= resolvedFrom) toIdx else stopList.size - 1
 
-            val start = if (fromIdx != -1) fromIdx else 0
-            val end = if (toIdx != -1 && toIdx >= start) toIdx else stopList.size - 1
-            val segmentStops = stopList.subList(start, end + 1)
-            logD("JourneyDiag", "RETURN fromIdx=$fromIdx toIdx=$toIdx segmentStops=${segmentStops.size}")
-            JourneySegment(maxOf(0, segmentStops.size - 1), segmentStops.map { Pair(it.lat, it.lon) }, segmentStops.map { it.name }, segmentStops.map { it.depTime })
+            // Mesafe hesabı için sadece segment koordinatları (biniş→iniş arası)
+            val segmentCoords = stopList.subList(resolvedFrom, resolvedTo + 1).map { Pair(it.lat, it.lon) }
+            val segStopCount = maxOf(0, resolvedTo - resolvedFrom)
+
+            // Durak listesi: tüm hat (dialog'da seçim yapılabilsin)
+            val allNames = stopList.map { it.name }
+            val allTimes = stopList.map { it.depTime }
+
+            logD("JourneyDiag", "RETURN fromIdx=$resolvedFrom toIdx=$resolvedTo totalStops=${stopList.size} segStops=$segStopCount")
+            JourneySegment(
+                stopCount = segStopCount,
+                coords = segmentCoords,
+                stopNames = allNames,
+                stopTimes = allTimes,
+                fromIdx = resolvedFrom,
+                toIdx = resolvedTo
+            )
         }
     }
 

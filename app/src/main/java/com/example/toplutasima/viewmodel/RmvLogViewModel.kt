@@ -2,8 +2,10 @@ package com.example.toplutasima.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.Departure
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.StopOption
@@ -13,16 +15,20 @@ import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.network.RmvApiService
 import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.service.TransitNotificationReceiver
+import com.example.toplutasima.service.TransitTripForegroundService
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.LocalDate
@@ -137,6 +143,9 @@ class RmvLogViewModel(
     private val nearbyManager: com.example.toplutasima.location.NearbyStopsManager
 ) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
+    private val notifPrefs = application.getSharedPreferences(
+        TransitNotificationReceiver.PREFS_NAME, Context.MODE_PRIVATE
+    )
     private var tripDetailJob: Job? = null
 
     private val _uiState = MutableStateFlow(
@@ -151,6 +160,32 @@ class RmvLogViewModel(
     val uiState: StateFlow<RmvLogUiState> = _uiState.asStateFlow()
 
     private fun lang() = LocaleManager.currentLanguage
+    private fun ctx(): Context = getApplication()
+
+    init {
+        // Bildirim butonlarından gelen aksiyonları kontrol et
+        pollNotificationActions()
+    }
+
+    /**
+     * Bildirim üzerindeki Bindim/İndim butonlarına basıldığında
+     * SharedPreferences'a yazılan pending action'ı periyodik olarak kontrol eder.
+     */
+    private fun pollNotificationActions() {
+        viewModelScope.launch {
+            while (isActive) {
+                val pending = notifPrefs.getString(TransitNotificationReceiver.KEY_PENDING_ACTION, null)
+                if (pending != null) {
+                    notifPrefs.edit().remove(TransitNotificationReceiver.KEY_PENDING_ACTION).apply()
+                    when (pending) {
+                        TransitNotificationReceiver.PENDING_BINDIM -> recordBindim()
+                        TransitNotificationReceiver.PENDING_INDIM -> recordIndim()
+                    }
+                }
+                delay(1_000L)  // 1 saniye aralıkla kontrol
+            }
+        }
+    }
 
     fun hasLocationPermission(): Boolean = nearbyManager.hasLocationPermission()
 
@@ -432,6 +467,8 @@ class RmvLogViewModel(
             )
         )
         prefs.edit().remove("first_id").remove("last_id").apply()
+        // Bildirim aktifse durdur
+        stopTransitNotification()
     }
 
     // ── API çağrıları ────────────────────────────────────────────────────────
@@ -653,6 +690,10 @@ class RmvLogViewModel(
                     }
                     _uiState.value = _uiState.value.copy(status = S.statusSaved(lang()))
                 }
+
+                // ── Bildirim başlat ──────────────────────────────────────────
+                startTransitNotification(tr)
+
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
@@ -673,6 +714,8 @@ class RmvLogViewModel(
                     status = if (ok) S.statusBoarded(t, lang())
                              else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=$segId)"
                 )
+                // ── Bildirimi güncelle (Bindim butonunu kaldır + hatırlatma kur) ──
+                if (ok) updateTransitNotificationBoarding()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
@@ -693,6 +736,8 @@ class RmvLogViewModel(
                     status = if (ok) S.statusAlighted(t, lang())
                              else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=$segId)"
                 )
+                // ── Bildirim: durdur veya sonraki segmente geç ──
+                if (ok) handleTransitNotificationAfterIndim()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
@@ -844,32 +889,22 @@ class RmvLogViewModel(
 
                 val isBinis = s.changeStopMode == "binis"
 
-                // Bug 4 fix: stopCount hesabı sabit 0/lastIndex yerine segmentin
-                // gerçek mevcut biniş/iniş durak indekslerini kullanır.
-                // Böylece önce biniş sonra iniş (veya tersi) değiştirildiğinde
-                // diğer uçun mevcut pozisyonu korunur.
-                val currentFromIdx = if (isBinis) {
-                    selectedIdx  // yeni biniş durak indeksi
-                } else {
-                    // Mevcut biniş durağının stopNames içindeki pozisyonu
-                    seg.stopNames.indexOfFirst { it == seg.fromStop }.takeIf { it >= 0 } ?: 0
-                }
-                val currentToIdx = if (!isBinis) {
-                    selectedIdx  // yeni iniş durak indeksi
-                } else {
-                    // Mevcut iniş durağının stopNames içindeki pozisyonu
-                    seg.stopNames.indexOfLast { it == seg.toStop }.takeIf { it >= 0 } ?: (seg.stopNames.size - 1)
-                }
+                // stopNames artık tüm hattı kapsıyor; seg.stopFromIdx / stopToIdx
+                // mevcut biniş-iniş pozisyonlarını tutuyor.
+                val currentFromIdx = if (isBinis) selectedIdx else seg.stopFromIdx
+                val currentToIdx   = if (!isBinis) selectedIdx else
+                    seg.stopToIdx.takeIf { it >= 0 } ?: (seg.stopNames.size - 1)
                 val newStopCount = maxOf(0, currentToIdx - currentFromIdx)
 
                 var newDistanceKm = seg.distanceKm
                 if (seg.journeyRef.isNotBlank()) {
                     val newFrom = if (isBinis) newStopName else seg.fromStop
-                    val newTo = if (!isBinis) newStopName else seg.toStop
+                    val newTo   = if (!isBinis) newStopName else seg.toStop
                     try {
                         val journeySegment = withContext(Dispatchers.IO) {
                             RmvApiService.fetchJourneyStops(seg.journeyRef, newFrom, newTo)
                         }
+                        // fetchJourneyStops coords = fromIdx→toIdx arası, mesafe için doğru
                         if (journeySegment.coords.size >= 2) {
                             newDistanceKm = withContext(Dispatchers.IO) {
                                 if (seg.typeTr == VehicleType.BUS.key) RmvApiService.calculateDistanceORS(journeySegment.coords)
@@ -885,18 +920,26 @@ class RmvLogViewModel(
                 val ok = repository.updateStops(
                     id = segId,
                     binisDuragi = if (isBinis) newStopName else null,
-                    binisTime = if (isBinis) newTime else null,
-                    inisDuragi = if (!isBinis) newStopName else null,
-                    inisTime = if (!isBinis) newTime else null,
-                    mesafe = newMesafe,
+                    binisTime   = if (isBinis) newTime else null,
+                    inisDuragi  = if (!isBinis) newStopName else null,
+                    inisTime    = if (!isBinis) newTime else null,
+                    mesafe      = newMesafe,
                     durakSayisi = newDurakSayisi
                 )
 
                 if (ok) {
                     val updatedSeg = if (isBinis)
-                        seg.copy(fromStop = newStopName, dep = newTime.ifBlank { seg.dep }, distanceKm = newDistanceKm, stopCount = newStopCount)
+                        seg.copy(
+                            fromStop = newStopName, dep = newTime.ifBlank { seg.dep },
+                            distanceKm = newDistanceKm, stopCount = newStopCount,
+                            stopFromIdx = currentFromIdx
+                        )
                     else
-                        seg.copy(toStop = newStopName, arr = newTime.ifBlank { seg.arr }, distanceKm = newDistanceKm, stopCount = newStopCount)
+                        seg.copy(
+                            toStop = newStopName, arr = newTime.ifBlank { seg.arr },
+                            distanceKm = newDistanceKm, stopCount = newStopCount,
+                            stopToIdx = currentToIdx
+                        )
                     val newSegs = trip.segments.toMutableList()
                     newSegs[segIdx] = updatedSeg
                     val newTrip = trip.copy(
@@ -919,6 +962,7 @@ class RmvLogViewModel(
             }
         }
     }
+
 
     // ── Kayıt Modu Değiştirme ─────────────────────────────────────────────────
 
@@ -1056,6 +1100,118 @@ class RmvLogViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
+        }
+    }
+
+    // ── Toplu Taşıma Bildirim Yardımcıları ────────────────────────────────────
+
+    /**
+     * Android 13+ (API 33) için POST_NOTIFICATIONS izni kontrolü.
+     */
+    private fun hasNotificationPermission(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            ctx().checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true // API 32 ve altında izin gerekmez
+        }
+    }
+
+    /** ViewModel dışından izin durumunu sorgulamak için. */
+    fun needsNotificationPermission(): Boolean {
+        return android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            !hasNotificationPermission()
+    }
+
+    /**
+     * Kayıt başarılı olduktan sonra bildirim servisini başlatır.
+     */
+    private fun startTransitNotification(tr: TripResult) {
+        if (!PrefsManager.transitNotificationsEnabled) return
+        if (!hasNotificationPermission()) return
+        val s = _uiState.value
+        val segIdx = s.selectedSegmentIndex
+        val seg = tr.segments.getOrNull(segIdx) ?: return
+
+        try {
+            val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
+                action = TransitTripForegroundService.ACTION_START
+                putExtra(TransitTripForegroundService.EXTRA_LINE, seg.line)
+                putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_STOP, seg.toStop)
+                putExtra(TransitTripForegroundService.EXTRA_PLANNED_ARR, seg.arr)
+                putExtra(TransitTripForegroundService.EXTRA_VEHICLE_TYPE, seg.typeTr)
+                putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, segIdx)
+                putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
+            }
+            ctx().startForegroundService(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("RmvLogViewModel", "Bildirim servisi başlatılamadı: ${e.message}")
+        }
+    }
+
+    /**
+     * Bindim kaydedildikten sonra bildirimi günceller (Bindim butonunu kaldırır + hatırlatma kurar).
+     */
+    private fun updateTransitNotificationBoarding() {
+        if (!PrefsManager.transitNotificationsEnabled) return
+        if (!hasNotificationPermission()) return
+        try {
+            val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
+                action = TransitTripForegroundService.ACTION_UPDATE_BOARDING
+            }
+            ctx().startService(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("RmvLogViewModel", "Bildirim güncellenemedi: ${e.message}")
+        }
+    }
+
+    /**
+     * İndim kaydedildikten sonra: son segment ise durdur, değilse sonraki segmente geç.
+     */
+    private fun handleTransitNotificationAfterIndim() {
+        if (!PrefsManager.transitNotificationsEnabled) return
+        if (!hasNotificationPermission()) return
+        val s = _uiState.value
+        val tr = s.trip ?: return
+        val currentIdx = s.selectedSegmentIndex
+        val isLastSegment = currentIdx >= tr.segments.size - 1
+
+        if (isLastSegment) {
+            stopTransitNotification()
+        } else {
+            // Sonraki segmente geç
+            val nextIdx = currentIdx + 1
+            val nextSeg = tr.segments.getOrNull(nextIdx) ?: return
+            try {
+                val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
+                    action = TransitTripForegroundService.ACTION_NEXT_SEGMENT
+                    putExtra(TransitTripForegroundService.EXTRA_LINE, nextSeg.line)
+                    putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_STOP, nextSeg.toStop)
+                    putExtra(TransitTripForegroundService.EXTRA_PLANNED_ARR, nextSeg.arr)
+                    putExtra(TransitTripForegroundService.EXTRA_VEHICLE_TYPE, nextSeg.typeTr)
+                    putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, nextIdx)
+                    putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
+                }
+                ctx().startService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("RmvLogViewModel", "Sonraki segment bildirimi başlatılamadı: ${e.message}")
+            }
+            // ViewModel'de de sonraki segmente geç
+            nextSegment()
+        }
+    }
+
+    /**
+     * Bildirim servisini durdurur.
+     */
+    private fun stopTransitNotification() {
+        try {
+            val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
+                action = TransitTripForegroundService.ACTION_STOP
+            }
+            ctx().startService(intent)
+        } catch (_: Exception) {
+            // Servis çalışmıyorsa hata vermesin
         }
     }
 }

@@ -222,6 +222,9 @@ class PersonalTripViewModel(
                     "aracTuru"    to trip.aracTuru,
                     "plaka"       to trip.plaka.uppercase(),
                     "havaDurumu"  to trip.havaDurumu,
+                    "tarih"       to trip.tarih,
+                    "kaldigiSaat" to trip.kaldigiSaat,
+                    "varisSaat"   to trip.varisSaat,
                     "surucu"      to trip.surucu,
                     "yolcuSayisi" to trip.yolcuSayisi,
                     "not"         to trip.not

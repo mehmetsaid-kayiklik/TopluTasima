@@ -36,6 +36,7 @@ import com.example.toplutasima.viewmodel.SummaryViewModel
 @Composable
 fun MainAppScreen(isDarkTheme: Boolean) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showPersonal by remember { mutableStateOf(false) }
     val lang = LocaleManager.currentLanguage
     val rmvLogViewModel: RmvLogViewModel = koinViewModel()
     val navItems = listOf(
@@ -80,10 +81,17 @@ fun MainAppScreen(isDarkTheme: Boolean) {
                 0 -> RMVLogScreen(modifier = Modifier.padding(innerPadding), viewModel = rmvLogViewModel)
                 1 -> {
                     val summaryViewModel: SummaryViewModel = koinViewModel()
-                    SummaryScreen(modifier = Modifier.padding(innerPadding), viewModel = summaryViewModel)
+                    SummaryScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        viewModel = summaryViewModel,
+                        showPersonal = showPersonal,
+                        onTogglePersonal = { showPersonal = it }
+                    )
                 }
                 2 -> RecordsScreen(
                     modifier = Modifier.padding(innerPadding),
+                    showPersonal = showPersonal,
+                    onTogglePersonal = { showPersonal = it },
                     onRestoreRecord = { record ->
                         rmvLogViewModel.restoreRecord(record)
                         selectedTab = 0

@@ -41,22 +41,10 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             throw IllegalStateException("Segment verisi bulunamadı")
         }
 
-        // 2. Yolculuğu gerçek biniş durağından kes
-        val boardingTime = dep.time.take(5)
-        val exactJourney = if (
-            rawJourney.stopTimes.firstOrNull()?.take(5) != boardingTime &&
-            boardingTime.isNotBlank()
-        ) {
-            val boardIdx = rawJourney.stopTimes.indexOfFirst { it.take(5) == boardingTime }
-            if (boardIdx > 0) {
-                RmvApiService.JourneySegment(
-                    stopCount = maxOf(0, rawJourney.stopNames.size - boardIdx - 1),
-                    coords = rawJourney.coords.drop(boardIdx),
-                    stopNames = rawJourney.stopNames.drop(boardIdx),
-                    stopTimes = rawJourney.stopTimes.drop(boardIdx)
-                )
-            } else rawJourney
-        } else rawJourney
+        // 2. Tüm hat listesi zaten rawJourney.stopNames'te mevcut.
+        // fromIdx / toIdx rawJourney içinde biniş-iniş pozisyonlarını gösteriyor.
+        // Aktarma kontrolü için rawJourney'i kullanmaya devam ediyoruz.
+        val exactJourney = rawJourney
 
         // 3. Aktarmasız mı yoksa aktarmalı mı?
         val isDirect = exactJourney.stopNames.any { StopNameUtils.fuzzyMatch(input.to, it) }
@@ -107,23 +95,25 @@ class TripPlanningUseCase(private val repository: TripRepository) {
         input: PlanInput,
         exactJourney: RmvApiService.JourneySegment
     ): Segment {
-        val destIdx = exactJourney.stopNames.indexOfFirst { StopNameUtils.fuzzyMatch(input.to, it) }
-        val slicedNames = if (destIdx != -1) exactJourney.stopNames.take(destIdx + 1) else exactJourney.stopNames
-        val slicedTimes = if (destIdx != -1) exactJourney.stopTimes.take(destIdx + 1) else exactJourney.stopTimes
-        val slicedCoords = if (destIdx != -1) exactJourney.coords.take(destIdx + 1) else exactJourney.coords
+        // Tüm hat durağı stopNames'te saklanıyor.
+        // fromIdx/toIdx biniş-iniş arasındaki koordinatları sınırlar (mesafe için).
+        val segFromIdx = exactJourney.fromIdx
+        val segToIdx = if (exactJourney.toIdx >= segFromIdx) exactJourney.toIdx
+                       else exactJourney.stopNames.size - 1
 
-        val distanceKm = calcDistance(dep.typeTr, slicedCoords)
         return Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
-            fromStop = slicedNames.firstOrNull() ?: input.from,
-            toStop = slicedNames.lastOrNull() ?: input.to,
-            dep = slicedTimes.firstOrNull() ?: dep.time,
-            arr = slicedTimes.lastOrNull() ?: "",
-            distanceKm = distanceKm,
-            stopCount = maxOf(0, slicedNames.size - 1),
-            stopNames = slicedNames,
-            stopTimes = slicedTimes,
-            journeyRef = dep.journeyDetailRef
+            fromStop = exactJourney.stopNames.getOrElse(segFromIdx) { input.from },
+            toStop = exactJourney.stopNames.getOrElse(segToIdx) { input.to },
+            dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
+            arr = exactJourney.stopTimes.getOrElse(segToIdx) { "" },
+            distanceKm = calcDistance(dep.typeTr, exactJourney.coords), // coords zaten from→to arası
+            stopCount = maxOf(0, segToIdx - segFromIdx),
+            stopNames = exactJourney.stopNames,
+            stopTimes = exactJourney.stopTimes,
+            journeyRef = dep.journeyDetailRef,
+            stopFromIdx = segFromIdx,
+            stopToIdx = segToIdx
         )
     }
 
@@ -140,20 +130,25 @@ class TripPlanningUseCase(private val repository: TripRepository) {
 
         if (transferIdx == -1) return listOf(buildFallbackSegment(dep, input, exactJourney))
 
-        val leg1Names = exactJourney.stopNames.take(transferIdx + 1)
-        val leg1Times = exactJourney.stopTimes.take(transferIdx + 1)
-        val leg1Coords = exactJourney.coords.take(transferIdx + 1)
+        // Koordinatlar for leg1 = fromIdx → transferIdx (mesafe için)
+        val segFromIdx = exactJourney.fromIdx
+        val leg1Coords = exactJourney.coords // coords zaten fromIdx→toIdx arası (JourneySegment'ten)
         val leg1Distance = calcDistance(dep.typeTr, leg1Coords)
 
         val result = mutableListOf<Segment>()
         result += Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
-            fromStop = leg1Names.first(), toStop = leg1Names.last(),
-            dep = leg1Times.first(), arr = leg1Times.last(),
+            fromStop = exactJourney.stopNames.getOrElse(segFromIdx) { input.from },
+            toStop = exactJourney.stopNames.getOrElse(transferIdx) { transferStop },
+            dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
+            arr = exactJourney.stopTimes.getOrElse(transferIdx) { "" },
             distanceKm = leg1Distance,
-            stopCount = maxOf(0, leg1Names.size - 1),
-            stopNames = leg1Names, stopTimes = leg1Times,
-            journeyRef = dep.journeyDetailRef
+            stopCount = maxOf(0, transferIdx - segFromIdx),
+            stopNames = exactJourney.stopNames,
+            stopTimes = exactJourney.stopTimes,
+            journeyRef = dep.journeyDetailRef,
+            stopFromIdx = segFromIdx,
+            stopToIdx = transferIdx
         )
         // Sonraki bacakları rehber seferden ekle
         for (i in 1 until guideSegments.size) result += guideSegments[i]
@@ -165,18 +160,23 @@ class TripPlanningUseCase(private val repository: TripRepository) {
         input: PlanInput,
         exactJourney: RmvApiService.JourneySegment
     ): Segment {
+        val segFromIdx = exactJourney.fromIdx
+        val segToIdx = if (exactJourney.toIdx >= segFromIdx) exactJourney.toIdx
+                       else exactJourney.stopNames.size - 1
         val distanceKm = calcDistance(dep.typeTr, exactJourney.coords)
         return Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
-            fromStop = exactJourney.stopNames.firstOrNull() ?: input.from,
+            fromStop = exactJourney.stopNames.getOrElse(segFromIdx) { input.from },
             toStop = input.to,
-            dep = exactJourney.stopTimes.firstOrNull() ?: dep.time,
+            dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = "",
             distanceKm = distanceKm,
             stopCount = exactJourney.stopCount,
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
-            journeyRef = dep.journeyDetailRef
+            journeyRef = dep.journeyDetailRef,
+            stopFromIdx = segFromIdx,
+            stopToIdx = segToIdx
         )
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,7 +45,6 @@ fun PersonalTripCard(
 ) {
     val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
-    var showMenu by remember { mutableStateOf(false) }
 
     // Araç türü emojisi
     val vehicleEmoji = S.personalVehicleOptions.find { it.first == trip.aracTuru }?.second ?: "🚗"
@@ -73,7 +73,12 @@ fun PersonalTripCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (borderWidth > 0.dp) Modifier.border(borderWidth, borderColor, RoundedCornerShape(16.dp)) else Modifier),
+            .then(if (borderWidth > 0.dp) Modifier.border(borderWidth, borderColor, RoundedCornerShape(16.dp)) else Modifier)
+            .then(
+                if (trip.durum == PersonalTrip.DURUM_TAMAMLANDI)
+                    Modifier.clickable { viewModel.openEditDialog(trip) }
+                else Modifier
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
@@ -122,31 +127,7 @@ fun PersonalTripCard(
                     }
                 }
 
-                // Tamamlandı: üç nokta menüsü
-                if (trip.durum == PersonalTrip.DURUM_TAMAMLANDI) {
-                    Box {
-                        IconButton(
-                            onClick = { showMenu = true },
-                            modifier = Modifier.size(32.dp)
-                        ) { Text("⋮", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("✏️  ${S.editEdit(lang)}") },
-                                onClick = {
-                                    showMenu = false
-                                    viewModel.openEditDialog(trip)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("🗑️  ${S.delete(lang)}", color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMenu = false
-                                    showDeleteDialog = true
-                                }
-                            )
-                        }
-                    }
-                }
+                // Tamamlandı kartları tıklanabilir (edit dialog açılır)
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))

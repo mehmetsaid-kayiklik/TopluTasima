@@ -473,6 +473,59 @@ fun SettingsScreen(
             }
         }
 
+        // ── Toplu Taşıma Bildirim Ayarları Card ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(S.transitNotifSettingsTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+                // Toggle: bildirimler açık/kapalı
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.transitNotifEnabled(lang), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(S.transitNotifEnabledDesc(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = PrefsManager.transitNotificationsEnabled,
+                        onCheckedChange = { PrefsManager.changeTransitNotifications(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+
+                // Hatırlatma offset seçimi
+                if (PrefsManager.transitNotificationsEnabled) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Text(S.transitReminderTitle(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    val offsetOptions = listOf(-2, -1, 0, 1, 2)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        offsetOptions.forEach { minutes ->
+                            val selected = PrefsManager.reminderOffsetMinutes == minutes
+                            FilterChip(
+                                selected = selected,
+                                onClick = { PrefsManager.changeReminderOffset(minutes) },
+                                label = { Text(S.transitReminderOption(minutes, lang), fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
             RmvFooter(modifier = Modifier.padding(vertical = 8.dp))
         }
 

@@ -21,8 +21,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
- * Yeni kişisel biniş eklemek veya mevcut kaydı düzenlemek için BottomSheet.
- * Kalkış/varış konumu veya saati bu formda girilmez — bunlar Bindim/İndim ile alınır.
+ * Kişisel araç kaydını düzenlemek veya yeni kayıt eklemek için AlertDialog.
+ * Toplu taşıma düzenleme dialog'u ile aynı UX kalıbını kullanır.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,148 +42,216 @@ fun AddPersonalTripDialog(
     var surucu      by remember { mutableStateOf(editingTrip?.surucu) }
     var yolcuSayisi by remember { mutableStateOf(editingTrip?.yolcuSayisi?.toString() ?: "") }
     var not         by remember { mutableStateOf(editingTrip?.not ?: "") }
+    var kaldigiSaat by remember { mutableStateOf(editingTrip?.kaldigiSaat ?: "") }
+    var varisSaat   by remember { mutableStateOf(editingTrip?.varisSaat ?: "") }
 
     var aracMenuOpen  by remember { mutableStateOf(false) }
     var havaMenuOpen  by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
+    AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Başlık
+        title = {
             Text(
-                if (isEditing) S.editEdit(lang) else S.personalAdd(lang),
-                style = MaterialTheme.typography.titleLarge,
+                if (isEditing) S.editEdit(lang) else "🚗  ${S.personalAdd(lang)}",
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-
-            HorizontalDivider()
-
-            // ── Araç Türü ───────────────────────────────────────────────────
-            Text(S.personalVehicleType(lang), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            Box {
-                val selectedEmoji = S.personalVehicleOptions.find { it.first == aracTuru }?.second ?: "🚗"
-                OutlinedButton(
-                    onClick = { aracMenuOpen = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("$selectedEmoji  $aracTuru", fontWeight = FontWeight.SemiBold)
-                }
-                DropdownMenu(expanded = aracMenuOpen, onDismissRequest = { aracMenuOpen = false }) {
-                    S.personalVehicleOptions.forEach { (name, emoji) ->
-                        DropdownMenuItem(
-                            text = { Text("$emoji  $name", fontSize = 15.sp) },
-                            onClick = { aracTuru = name; aracMenuOpen = false }
-                        )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // ── Araç Türü ───────────────────────────────────────────
+                Text(S.personalVehicleType(lang), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Box {
+                    val selectedEmoji = S.personalVehicleOptions.find { it.first == aracTuru }?.second ?: "🚗"
+                    OutlinedButton(
+                        onClick = { aracMenuOpen = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("$selectedEmoji  $aracTuru", fontWeight = FontWeight.SemiBold)
+                    }
+                    DropdownMenu(expanded = aracMenuOpen, onDismissRequest = { aracMenuOpen = false }) {
+                        S.personalVehicleOptions.forEach { (name, emoji) ->
+                            DropdownMenuItem(
+                                text = { Text("$emoji  $name", fontSize = 15.sp) },
+                                onClick = { aracTuru = name; aracMenuOpen = false }
+                            )
+                        }
                     }
                 }
-            }
 
-            // ── Plaka ───────────────────────────────────────────────────────
-            OutlinedTextField(
-                value = plaka,
-                onValueChange = { plaka = it.uppercase() },
-                label = { Text(S.personalPlate(lang)) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                singleLine = true,
-                placeholder = { Text("34 ABC 123", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            )
-
-            // ── Hava Durumu ─────────────────────────────────────────────────
-            Text(S.weatherLabel(lang), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            Box {
-                val havaEmoji = S.weatherOptions.find { it.first == havaDurumu }?.second ?: "❓"
-                FilledTonalButton(
-                    onClick = { havaMenuOpen = true },
+                // ── Plaka ───────────────────────────────────────────────
+                OutlinedTextField(
+                    value = plaka,
+                    onValueChange = { plaka = it.uppercase() },
+                    label = { Text(S.personalPlate(lang)) },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("$havaEmoji  ${S.weatherName(havaDurumu, lang)}")
-                }
-                DropdownMenu(expanded = havaMenuOpen, onDismissRequest = { havaMenuOpen = false }) {
-                    S.weatherOptions.forEach { (key, emoji) ->
-                        DropdownMenuItem(
-                            text = { Text("$emoji  ${S.weatherName(key, lang)}") },
-                            onClick = { havaDurumu = key; havaMenuOpen = false }
+                    shape = RoundedCornerShape(10.dp),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    singleLine = true,
+                    placeholder = { Text("34 ABC 123", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                )
+
+                // ── Tarih ───────────────────────────────────────────────
+                OutlinedTextField(
+                    value = tarih,
+                    onValueChange = { tarih = it },
+                    label = { Text(S.date(lang)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    placeholder = { Text("GG.AA.YYYY") }
+                )
+
+                // ── Kalkış / Varış Saati ─────────────────────────────────
+                if (isEditing) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = kaldigiSaat,
+                            onValueChange = { kaldigiSaat = it },
+                            label = { Text(S.personalDepartureTime(lang)) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            placeholder = { Text("HH:mm") }
+                        )
+                        OutlinedTextField(
+                            value = varisSaat,
+                            onValueChange = { varisSaat = it },
+                            label = { Text(S.personalArrivalTime(lang)) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            shape = RoundedCornerShape(10.dp),
+                            placeholder = { Text("HH:mm") }
                         )
                     }
+
+                    // Kalkış / Varış yeri (sadece göster, read-only)
+                    if (editingTrip?.kaldigiYer?.isNotBlank() == true) {
+                        Text(
+                            "📍 ${editingTrip.kaldigiYer}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (editingTrip?.varisYeri?.isNotBlank() == true) {
+                        Text(
+                            "🏁 ${editingTrip.varisYeri}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                 }
+
+                // ── Hava Durumu ─────────────────────────────────────────
+                Text(S.weatherLabel(lang), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Box {
+                    val havaEmoji = S.weatherOptions.find { it.first == havaDurumu }?.second ?: "❓"
+                    FilledTonalButton(
+                        onClick = { havaMenuOpen = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("$havaEmoji  ${S.weatherName(havaDurumu, lang)}")
+                    }
+                    DropdownMenu(expanded = havaMenuOpen, onDismissRequest = { havaMenuOpen = false }) {
+                        S.weatherOptions.forEach { (key, emoji) ->
+                            DropdownMenuItem(
+                                text = { Text("$emoji  ${S.weatherName(key, lang)}") },
+                                onClick = { havaDurumu = key; havaMenuOpen = false }
+                            )
+                        }
+                    }
+                }
+
+                // ── Not ─────────────────────────────────────────────────
+                OutlinedTextField(
+                    value = not,
+                    onValueChange = { not = it },
+                    label = { Text(S.noteOptional(lang)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    maxLines = 3
+                )
             }
-
-            // ── Tarih ───────────────────────────────────────────────────────
-            OutlinedTextField(
-                value = tarih,
-                onValueChange = { tarih = it },
-                label = { Text(S.date(lang)) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
-                placeholder = { Text("GG.AA.YYYY") }
-            )
-
-
-
-            // ── Not ─────────────────────────────────────────────────────────
-            OutlinedTextField(
-                value = not,
-                onValueChange = { not = it },
-                label = { Text(S.noteOptional(lang)) },
-                modifier = Modifier.fillMaxWidth().height(100.dp),
-                shape = RoundedCornerShape(12.dp),
-                maxLines = 4
-            )
-
-            // ── Kaydet ─────────────────────────────────────────────────────
-            Button(
-                onClick = {
-                    if (isEditing) {
-                        viewModel.updateTrip(
-                            editingTrip!!.copy(
+        },
+        confirmButton = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Sil butonu (sadece düzenlemede)
+                if (isEditing && editingTrip != null) {
+                    TextButton(
+                        onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) { Text(S.delete(lang)) }
+                }
+                // Kaydet
+                Button(
+                    onClick = {
+                        if (isEditing && editingTrip != null) {
+                            viewModel.updateTrip(
+                                editingTrip.copy(
+                                    aracTuru = aracTuru,
+                                    plaka = plaka.uppercase(),
+                                    havaDurumu = havaDurumu,
+                                    tarih = tarih,
+                                    kaldigiSaat = kaldigiSaat,
+                                    varisSaat = varisSaat,
+                                    surucu = surucu,
+                                    yolcuSayisi = yolcuSayisi.toIntOrNull(),
+                                    not = not
+                                )
+                            )
+                        } else {
+                            viewModel.saveDraft(
                                 aracTuru = aracTuru,
                                 plaka = plaka.uppercase(),
                                 havaDurumu = havaDurumu,
+                                tarih = tarih,
                                 surucu = surucu,
                                 yolcuSayisi = yolcuSayisi.toIntOrNull(),
                                 not = not
                             )
-                        )
-                    } else {
-                        viewModel.saveDraft(
-                            aracTuru = aracTuru,
-                            plaka = plaka.uppercase(),
-                            havaDurumu = havaDurumu,
-                            tarih = tarih,
-                            surucu = surucu,
-                            yolcuSayisi = yolcuSayisi.toIntOrNull(),
-                            not = not
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                contentPadding = PaddingValues(vertical = 14.dp),
-                enabled = aracTuru.isNotBlank() && tarih.isNotBlank()
-            ) {
-                Text(
-                    if (isEditing) S.save(lang) else S.personalAdd(lang),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = aracTuru.isNotBlank() && tarih.isNotBlank()
+                ) {
+                    Text(S.save(lang), fontWeight = FontWeight.Bold)
+                }
             }
-
-            Spacer(Modifier.height(8.dp))
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(S.cancel(lang)) }
         }
+    )
+
+    // ── Silme onay diyaloğu ──────────────────────────────────────────────
+    if (showDeleteConfirm && editingTrip != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(S.delete(lang), fontWeight = FontWeight.Bold) },
+            text = { Text(S.personalDeleteConfirm(lang)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        viewModel.deleteTrip(editingTrip.firestoreDocId)
+                        onDismiss()
+                    }
+                ) { Text(S.delete(lang), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(S.cancel(lang)) }
+            }
+        )
     }
 }

@@ -47,6 +47,7 @@ import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.ui.components.PersonalTripCard
+import com.example.toplutasima.ui.components.AddPersonalTripDialog
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import com.example.toplutasima.viewmodel.PersonalTripUiState
 import androidx.compose.foundation.lazy.items
@@ -67,6 +68,8 @@ private fun typeEmoji(type: String): String = when (type) {
 fun RecordsScreen(
     modifier: Modifier = Modifier,
     viewModel: RecordsViewModel = koinViewModel(),
+    showPersonal: Boolean = false,
+    onTogglePersonal: (Boolean) -> Unit = {},
     onRestoreRecord: ((Map<String, Any>) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -74,13 +77,12 @@ fun RecordsScreen(
     val context = LocalContext.current
     val personalViewModel: PersonalTripViewModel = koinViewModel()
     val personalState by personalViewModel.uiState.collectAsState()
-    var showPersonal by remember { mutableStateOf(false) }
 
     // Edit dialog state
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     // Physical back button: Kişisel moddan çık, sonra ay seçimini kapat
-    BackHandler(enabled = showPersonal) { showPersonal = false }
+    BackHandler(enabled = showPersonal) { onTogglePersonal(false) }
     BackHandler(enabled = !showPersonal && state.selectedMonth != null) {
         viewModel.clearSelectedMonth()
     }
@@ -92,7 +94,7 @@ fun RecordsScreen(
                 uiState = personalState,
                 lang = lang,
                 viewModel = personalViewModel,
-                onBack = { showPersonal = false }
+                onBack = { onTogglePersonal(false) }
             )
         } else if (state.selectedMonth == null) {
             // ── LEVEL 1: Month List ──
@@ -102,7 +104,7 @@ fun RecordsScreen(
                 errorMsg = state.errorMsg,
                 lang = lang,
                 onMonthClick = { viewModel.selectMonth(it) },
-                onTogglePersonal = { showPersonal = true }
+                onTogglePersonal = { onTogglePersonal(true) }
             )
         } else {
             // ── LEVEL 2: Day/Trip List ──
@@ -1379,13 +1381,7 @@ fun PersonalRecordsContent(
     val months = remember(trips) {
         trips.map { it.yearMonth }.filter { it.isNotBlank() }.distinct().sortedDescending()
     }
-    val doneTrips = remember(trips) { trips.filter { it.durum == PersonalTrip.DURUM_TAMAMLANDI } }
-    val totalDist = remember(doneTrips) {
-        doneTrips.sumOf { t -> t.mesafe.replace(" km","").replace(",",".").toDoubleOrNull() ?: 0.0 }
-    }
-    val topVehicle = remember(doneTrips) {
-        doneTrips.groupingBy { it.aracTuru }.eachCount().maxByOrNull { it.value }?.key ?: "—"
-    }
+
 
     Column(modifier = Modifier.fillMaxSize()) {
 
@@ -1448,30 +1444,7 @@ fun PersonalRecordsContent(
                             }
                         }
 
-                        // Özet şerit
-                        if (doneTrips.isNotEmpty()) {
-                            item {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                                    )
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                        horizontalArrangement = Arrangement.SpaceEvenly
-                                    ) {
-                                        PersonalStatChip(label = S.personalSummaryTotal(lang), value = "${trips.size}")
-                                        PersonalStatChip(label = S.personalSummaryTopType(lang), value = topVehicle)
-                                        PersonalStatChip(
-                                            label = S.personalSummaryTotalDist(lang),
-                                            value = if (totalDist > 0) String.format("%.0f km", totalDist) else "—"
-                                        )
-                                    }
-                                }
-                            }
-                        }
+
 
                         // Kayıt kartları
                         items(trips, key = { it.id }) { trip ->
@@ -1486,6 +1459,16 @@ fun PersonalRecordsContent(
                 }
             }
         }
+    }
+
+    // Düzenleme diyaloğu — Records ekranındaki kartlara tıklayınca burada açılır
+    if (uiState.showAddDialog) {
+        AddPersonalTripDialog(
+            editingTrip = uiState.editingTrip,
+            lang = lang,
+            viewModel = viewModel,
+            onDismiss = { viewModel.closeDialog() }
+        )
     }
 }
 

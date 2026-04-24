@@ -8,6 +8,11 @@
     <!-- Kişisel Araç — Foreground Service için -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <!-- Toplu Taşıma Bildirimleri -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
 
     <application
         android:name=".TopluTasimaApp"
@@ -46,6 +51,27 @@
             android:name=".service.PersonalTripForegroundService"
             android:foregroundServiceType="location"
             android:exported="false"/>
+
+        <!-- Toplu Taşıma — Bildirim Servisi -->
+        <service
+            android:name=".service.TransitTripForegroundService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Transit trip notification with boarding/alighting action buttons and arrival reminder"/>
+        </service>
+
+        <!-- Toplu Taşıma — Bildirim Aksiyon Receiver -->
+        <receiver
+            android:name=".service.TransitNotificationReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.toplutasima.transit.NOTIF_BINDIM"/>
+                <action android:name="com.example.toplutasima.transit.NOTIF_INDIM"/>
+                <action android:name="com.example.toplutasima.transit.REMINDER"/>
+            </intent-filter>
+        </receiver>
 
     </application>
 

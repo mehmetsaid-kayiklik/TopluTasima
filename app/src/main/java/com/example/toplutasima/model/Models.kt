@@ -25,7 +25,10 @@ data class Segment(
     val stopCount: Int = 0,
     val stopNames: List<String> = emptyList(),
     val stopTimes: List<String> = emptyList(),
-    val journeyRef: String = ""
+    val journeyRef: String = "",
+    // stopNames içinde biniş/iniş pozisyonları (tüm hat listesinde)
+    val stopFromIdx: Int = 0,
+    val stopToIdx: Int = -1
 )
 
 data class TripResult(

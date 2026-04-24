@@ -107,7 +107,7 @@ object S {
     fun lineStops(line: String, l: AppLanguage) = m(l, "$line durağı:", "$line Haltestellen:", "$line stops:")
 
     // ── Summary Screen ──
-    fun allStopsTitle(l: AppLanguage) = m(l, "Tüm Duraklar", "Alle Haltestellen", "All Stops")
+    fun allStopsTitle(l: AppLanguage) = m(l, "Duraklar", "Haltestellen", "Stops")
     fun totalTrips(l: AppLanguage) = m(l, "Toplam Sefer", "Gesamtfahrten", "Total Trips")
     fun seated(l: AppLanguage) = m(l, "oturma", "Sitzplatz", "seated")
     fun control(l: AppLanguage) = m(l, "kontrol", "Kontrolle", "control")
@@ -481,5 +481,22 @@ object S {
         "Servis" to "🚐",
         "Diğer" to "❓"
     )
+
+    // ── Toplu Taşıma Bildirim Ayarları ──
+    fun transitNotifSettingsTitle(l: AppLanguage) = m(l, "🔔 Bildirim Ayarları", "🔔 Benachrichtigungseinstellungen", "🔔 Notification Settings")
+    fun transitNotifEnabled(l: AppLanguage) = m(l, "Toplu taşıma bildirimleri", "ÖPNV-Benachrichtigungen", "Transit notifications")
+    fun transitNotifEnabledDesc(l: AppLanguage) = m(l, "Kayıt ve yolculuk sırasında bildirim göster", "Benachrichtigung während der Fahrt anzeigen", "Show notification during trip")
+    fun transitReminderTitle(l: AppLanguage) = m(l, "İniş Hatırlatması", "Ausstiegserinnerung", "Alighting Reminder")
+    fun transitReminderOption(minutes: Int, l: AppLanguage): String = when (minutes) {
+        -2 -> m(l, "2 dk önce", "2 Min. vorher", "2 min before")
+        -1 -> m(l, "1 dk önce", "1 Min. vorher", "1 min before")
+        0 -> m(l, "Tam iniş saatinde", "Zur Ankunftszeit", "At arrival time")
+        1 -> m(l, "1 dk sonra", "1 Min. danach", "1 min after")
+        2 -> m(l, "2 dk sonra", "2 Min. danach", "2 min after")
+        else -> "$minutes ${m(l, "dk", "Min.", "min")}"
+    }
+
+    fun personalSummaryAvgDuration(l: AppLanguage) = m(l, "Ort. Süre", "Ø Dauer", "Avg. Duration")
+    fun personalSummaryMonthly(l: AppLanguage) = m(l, "Aylık Kırılım", "Monatliche Aufschlüsselung", "Monthly Breakdown")
 
 }
