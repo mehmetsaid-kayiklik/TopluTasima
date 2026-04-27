@@ -50,7 +50,12 @@ import com.example.toplutasima.viewmodel.LogMode
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 
 @Composable
-fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koinViewModel()) {
+fun RMVLogScreen(
+    modifier: Modifier = Modifier,
+    viewModel: RmvLogViewModel = koinViewModel(),
+    showPersonal: Boolean = false,
+    onTogglePersonal: (Boolean) -> Unit = {}
+) {
     val personalViewModel: PersonalTripViewModel = koinViewModel()
     val personalState by personalViewModel.uiState.collectAsState()
     val state by viewModel.uiState.collectAsState()
@@ -85,10 +90,10 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
             ) {
                 Column {
                     Text(
-                        when (state.mode) {
-                            LogMode.MANUAL   -> S.manualLogTitle(lang)
-                            LogMode.PERSONAL -> S.personalTitle(lang)
-                            else             -> S.logHeader(lang)
+                        when {
+                            showPersonal -> S.personalTitle(lang)
+                            state.mode == LogMode.MANUAL -> S.manualLogTitle(lang)
+                            else -> S.logHeader(lang)
                         },
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
@@ -96,10 +101,10 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        when (state.mode) {
-                            LogMode.MANUAL   -> S.manualLogSubheader(lang)
-                            LogMode.PERSONAL -> "GPS · ORS"
-                            else             -> S.logSubheader(lang)
+                        when {
+                            showPersonal -> "GPS · ORS"
+                            state.mode == LogMode.MANUAL -> S.manualLogSubheader(lang)
+                            else -> S.logSubheader(lang)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
@@ -115,10 +120,10 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
                         )
                     ) { Text(S.modeManual(lang), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge) }
                     TextButton(
-                        onClick = { viewModel.setMode(if (state.mode == LogMode.PERSONAL) LogMode.AUTO else LogMode.PERSONAL) },
+                        onClick = { onTogglePersonal(!showPersonal) },
                         colors = ButtonDefaults.textButtonColors(
                             contentColor = Color.White,
-                            containerColor = if (state.mode == LogMode.PERSONAL) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f)
+                            containerColor = if (showPersonal) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f)
                         )
                     ) { Text("🚗 ${S.modePersonal(lang)}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge) }
                 }
@@ -129,7 +134,7 @@ fun RMVLogScreen(modifier: Modifier = Modifier, viewModel: RmvLogViewModel = koi
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (state.mode == LogMode.PERSONAL) {
+            if (showPersonal) {
                 PersonalTripsContent(
                     uiState = personalState,
                     lang = lang,

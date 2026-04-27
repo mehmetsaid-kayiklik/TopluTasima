@@ -107,7 +107,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             toStop = exactJourney.stopNames.getOrElse(segToIdx) { input.to },
             dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = exactJourney.stopTimes.getOrElse(segToIdx) { "" },
-            distanceKm = calcDistance(dep.typeTr, exactJourney.coords), // coords zaten from→to arası
+            distanceKm = calcDistance(dep.typeTr, exactJourney.coords, exactJourney.allStopCoords, exactJourney.fromIdx, exactJourney.toIdx), // coords zaten from→to arası
             stopCount = maxOf(0, segToIdx - segFromIdx),
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
@@ -142,7 +142,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             toStop = exactJourney.stopNames.getOrElse(transferIdx) { transferStop },
             dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = exactJourney.stopTimes.getOrElse(transferIdx) { "" },
-            distanceKm = leg1Distance,
+            distanceKm = calcDistance(dep.typeTr, leg1Coords, exactJourney.allStopCoords, exactJourney.fromIdx, transferIdx),
             stopCount = maxOf(0, transferIdx - segFromIdx),
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
@@ -163,7 +163,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
         val segFromIdx = exactJourney.fromIdx
         val segToIdx = if (exactJourney.toIdx >= segFromIdx) exactJourney.toIdx
                        else exactJourney.stopNames.size - 1
-        val distanceKm = calcDistance(dep.typeTr, exactJourney.coords)
+        val distanceKm = calcDistance(dep.typeTr, exactJourney.coords, exactJourney.allStopCoords, exactJourney.fromIdx, exactJourney.toIdx)
         return Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
             fromStop = exactJourney.stopNames.getOrElse(segFromIdx) { input.from },
@@ -182,11 +182,17 @@ class TripPlanningUseCase(private val repository: TripRepository) {
 
     // ── Yardımcılar ───────────────────────────────────────────────────────────
 
-    private suspend fun calcDistance(typeTr: String, coords: List<Pair<Double, Double>>): Double {
+    private suspend fun calcDistance(
+        typeTr: String,
+        coords: List<Pair<Double, Double>>,
+        allStopCoords: List<Pair<Double, Double>> = emptyList(),
+        fromIdx: Int = -1,
+        toIdx: Int = -1
+    ): Double {
         if (coords.size < 2) return 0.0
         return withContext(Dispatchers.IO) {
             if (typeTr == VehicleType.BUS.key) RmvApiService.calculateDistanceORS(coords)
-            else RmvApiService.calculateDistanceRail(coords)
+            else RmvApiService.calculateDistanceRail(coords, allStopCoords, fromIdx, toIdx)
         }
     }
 

@@ -413,7 +413,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
                 recordOrsCall()
                 d
             }
-            else -> RmvApiService.calculateDistanceRail(journeySegment.coords)
+            else -> RmvApiService.calculateDistanceRail(journeySegment.coords, journeySegment.allStopCoords, journeySegment.fromIdx, journeySegment.toIdx)
         }
 
         val stopCount = journeySegment.stopCount

@@ -46,7 +46,9 @@ object RmvApiService {
         val stopTimes: List<String> = emptyList(),
         // Tüm hat listesi içinde kullanıcının biniş/iniş indeksleri
         val fromIdx: Int = 0,
-        val toIdx: Int = -1
+        val toIdx: Int = -1,
+        // Tüm hat durak koordinatları (rail routing retry için)
+        val allStopCoords: List<Pair<Double, Double>> = emptyList()
     )
 
     fun formatTimeDigits(digits: String): String {
@@ -429,8 +431,19 @@ object RmvApiService {
                 }
             }
 
-            val resolvedFrom = if (fromIdx != -1) fromIdx else 0
-            val resolvedTo = if (toIdx != -1 && toIdx >= resolvedFrom) toIdx else stopList.size - 1
+            logD("JourneyDiag", "IDX-RESOLVE fromIdx=$fromIdx toIdx=$toIdx (before resolve) fromStop='$fromStop' toStop='$toStop'")
+
+            var resolvedFrom = if (fromIdx != -1) fromIdx else 0
+            var resolvedTo = if (toIdx != -1) toIdx else stopList.size - 1
+
+            // Ters yön: dönüş yolculuğunda toIdx < fromIdx olabilir (duraklar gidiş sırasında listelenir)
+            // Bu durumda indeksleri swap et — mesafe aynıdır.
+            if (resolvedTo < resolvedFrom) {
+                logD("JourneyDiag", "SWAP resolvedFrom=$resolvedFrom resolvedTo=$resolvedTo")
+                val tmp = resolvedFrom
+                resolvedFrom = resolvedTo
+                resolvedTo = tmp
+            }
 
             // Mesafe hesabı için sadece segment koordinatları (biniş→iniş arası)
             val segmentCoords = stopList.subList(resolvedFrom, resolvedTo + 1).map { Pair(it.lat, it.lon) }
@@ -440,14 +453,18 @@ object RmvApiService {
             val allNames = stopList.map { it.name }
             val allTimes = stopList.map { it.depTime }
 
-            logD("JourneyDiag", "RETURN fromIdx=$resolvedFrom toIdx=$resolvedTo totalStops=${stopList.size} segStops=$segStopCount")
+            // Tüm hat durak koordinatları (calculateDistanceRail retry için)
+            val allStopCoords = stopList.map { Pair(it.lat, it.lon) }
+
+            logD("JourneyDiag", "RETURN fromIdx=$resolvedFrom toIdx=$resolvedTo totalStops=${stopList.size} segStops=$segStopCount coordsSize=${segmentCoords.size}")
             JourneySegment(
                 stopCount = segStopCount,
                 coords = segmentCoords,
                 stopNames = allNames,
                 stopTimes = allTimes,
                 fromIdx = resolvedFrom,
-                toIdx = resolvedTo
+                toIdx = resolvedTo,
+                allStopCoords = allStopCoords
             )
         }
     }
@@ -485,43 +502,169 @@ object RmvApiService {
 
     // ── 5. Rail distance — OkHttp (suspend) ──────────────────────────────────
 
-    suspend fun calculateDistanceRail(coords: List<Pair<Double, Double>>): Double {
+    suspend fun calculateDistanceRail(
+        coords: List<Pair<Double, Double>>,
+        allStopCoords: List<Pair<Double, Double>> = emptyList(),
+        fromIdx: Int = -1,
+        toIdx: Int = -1
+    ): Double {
         if (coords.size < 2) return 0.0
         return withContext(Dispatchers.IO) {
+            // 1. Önce segment koordinatlarıyla dene: multi-waypoint + pairwise fallback
+            val directKm = railRouteWithPairwise(coords)
+            if (directKm > 0.0) return@withContext directKm
+
+            // 2. Başarısız olursa, durakların kopuk olması ihtimaline karşı daha geniş bir aralık seçip
+            //    sadece UÇ NOKTALAR arasında rota çizerek tüm ray geometrisini (polyline) almayı deneriz.
+            //    Daha sonra asıl biniş/iniş duraklarımızı bu geometri üzerine izdüşürüp (en yakın noktayı bulup)
+            //    gerçek ray mesafesini hesaplarız.
+            if (allStopCoords.size >= 3 && fromIdx >= 0 && toIdx >= 0) {
+                val paddings = intArrayOf(2, 4, 8, 15, allStopCoords.size)
+                for (pad in paddings) {
+                    val extFrom = maxOf(0, fromIdx - pad)
+                    val extTo = minOf(allStopCoords.size - 1, toIdx + pad)
+                    if (extFrom == fromIdx && extTo == toIdx) continue
+
+                    val pStart = allStopCoords[extFrom]
+                    val pEnd = allStopCoords[extTo]
+
+                    logD("RailDist", "Retry endpoints only: pad=$pad extFrom=$extFrom extTo=$extTo")
+                    val polyline = railRoutePolyline(pStart, pEnd)
+                    if (polyline.size > 1) {
+                        val actualStart = allStopCoords[fromIdx]
+                        val actualEnd = allStopCoords[toIdx]
+                        
+                        val distA = closestVertexDistance(polyline, actualStart)
+                        val distB = closestVertexDistance(polyline, actualEnd)
+                        val segDist = kotlin.math.abs(distB - distA)
+                        
+                        logD("RailDist", "Endpoints succeeded. segDist=${String.format(java.util.Locale.US, "%.2f", segDist)}")
+                        if (segDist > 0.01) return@withContext segDist
+                    }
+                }
+            }
+            0.0
+        }
+    }
+
+    /** Tek bir multi-waypoint rail routing çağrısı (pairwise yok). */
+    private fun railRouteMultiWaypoint(coords: List<Pair<Double, Double>>): Double {
+        if (coords.size < 2) return 0.0
+        return try {
+            val pointParams = coords.joinToString("&") { "point=${it.first},${it.second}" }
+            val url = "https://routing.openrailrouting.org/route?$pointParams&profile=all_tracks&points_encoded=false"
+            val req = Request.Builder().url(url).get().build()
+            ApiClient.http.newCall(req).execute().use { res ->
+                val body = res.body?.string().orEmpty()
+                if (res.isSuccessful) {
+                    val json = JSONObject(body)
+                    val paths = json.optJSONArray("paths")
+                    if (paths != null && paths.length() > 0) {
+                        val distance = paths.getJSONObject(0).optDouble("distance", 0.0)
+                        if (distance > 0) return@use distance / 1000.0
+                    }
+                } else {
+                    logD("RailDist", "HTTP ${res.code} for ${coords.size} coords: ${body.take(150)}")
+                }
+                0.0
+            }
+        } catch (e: Exception) {
+            logD("RailDist", "Route failed: ${e.message}")
+            0.0
+        }
+    }
+
+    /** Multi-waypoint + pairwise fallback. İlk deneme için kullanılır. */
+    private fun railRouteWithPairwise(coords: List<Pair<Double, Double>>): Double {
+        if (coords.size < 2) return 0.0
+        // Önce multi-waypoint dene
+        val multiKm = railRouteMultiWaypoint(coords)
+        if (multiKm > 0.0) return multiKm
+        // Multi-waypoint başarısız olursa pairwise dene
+        var totalMeters = 0.0
+        for (i in 0 until coords.size - 1) {
             try {
-                val pointParams = coords.joinToString("&") { "point=${it.first},${it.second}" }
-                val url = "https://routing.openrailrouting.org/route?$pointParams&profile=all_tracks&points_encoded=false"
-                val req = Request.Builder().url(url).get().build()
-                ApiClient.http.newCall(req).execute().use { res ->
+                val from = coords[i]; val to = coords[i + 1]
+                val url = "https://routing.openrailrouting.org/route?point=${from.first},${from.second}&point=${to.first},${to.second}&profile=all_tracks&points_encoded=false"
+                ApiClient.http.newCall(Request.Builder().url(url).get().build()).execute().use { res ->
                     if (res.isSuccessful) {
                         val json = JSONObject(res.body?.string().orEmpty())
                         val paths = json.optJSONArray("paths")
-                        if (paths != null && paths.length() > 0) {
-                            val distance = paths.getJSONObject(0).optDouble("distance", 0.0)
-                            if (distance > 0) return@withContext distance / 1000.0
-                        }
+                        if (paths != null && paths.length() > 0)
+                            totalMeters += paths.getJSONObject(0).optDouble("distance", 0.0)
                     }
                 }
-            } catch (e: Exception) { logD("RailDist", "Multi-waypoint failed: ${e.message}") }
-
-            // Fallback: pairwise
-            var totalMeters = 0.0
-            for (i in 0 until coords.size - 1) {
-                try {
-                    val from = coords[i]; val to = coords[i + 1]
-                    val url = "https://routing.openrailrouting.org/route?point=${from.first},${from.second}&point=${to.first},${to.second}&profile=all_tracks&points_encoded=false"
-                    ApiClient.http.newCall(Request.Builder().url(url).get().build()).execute().use { res ->
-                        if (res.isSuccessful) {
-                            val json = JSONObject(res.body?.string().orEmpty())
-                            val paths = json.optJSONArray("paths")
-                            if (paths != null && paths.length() > 0)
-                                totalMeters += paths.getJSONObject(0).optDouble("distance", 0.0)
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
-            totalMeters / 1000.0
+            } catch (_: Exception) {}
         }
+        return totalMeters / 1000.0
+    }
+
+    /** İki nokta arasında OpenRailRouting üzerinden rotanın tam geometrisini (polyline) çeker. */
+    private fun railRoutePolyline(pStart: Pair<Double, Double>, pEnd: Pair<Double, Double>): List<Pair<Double, Double>> {
+        return try {
+            val url = "https://routing.openrailrouting.org/route?point=${pStart.first},${pStart.second}&point=${pEnd.first},${pEnd.second}&profile=all_tracks&points_encoded=false"
+            val req = Request.Builder().url(url).get().build()
+            ApiClient.http.newCall(req).execute().use { res ->
+                if (!res.isSuccessful) return@use emptyList()
+                val body = res.body?.string().orEmpty()
+                val json = JSONObject(body)
+                val paths = json.optJSONArray("paths")
+                if (paths != null && paths.length() > 0) {
+                    val coords = paths.getJSONObject(0).optJSONObject("points")?.optJSONArray("coordinates")
+                    if (coords != null) {
+                        val poly = mutableListOf<Pair<Double, Double>>()
+                        for (i in 0 until coords.length()) {
+                            val pt = coords.optJSONArray(i)
+                            if (pt != null && pt.length() >= 2) {
+                                // Graphhopper dönerken [lon, lat] verir
+                                poly.add(Pair(pt.optDouble(1), pt.optDouble(0)))
+                            }
+                        }
+                        return@use poly
+                    }
+                }
+                emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 
+     * Verilen ray geometrisi (polyline) üzerinde, aradığımız durağa (p) en yakın 
+     * noktayı bulur ve polyline'ın başından o noktaya kadar olan mesafeyi kilometre olarak döner.
+     * DİKKAT: Haversine sadece polyline üzerindeki çok sık (10m) noktaları ölçmek için matematiksel 
+     * bir araç olarak kullanılır, eksik rotalarda düz çizgi fallback olarak KULLANILMAZ.
+     */
+    private fun closestVertexDistance(poly: List<Pair<Double, Double>>, p: Pair<Double, Double>): Double {
+        if (poly.isEmpty()) return 0.0
+        var minIdx = 0
+        var minDist = Double.MAX_VALUE
+        for (i in poly.indices) {
+            val d = haversineKm(p, poly[i])
+            if (d < minDist) {
+                minDist = d
+                minIdx = i
+            }
+        }
+        var dist = 0.0
+        for (i in 0 until minIdx) {
+            dist += haversineKm(poly[i], poly[i+1])
+        }
+        return dist
+    }
+
+    private fun haversineKm(p1: Pair<Double, Double>, p2: Pair<Double, Double>): Double {
+        val r = 6371.0 // Dünya yarıçapı (km)
+        val lat1 = Math.toRadians(p1.first)
+        val lat2 = Math.toRadians(p2.first)
+        val dLat = Math.toRadians(p2.first - p1.first)
+        val dLon = Math.toRadians(p2.second - p1.second)
+        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1) * Math.cos(lat2) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        return r * c
     }
 
     // ── 6. Trip — OkHttp (suspend) ────────────────────────────────────────────
@@ -578,7 +721,7 @@ object RmvApiService {
         val distanceKm = if (journeySegment.coords.size >= 2) {
             when (seg.typeTr) {
                 VehicleType.BUS.key -> calculateDistanceORS(journeySegment.coords)
-                else -> calculateDistanceRail(journeySegment.coords)
+                else -> calculateDistanceRail(journeySegment.coords, journeySegment.allStopCoords, journeySegment.fromIdx, journeySegment.toIdx)
             }
         } else 0.0
         return SegmentDetails(distanceKm, journeySegment.stopCount, journeySegment.stopNames, journeySegment.stopTimes)

@@ -78,7 +78,12 @@ fun MainAppScreen(isDarkTheme: Boolean) {
     ) { innerPadding ->
         Crossfade(targetState = selectedTab, animationSpec = tween(300), label = "tabAnim") { tab ->
             when (tab) {
-                0 -> RMVLogScreen(modifier = Modifier.padding(innerPadding), viewModel = rmvLogViewModel)
+                0 -> RMVLogScreen(
+                    modifier = Modifier.padding(innerPadding),
+                    viewModel = rmvLogViewModel,
+                    showPersonal = showPersonal,
+                    onTogglePersonal = { showPersonal = it }
+                )
                 1 -> {
                     val summaryViewModel: SummaryViewModel = koinViewModel()
                     SummaryScreen(
@@ -92,6 +97,7 @@ fun MainAppScreen(isDarkTheme: Boolean) {
                     modifier = Modifier.padding(innerPadding),
                     showPersonal = showPersonal,
                     onTogglePersonal = { showPersonal = it },
+                    isActive = (tab == 2),
                     onRestoreRecord = { record ->
                         rmvLogViewModel.restoreRecord(record)
                         selectedTab = 0

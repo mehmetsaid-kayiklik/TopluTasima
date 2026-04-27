@@ -37,7 +37,7 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 // ── Kayıt Modu ───────────────────────────────────────────────────────────────
-enum class LogMode { AUTO, MANUAL, PERSONAL }
+enum class LogMode { AUTO, MANUAL }
 
 // ── Manuel giriş alanları ayrı bir state paketine taşındı ────────────────────
 // Böylece RmvLogUiState daha az değişken barındırır ve form state'i net ayrılır.
@@ -908,7 +908,7 @@ class RmvLogViewModel(
                         if (journeySegment.coords.size >= 2) {
                             newDistanceKm = withContext(Dispatchers.IO) {
                                 if (seg.typeTr == VehicleType.BUS.key) RmvApiService.calculateDistanceORS(journeySegment.coords)
-                                else RmvApiService.calculateDistanceRail(journeySegment.coords)
+                                else RmvApiService.calculateDistanceRail(journeySegment.coords, journeySegment.allStopCoords, journeySegment.fromIdx, journeySegment.toIdx)
                             }
                         }
                     } catch (_: Exception) { }

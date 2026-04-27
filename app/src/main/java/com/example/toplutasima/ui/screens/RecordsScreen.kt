@@ -70,7 +70,8 @@ fun RecordsScreen(
     viewModel: RecordsViewModel = koinViewModel(),
     showPersonal: Boolean = false,
     onTogglePersonal: (Boolean) -> Unit = {},
-    onRestoreRecord: ((Map<String, Any>) -> Unit)? = null
+    onRestoreRecord: ((Map<String, Any>) -> Unit)? = null,
+    isActive: Boolean = true
 ) {
     val state by viewModel.uiState.collectAsState()
     val lang = LocaleManager.currentLanguage
@@ -81,9 +82,9 @@ fun RecordsScreen(
     // Edit dialog state
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    // Physical back button: Kişisel moddan çık, sonra ay seçimini kapat
-    BackHandler(enabled = showPersonal) { onTogglePersonal(false) }
-    BackHandler(enabled = !showPersonal && state.selectedMonth != null) {
+    // Physical back button: sadece bu sekme aktifken çalışsın (Crossfade'de eski sekme arka planda kalır)
+    BackHandler(enabled = isActive && showPersonal) { onTogglePersonal(false) }
+    BackHandler(enabled = isActive && !showPersonal && state.selectedMonth != null) {
         viewModel.clearSelectedMonth()
     }
 
