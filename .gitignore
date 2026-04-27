@@ -14,3 +14,4 @@ local.properties
 .vscode/
 *.py
 google-services.json
+app/release/
