@@ -332,7 +332,7 @@ fun SummaryScreen(
 
                         // Toplam Mesafe
                         if (s.totalDistanceKm > 0) {
-                            SummaryCard(S.totalDistance(lang), String.format("%.2f km", s.totalDistanceKm))
+                            SummaryCard(S.totalDistance(lang), String.format(java.util.Locale.US, "%.2f km", s.totalDistanceKm))
                         }
 
                         // Kişisel Rekorlar
@@ -432,7 +432,7 @@ fun SummaryScreen(
                         SummaryCard(S.totalPlanned(lang), formatMin(s.totalPlannedMin, lang))
                         SummaryCard(S.totalActual(lang), formatMin(s.totalActualMin, lang))
                         SummaryCard(S.totalDelay(lang), "${s.totalDelay} ${S.minutes(lang)}")
-                        SummaryCard(S.avgDelay(lang), String.format("%.1f ${S.minutes(lang)}", s.avgDelay))
+                        SummaryCard(S.avgDelay(lang), String.format(java.util.Locale.US, "%.1f ${S.minutes(lang)}", s.avgDelay))
                     } else if (state.selectedInnerTab == 2) {
                         // ── Tab 2: Monthly Comparison ──
                         Text(S.comparisonTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -503,7 +503,7 @@ fun SummaryScreen(
                                             )
                                             if (!delta.isNeutral) {
                                                 Text(
-                                                    String.format("%.0f%%", delta.deltaPercent * 100),
+                                                    String.format(java.util.Locale.US, "%.0f%%", delta.deltaPercent * 100),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = deltaColor.copy(alpha = 0.7f)
                                                 )

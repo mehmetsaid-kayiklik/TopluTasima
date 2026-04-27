@@ -88,7 +88,7 @@ class PersonalLocationHelper(private val context: Context) {
                     }
                 }
                 .addOnFailureListener {
-                    Log.e(TAG, "getCurrentLocation failed: ${it.message}")
+                    if (BuildConfig.DEBUG) Log.e(TAG, "getCurrentLocation failed: ${it.message}")
                     cont.resume(null)
                 }
         }
@@ -107,7 +107,7 @@ class PersonalLocationHelper(private val context: Context) {
                     "$lat, $lng"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Geocoder failed: ${e.message}")
+                if (BuildConfig.DEBUG) Log.e(TAG, "Geocoder failed: ${e.message}")
                 "$lat, $lng"
             }
         }
@@ -142,7 +142,7 @@ class PersonalLocationHelper(private val context: Context) {
 
                 val response = httpClient.newCall(request).execute()
                 if (!response.isSuccessful) {
-                    Log.e(TAG, "ORS error ${response.code}: ${response.body?.string()}")
+                    if (BuildConfig.DEBUG) Log.e(TAG, "ORS error ${response.code}: ${response.body?.string()}")
                     return@withContext null
                 }
 
@@ -151,7 +151,7 @@ class PersonalLocationHelper(private val context: Context) {
                 val summary = routes.getJSONObject(0).getJSONObject("summary")
                 summary.getDouble("distance") // metre
             } catch (e: Exception) {
-                Log.e(TAG, "fetchRouteDistanceMeters failed: ${e.message}")
+                if (BuildConfig.DEBUG) Log.e(TAG, "fetchRouteDistanceMeters failed: ${e.message}")
                 null
             }
         }

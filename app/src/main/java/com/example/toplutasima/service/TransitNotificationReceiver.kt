@@ -7,6 +7,12 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.network.FirestoreService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 /**
  * Bildirim üzerindeki aksiyon butonlarından ve hatırlatma alarm'ından
@@ -38,11 +44,13 @@ class TransitNotificationReceiver : BroadcastReceiver() {
             ACTION_NOTIF_BINDIM -> {
                 Log.d(TAG, "Bildirimden Bindim aksiyonu alındı")
                 writePendingAction(context, PENDING_BINDIM)
+                updateActualFromNotification(context, intent, isBoarding = true)
             }
 
             ACTION_NOTIF_INDIM -> {
                 Log.d(TAG, "Bildirimden İndim aksiyonu alındı")
                 writePendingAction(context, PENDING_INDIM)
+                updateActualFromNotification(context, intent, isBoarding = false)
             }
 
             ACTION_REMINDER_TRIGGER -> {
@@ -62,6 +70,30 @@ class TransitNotificationReceiver : BroadcastReceiver() {
             .putString(KEY_PENDING_ACTION, action)
             .putLong(KEY_ACTION_TIMESTAMP, System.currentTimeMillis())
             .apply()
+    }
+
+    private fun updateActualFromNotification(context: Context, intent: Intent, isBoarding: Boolean) {
+        val tripId = intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
+        if (tripId.isBlank()) return
+
+        val timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+
+        val workData = androidx.work.Data.Builder()
+            .putString(com.example.toplutasima.worker.TransitActionWorker.KEY_TRIP_ID, tripId)
+            .putBoolean(com.example.toplutasima.worker.TransitActionWorker.KEY_IS_BOARDING, isBoarding)
+            .putString(com.example.toplutasima.worker.TransitActionWorker.KEY_TIMESTAMP, timestamp)
+            .build()
+
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+            .build()
+
+        val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.example.toplutasima.worker.TransitActionWorker>()
+            .setConstraints(constraints)
+            .setInputData(workData)
+            .build()
+
+        androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
     }
 
     /**
@@ -85,6 +117,10 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         // İndim aksiyon butonu
         val indimIntent = Intent(context, TransitNotificationReceiver::class.java).apply {
             action = ACTION_NOTIF_INDIM
+            putExtra(
+                TransitTripForegroundService.EXTRA_TRIP_ID,
+                intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
+            )
         }
         val indimPi = android.app.PendingIntent.getBroadcast(
             context,

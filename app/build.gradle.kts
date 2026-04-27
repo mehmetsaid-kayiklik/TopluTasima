@@ -86,4 +86,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     // Location — Google Play Services
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

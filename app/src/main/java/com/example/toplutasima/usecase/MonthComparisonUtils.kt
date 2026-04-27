@@ -3,6 +3,7 @@ package com.example.toplutasima.usecase
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
+import java.util.Locale
 
 /**
  * Aylık karşılaştırma delta hesaplama modülü.
@@ -46,7 +47,7 @@ object MonthComparisonUtils {
             label = S.avgDelay(lang),
             current = current.avgDelay,
             previous = previous.avgDelay,
-            format = { String.format("%.1f ${S.minutes(lang)}", it) },
+            format = { String.format(Locale.US, "%.1f ${S.minutes(lang)}", it) },
             neutralIsGood = false
         ))
 
@@ -64,7 +65,7 @@ object MonthComparisonUtils {
             label = S.totalDistance(lang),
             current = current.totalDistanceKm,
             previous = previous.totalDistanceKm,
-            format = { String.format("%.1f km", it) },
+            format = { String.format(Locale.US, "%.1f km", it) },
             neutralIsGood = true
         ))
 
@@ -75,7 +76,7 @@ object MonthComparisonUtils {
             label = "💺 ${S.colSeated(lang)} %",
             current = currentSeatedRate,
             previous = previousSeatedRate,
-            format = { String.format("%.0f%%", it) },
+            format = { String.format(Locale.US, "%.0f%%", it) },
             neutralIsGood = true // more seated = good
         ))
 
@@ -137,7 +138,7 @@ object MonthComparisonUtils {
         return if (value == value.toLong().toDouble()) {
             value.toLong().toString()
         } else {
-            String.format("%.1f", value)
+            String.format(Locale.US, "%.1f", value)
         }
     }
 }

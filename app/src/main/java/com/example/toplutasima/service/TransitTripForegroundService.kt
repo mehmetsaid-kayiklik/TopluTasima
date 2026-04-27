@@ -6,12 +6,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.VehicleType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +60,7 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_VEHICLE_TYPE = "vehicleType"
         const val EXTRA_SEGMENT_INDEX = "segmentIndex"
         const val EXTRA_TOTAL_SEGMENTS = "totalSegments"
+        const val EXTRA_TRIP_ID = "tripId"
 
         // ViewModel tarafından gözlemlenen durum
         private val _isActive = MutableStateFlow(false)
@@ -73,7 +77,12 @@ class TransitTripForegroundService : Service() {
     private var currentVehicleType = ""
     private var currentSegmentIndex = 0
     private var totalSegments = 1
+    private var currentTripId = ""
     private var hasBoarded = false
+
+    private fun logD(message: String) {
+        if (BuildConfig.DEBUG) Log.d(TAG, message)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -102,13 +111,13 @@ class TransitTripForegroundService : Service() {
                 }
                 _isActive.value = true
                 _activeSegmentIndex.value = currentSegmentIndex
-                Log.d(TAG, "Bildirim başladı: $currentLine → $currentAlightingStop ($currentPlannedArr)")
+                logD("Bildirim başladı")
             }
             ACTION_UPDATE_BOARDING -> {
                 hasBoarded = true
                 updateTrackingNotification()
                 scheduleReminder()
-                Log.d(TAG, "Bindim kaydedildi, hatırlatma kuruldu")
+                logD("Bindim kaydedildi, hatırlatma kuruldu")
             }
             ACTION_NEXT_SEGMENT -> {
                 cancelReminder()
@@ -116,7 +125,7 @@ class TransitTripForegroundService : Service() {
                 hasBoarded = false
                 updateTrackingNotification()
                 _activeSegmentIndex.value = currentSegmentIndex
-                Log.d(TAG, "Sonraki segment: $currentLine → $currentAlightingStop ($currentPlannedArr)")
+                logD("Sonraki segment bildirimi güncellendi")
             }
             ACTION_STOP -> {
                 stopTracking()
@@ -142,12 +151,13 @@ class TransitTripForegroundService : Service() {
         currentVehicleType = intent.getStringExtra(EXTRA_VEHICLE_TYPE) ?: currentVehicleType
         currentSegmentIndex = intent.getIntExtra(EXTRA_SEGMENT_INDEX, currentSegmentIndex)
         totalSegments = intent.getIntExtra(EXTRA_TOTAL_SEGMENTS, totalSegments)
+        currentTripId = intent.getStringExtra(EXTRA_TRIP_ID) ?: currentTripId
     }
 
     // ── Takip Durdurma ───────────────────────────────────────────────────────
 
     private fun stopTracking() {
-        Log.d(TAG, "Bildirim durduruluyor")
+        logD("Bildirim durduruluyor")
         cancelReminder()
         // Hatırlatma bildirimini de kaldır
         val nm = getSystemService(NotificationManager::class.java)
@@ -246,6 +256,7 @@ class TransitTripForegroundService : Service() {
 
     // ── Hatırlatma Zamanlayıcısı ──────────────────────────────────────────────
 
+    @SuppressLint("MissingPermission", "ScheduleExactAlarm")
     private fun scheduleReminder() {
         if (currentPlannedArr.isBlank()) {
             Log.w(TAG, "Planlanan varış saati yok, hatırlatma kurulamıyor")
@@ -277,16 +288,24 @@ class TransitTripForegroundService : Service() {
                 putExtra(EXTRA_ALIGHTING_STOP, currentAlightingStop)
                 putExtra(EXTRA_PLANNED_ARR, currentPlannedArr)
                 putExtra(EXTRA_VEHICLE_TYPE, currentVehicleType)
+                putExtra(EXTRA_TRIP_ID, currentTripId)
             }
             val pi = PendingIntent.getBroadcast(
                 this, NOTIF_ID_REMINDER, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // Exact alarm kullan (önemli zamanlamalar için)
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-                Log.d(TAG, "Hatırlatma kuruldu: ${delayMs / 1000}s sonra ($reminderTime)")
+            val canUseExactAlarm =
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+
+            if (canUseExactAlarm) {
+                try {
+                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    logD("Hatırlatma kuruldu: ${delayMs / 1000}s sonra ($reminderTime)")
+                } catch (e: SecurityException) {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                    Log.w(TAG, "Exact alarm güvenlik hatası, inexact alarm kullanılıyor: ${e.message}")
+                }
             } else {
                 alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
                 Log.w(TAG, "Exact alarm izni yok, inexact alarm kullanılıyor")
@@ -353,6 +372,7 @@ class TransitTripForegroundService : Service() {
     private fun createActionPendingIntent(action: String): PendingIntent {
         val intent = Intent(this, TransitNotificationReceiver::class.java).apply {
             this.action = action
+            putExtra(EXTRA_TRIP_ID, currentTripId)
         }
         return PendingIntent.getBroadcast(
             this,

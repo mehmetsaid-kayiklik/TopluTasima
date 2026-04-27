@@ -109,7 +109,12 @@ object PersonalFirestoreService {
      */
     suspend fun updateTrip(docId: String, fields: Map<String, Any?>): Boolean {
         return try {
-            val clean = fields.filterValues { it != null }.mapValues { it.value!! }
+            val clean = fields.filterValues { it != null }.mapValues { it.value!! }.toMutableMap()
+            val tarih = clean["tarih"]?.toString()
+            if (!tarih.isNullOrBlank()) {
+                clean["sortDate"] = computeSortDate(tarih)
+                clean["yearMonth"] = computeYearMonth(tarih)
+            }
             db.collection(COLLECTION).document(docId).update(clean).await()
             true
         } catch (_: Exception) { false }

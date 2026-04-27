@@ -24,6 +24,7 @@ import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
+import java.util.Locale
 
 @Composable
 fun PersonalSummaryContent(lang: AppLanguage) {
@@ -80,7 +81,7 @@ fun PersonalSummaryContent(lang: AppLanguage) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("📏", fontSize = 20.sp)
                             Text(
-                                if (totalDist > 0) String.format("%.1f km", totalDist) else "—",
+                                if (totalDist > 0) String.format(Locale.US, "%.1f km", totalDist) else "—",
                                 fontWeight = FontWeight.Bold, color = Color.White
                             )
                             Text(S.personalSummaryTotalDist(lang), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
@@ -88,7 +89,7 @@ fun PersonalSummaryContent(lang: AppLanguage) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("⏱️", fontSize = 20.sp)
                             Text(
-                                if (avgDuration > 0) String.format("%.0f dk", avgDuration) else "—",
+                                if (avgDuration > 0) String.format(Locale.US, "%.0f dk", avgDuration) else "—",
                                 fontWeight = FontWeight.Bold, color = Color.White
                             )
                             Text(S.personalSummaryAvgDuration(lang), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))

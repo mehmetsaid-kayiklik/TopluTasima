@@ -628,7 +628,7 @@ fun RMVLogScreen(
                                                     if (s.stopCount > 0) append("📍 ${s.stopCount} ${S.stops(lang)}")
                                                     if (s.distanceKm > 0) {
                                                         if (s.stopCount > 0) append("  •  ")
-                                                        append("${String.format("%.2f", s.distanceKm)} km")
+                                                        append("${String.format(java.util.Locale.US, "%.2f", s.distanceKm)} km")
                                                     }
                                                 },
                                                 style = MaterialTheme.typography.bodySmall,

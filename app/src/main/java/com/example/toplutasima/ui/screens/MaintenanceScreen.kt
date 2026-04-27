@@ -372,6 +372,7 @@ fun MaintenanceScreen(
 
         // ── Data Health Card ──
         var healthRunning by remember { mutableStateOf(false) }
+        var autoFixRunning by remember { mutableStateOf(false) }
         var healthIssues by remember { mutableStateOf<List<com.example.toplutasima.usecase.DataHealthChecker.HealthIssue>?>(null) }
         var healthExpanded by remember { mutableStateOf(false) }
 
@@ -383,14 +384,14 @@ fun MaintenanceScreen(
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(S.dataHealthTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
-                if (healthRunning) {
+                if (healthRunning || autoFixRunning) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Text(S.dataHealthRunning(lang), style = MaterialTheme.typography.bodyMedium)
+                        Text(if (healthRunning) S.dataHealthRunning(lang) else "Otomatik düzeltme yapılıyor...", style = MaterialTheme.typography.bodyMedium)
                     }
                 } else {
                     // Show results if available
@@ -451,6 +452,37 @@ fun MaintenanceScreen(
                                         )
                                     }
                                 }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Button(
+                                onClick = {
+                                    autoFixRunning = true
+                                    scope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                FirestoreService.migrateStripSeconds()
+                                                FirestoreService.migrateYolSuresi()
+                                                FirestoreService.migrateYearMonth()
+                                                FirestoreService.migrateSortDate()
+                                            }
+                                            // Re-run health check
+                                            val trips = withContext(Dispatchers.IO) {
+                                                FirestoreService.fetchTrips()
+                                            }
+                                            healthIssues = com.example.toplutasima.usecase.DataHealthChecker.analyzeTrips(trips)
+                                        } catch (e: Exception) {
+                                            // Ignore
+                                        } finally {
+                                            autoFixRunning = false
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                Text("✨ Tümünü Otomatik Düzelt", fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }

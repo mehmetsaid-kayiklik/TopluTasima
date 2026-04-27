@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.location.PersonalLocationHelper
 import com.google.android.gms.location.LocationCallback
@@ -24,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
  * Kişisel araç yolculuğu sırasında arka planda GPS takibi yapar.
@@ -46,6 +48,7 @@ class PersonalTripForegroundService : Service() {
         // ViewModel tarafından gözlemlenen durum akışları
         private val _liveDistanceKm = MutableStateFlow(0.0)
         val liveDistanceKm: StateFlow<Double> = _liveDistanceKm
+        val currentDistanceKm: Double get() = _liveDistanceKm.value
 
         private val _isTracking = MutableStateFlow(false)
         val isTracking: StateFlow<Boolean> = _isTracking
@@ -70,8 +73,11 @@ class PersonalTripForegroundService : Service() {
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             val loc = result.lastLocation ?: return
-            pendingWaypoints.add(loc.latitude to loc.longitude)
-            Log.d(TAG, "Waypoint #${pendingWaypoints.size}: ${loc.latitude}, ${loc.longitude}")
+            val count = synchronized(pendingWaypoints) {
+                pendingWaypoints.add(loc.latitude to loc.longitude)
+                pendingWaypoints.size
+            }
+            if (BuildConfig.DEBUG) Log.d(TAG, "Waypoint #$count alındı")
         }
     }
 
@@ -105,11 +111,18 @@ class PersonalTripForegroundService : Service() {
 
     @Suppress("MissingPermission")
     private fun startTracking() {
-        Log.d(TAG, "Takip başlıyor")
+        if (!locationHelper.hasPermission()) {
+            Log.w(TAG, "Konum izni yok, takip başlatılmadı")
+            _isTracking.value = false
+            stopSelf()
+            return
+        }
+
+        if (BuildConfig.DEBUG) Log.d(TAG, "Takip başlıyor")
         _isTracking.value = true
         _liveDistanceKm.value = 0.0
         totalDistanceMeters = 0.0
-        pendingWaypoints.clear()
+        synchronized(pendingWaypoints) { pendingWaypoints.clear() }
 
         startForeground(NOTIF_ID, buildNotification("0.0 km"))
 
@@ -118,7 +131,15 @@ class PersonalTripForegroundService : Service() {
             Priority.PRIORITY_HIGH_ACCURACY, intervalMs
         ).setMinUpdateIntervalMillis(intervalMs / 2).build()
 
-        fusedClient.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+        try {
+            fusedClient.requestLocationUpdates(locationRequest, locationCallback, mainLooper)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Konum izni kayboldu, takip durduruluyor: ${e.message}")
+            _isTracking.value = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
 
         // 4 dakikada bir ORS'e gönder
         orsBatchJob = serviceScope.launch {
@@ -130,7 +151,7 @@ class PersonalTripForegroundService : Service() {
     }
 
     private fun stopTracking() {
-        Log.d(TAG, "Takip durdu — toplam: ${totalDistanceMeters / 1000.0} km")
+        if (BuildConfig.DEBUG) Log.d(TAG, "Takip durdu — toplam: ${totalDistanceMeters / 1000.0} km")
         orsBatchJob?.cancel()
         orsBatchJob = null
         fusedClient.removeLocationUpdates(locationCallback)
@@ -157,14 +178,14 @@ class PersonalTripForegroundService : Service() {
             copy
         }
 
-        Log.d(TAG, "ORS gönderiliyor: ${batch.size} waypoint")
+        if (BuildConfig.DEBUG) Log.d(TAG, "ORS gönderiliyor: ${batch.size} waypoint")
         val meters = locationHelper.fetchRouteDistanceMeters(batch)
         if (meters != null) {
             totalDistanceMeters += meters
             val km = totalDistanceMeters / 1000.0
             _liveDistanceKm.value = km
-            updateNotification(String.format("%.1f km", km))
-            Log.d(TAG, "ORS mesafesi eklendi: +${meters/1000.0} km, toplam: $km km")
+            updateNotification(String.format(Locale.US, "%.1f km", km))
+            if (BuildConfig.DEBUG) Log.d(TAG, "ORS mesafesi eklendi: +${meters/1000.0} km, toplam: $km km")
         } else {
             Log.w(TAG, "ORS yanıt vermedi, bu batch atlandı")
         }

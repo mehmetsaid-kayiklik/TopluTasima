@@ -1,5 +1,8 @@
 package com.example.toplutasima.ui.components
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,6 +30,7 @@ import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
+import java.util.Locale
 
 /**
  * Kişisel araç yolculuğu kartı.
@@ -45,6 +49,17 @@ fun PersonalTripCard(
 ) {
     val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
+    val bindimPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            viewModel.recordBindim(context, trip.firestoreDocId)
+        } else {
+            viewModel.recordBindim(context, trip.firestoreDocId)
+        }
+    }
 
     // Araç türü emojisi
     val vehicleEmoji = S.personalVehicleOptions.find { it.first == trip.aracTuru }?.second ?: "🚗"
@@ -199,7 +214,7 @@ fun PersonalTripCard(
                         modifier = Modifier.alpha(pulse)
                     ) {
                         Text(
-                            "📏 ${String.format("%.1f km", liveDistanceKm)}",
+                            "📏 ${String.format(Locale.US, "%.1f km", liveDistanceKm)}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF2E7D32)
@@ -251,7 +266,18 @@ fun PersonalTripCard(
             when (trip.durum) {
                 PersonalTrip.DURUM_BEKLEMEDE -> {
                     Button(
-                        onClick = { viewModel.recordBindim(context, trip.firestoreDocId) },
+                        onClick = {
+                            if (viewModel.hasLocationPermission()) {
+                                viewModel.recordBindim(context, trip.firestoreDocId)
+                            } else {
+                                bindimPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                )
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))

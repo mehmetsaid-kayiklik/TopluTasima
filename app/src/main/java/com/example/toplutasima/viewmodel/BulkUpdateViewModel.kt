@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.TripResult
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 enum class BulkUpdatePhase {
     IDLE, LOADING, RUNNING, PAUSED, RATE_LIMITED, DONE
@@ -68,6 +70,10 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
         private const val RMV_MAX_PER_HOUR = 600
         private const val RMV_SAFETY_MARGIN = 10 // start waiting at 590
         private const val TAG = "BulkUpdate"
+    }
+
+    private fun logD(message: String) {
+        if (BuildConfig.DEBUG) Log.d(TAG, message)
     }
 
     fun loadPendingRows() {
@@ -355,7 +361,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
 
     private suspend fun processRow(row: BulkUpdateRow): Boolean {
         if (row.binisDuragi.isBlank() || row.inisDuragi.isBlank() || row.hat.isBlank()) {
-            Log.d(TAG, "Skipping row ${row.rowIndex}: missing required fields")
+            logD("Skipping row ${row.rowIndex}: missing required fields")
             return false
         }
 
@@ -363,7 +369,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
         val fromId = resolveStopId(row.binisDuragi)
         val toId = resolveStopId(row.inisDuragi)
         if (fromId.isBlank() || toId.isBlank()) {
-            Log.d(TAG, "Could not resolve stop IDs for row ${row.rowIndex}")
+            logD("Could not resolve stop IDs for row ${row.rowIndex}")
             return false
         }
 
@@ -389,7 +395,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
         ?: return false
 
         if (seg.journeyRef.isBlank()) {
-            Log.d(TAG, "No journeyRef for row ${row.rowIndex}")
+            logD("No journeyRef for row ${row.rowIndex}")
             return false
         }
 
@@ -401,7 +407,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
         recordRmvCall()
 
         if (journeySegment.coords.size < 2) {
-            Log.d(TAG, "Not enough coords for row ${row.rowIndex}: ${journeySegment.coords.size}")
+            logD("Not enough coords for row ${row.rowIndex}: ${journeySegment.coords.size}")
             return false
         }
 
@@ -418,15 +424,15 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
 
         val stopCount = journeySegment.stopCount
         if (distanceKm <= 0.0 && stopCount <= 0) {
-            Log.d(TAG, "No useful data for row ${row.rowIndex}")
+            logD("No useful data for row ${row.rowIndex}")
             return false
         }
 
         // 6) Write back to Firebase
-        val mesafeStr = if (distanceKm > 0) String.format("%.2f km", distanceKm) else ""
+        val mesafeStr = if (distanceKm > 0) String.format(Locale.US, "%.2f km", distanceKm) else ""
         val stopCountStr = if (stopCount > 0) stopCount.toString() else ""
         val ok = com.example.toplutasima.network.FirestoreService.updateTrip(row.firestoreDocId, mapOf("mesafe" to mesafeStr, "durakSayisi" to stopCountStr))
-        Log.d(TAG, "Row ${row.rowIndex} / doc ${row.firestoreDocId}: distance=${mesafeStr}km, stops=$stopCount, ok=$ok")
+        logD("Row ${row.rowIndex} / doc ${row.firestoreDocId}: distance=$mesafeStr, stops=$stopCount, ok=$ok")
         return ok
     }
 
@@ -448,7 +454,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
 
     private suspend fun processStopNameRow(row: BulkUpdateRow): Boolean {
         if (row.binisDuragi.isBlank() || row.inisDuragi.isBlank() || row.hat.isBlank()) {
-            Log.d(TAG, "Skipping stop name row ${row.rowIndex}: missing required fields")
+            logD("Skipping stop name row ${row.rowIndex}: missing required fields")
             return false
         }
 
@@ -456,7 +462,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
         val fromId = resolveStopId(row.binisDuragi)
         val toId = resolveStopId(row.inisDuragi)
         if (fromId.isBlank() || toId.isBlank()) {
-            Log.d(TAG, "Could not resolve stop IDs for stop name row ${row.rowIndex}")
+            logD("Could not resolve stop IDs for stop name row ${row.rowIndex}")
             return false
         }
 
@@ -487,7 +493,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
             "inisDuragi" to seg.toStop,
             "yon" to seg.direction
         ))
-        Log.d(TAG, "StopName row ${row.rowIndex} / doc ${row.firestoreDocId}: from=${seg.fromStop} to=${seg.toStop} dir=${seg.direction} ok=$ok")
+        logD("StopName row ${row.rowIndex} / doc ${row.firestoreDocId}: ok=$ok")
         return ok
     }
 }

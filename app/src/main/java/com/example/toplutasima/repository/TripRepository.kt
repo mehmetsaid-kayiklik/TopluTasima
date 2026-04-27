@@ -11,6 +11,7 @@ import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.network.RmvApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 class TripRepository {
 
@@ -65,7 +66,7 @@ class TripRepository {
             data["gercekYolSuresi"] = ""
             data["not"] = note
             data["biletKontrolü"] = TicketStatus.fromBoolean(biletKontrolu).key
-            data["mesafe"] = if (seg.distanceKm > 0) String.format("%.2f km", seg.distanceKm) else ""
+            data["mesafe"] = if (seg.distanceKm > 0) String.format(Locale.US, "%.2f km", seg.distanceKm) else ""
             data["durakSayisi"] = if (seg.stopCount > 0) seg.stopCount.toString() else ""
             data["id"] = id
             data["yearMonth"] = yearMonth // "YYYY-MM" - ay bazlı sunucu sorgusu için

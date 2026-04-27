@@ -34,6 +34,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 
 // ── Kayıt Modu ───────────────────────────────────────────────────────────────
@@ -914,7 +915,7 @@ class RmvLogViewModel(
                     } catch (_: Exception) { }
                 }
 
-                val newMesafe = if (newDistanceKm > 0) String.format("%.2f km", newDistanceKm) else ""
+                val newMesafe = if (newDistanceKm > 0) String.format(Locale.US, "%.2f km", newDistanceKm) else ""
                 val newDurakSayisi = if (newStopCount > 0) newStopCount.toString() else ""
 
                 val ok = repository.updateStops(
@@ -1086,7 +1087,7 @@ class RmvLogViewModel(
                         "gecikme" to gecikme,
                         "planlananYolSuresi" to planlananSure,
                         "gercekYolSuresi" to gercekSure,
-                        "mesafe" to if (distanceKm > 0) String.format("%.2f km", distanceKm) else "Bilinmiyor",
+                        "mesafe" to if (distanceKm > 0) String.format(Locale.US, "%.2f km", distanceKm) else "Bilinmiyor",
                         "durakSayisi" to if (stCount > 0) stCount.toString() else "Bilinmiyor",
                         "havaDurumu" to m.weather,
                         "oturabildimMi" to SeatingStatus.fromBoolean(m.oturabildim).key,
@@ -1132,6 +1133,7 @@ class RmvLogViewModel(
         val s = _uiState.value
         val segIdx = s.selectedSegmentIndex
         val seg = tr.segments.getOrNull(segIdx) ?: return
+        val segId = s.segmentIds.getOrNull(segIdx).orEmpty()
 
         try {
             val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
@@ -1142,6 +1144,7 @@ class RmvLogViewModel(
                 putExtra(TransitTripForegroundService.EXTRA_VEHICLE_TYPE, seg.typeTr)
                 putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, segIdx)
                 putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
+                putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, segId)
             }
             ctx().startForegroundService(intent)
         } catch (e: Exception) {
@@ -1182,6 +1185,7 @@ class RmvLogViewModel(
             // Sonraki segmente geç
             val nextIdx = currentIdx + 1
             val nextSeg = tr.segments.getOrNull(nextIdx) ?: return
+            val nextSegId = s.segmentIds.getOrNull(nextIdx).orEmpty()
             try {
                 val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
                     action = TransitTripForegroundService.ACTION_NEXT_SEGMENT
@@ -1191,6 +1195,7 @@ class RmvLogViewModel(
                     putExtra(TransitTripForegroundService.EXTRA_VEHICLE_TYPE, nextSeg.typeTr)
                     putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, nextIdx)
                     putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
+                    putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, nextSegId)
                 }
                 ctx().startService(intent)
             } catch (e: Exception) {

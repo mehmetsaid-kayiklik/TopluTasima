@@ -15,10 +15,13 @@ import com.example.toplutasima.ui.LocaleManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.LocalTime
+import java.util.Locale
 import java.util.UUID
 
 data class PersonalTripUiState(
@@ -262,6 +265,14 @@ class PersonalTripViewModel(
      *  4. Foreground Service başlatılır (waypoint takibi + ORS).
      */
     fun recordBindim(context: Context, docId: String) {
+        if (!hasLocationPermission()) {
+            _uiState.value = _uiState.value.copy(
+                isResolvingLocation = false,
+                statusMessage = "Konum izni gerekli"
+            )
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isResolvingLocation = true,
@@ -288,9 +299,17 @@ class PersonalTripViewModel(
                     "Biniş kaydedildi (konum alınamadı)"
             )
             // Foreground Service'i başlat
-            val intent = Intent(context, PersonalTripForegroundService::class.java)
-                .setAction(PersonalTripForegroundService.ACTION_START)
-            context.startForegroundService(intent)
+            try {
+                val intent = Intent(context, PersonalTripForegroundService::class.java)
+                    .setAction(PersonalTripForegroundService.ACTION_START)
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
+                _uiState.value = _uiState.value.copy(
+                    activeDocId = null,
+                    statusMessage = "Takip başlatılamadı: ${e.message}"
+                )
+            }
             load()
         }
     }
@@ -308,6 +327,9 @@ class PersonalTripViewModel(
         viewModelScope.launch {
             // Önce servisi durdur (son batch ORS'e gönderilecek)
             stopTracking(context)
+            withTimeoutOrNull(15_000L) {
+                PersonalTripForegroundService.isTracking.first { !it }
+            }
             _uiState.value = _uiState.value.copy(
                 isResolvingLocation = true,
                 statusMessage = "Konum alınıyor..."
@@ -316,8 +338,8 @@ class PersonalTripViewModel(
             val location = locationHelper.resolveCurrentLocation()
 
             // Servisten son mesafeyi oku (stopTracking sonrası StateFlow güncelleniyor)
-            val km = _uiState.value.liveDistanceKm
-            val mesafe = if (km > 0.0) String.format("%.1f km", km) else ""
+            val km = PersonalTripForegroundService.currentDistanceKm
+            val mesafe = if (km > 0.0) String.format(Locale.US, "%.1f km", km) else ""
 
             // Bindim saatini bul (yolSuresi hesabı için)
             val activeTrip = _uiState.value.trips.find { it.firestoreDocId == docId }

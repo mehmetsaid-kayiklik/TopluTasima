@@ -10,6 +10,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 object FirestoreService {
 
@@ -249,7 +250,7 @@ object FirestoreService {
         return monthCounts.entries
             .map { (key, count) ->
                 val (year, monthNum) = key
-                val monthStr = String.format("%02d", monthNum)
+                val monthStr = String.format(Locale.US, "%02d", monthNum)
                 val monthName = MONTH_NAMES[monthStr] ?: monthStr
                 MonthSummary(
                     monthName = monthName,
@@ -325,7 +326,7 @@ object FirestoreService {
         val sortedMonths = monthYearSet
             .sortedWith(compareBy({ it.first }, { it.second }))
             .map { (year, month) ->
-                val monthName = MONTH_NAMES[String.format("%02d", month)] ?: month.toString()
+                val monthName = MONTH_NAMES[String.format(Locale.US, "%02d", month)] ?: month.toString()
                 "$monthName $year"
             }
 

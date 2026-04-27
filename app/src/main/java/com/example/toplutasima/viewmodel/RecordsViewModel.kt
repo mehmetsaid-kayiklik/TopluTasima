@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.usecase.RecordFilterState
@@ -237,7 +238,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun updateRecord(docId: String, fields: Map<String, Any?>) {
-        Log.d("UpdateRecord", "docId='$docId' fields=$fields")
+        if (BuildConfig.DEBUG) Log.d("UpdateRecord", "docId='$docId' fields=${fields.keys}")
         if (docId.isBlank()) {
             _uiState.value = _uiState.value.copy(saveMsg = "❌ Kayıt ID bulunamadı")
             return

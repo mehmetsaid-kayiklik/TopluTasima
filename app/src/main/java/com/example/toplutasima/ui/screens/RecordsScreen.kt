@@ -1098,7 +1098,9 @@ private fun EditRecordDialog(
 ) {
     val context = LocalContext.current
     val docId = record["firestoreDocId"]?.toString() ?: ""
-    Log.d("EditDialog", "docId='$docId' record keys=${record.keys}")
+    if (com.example.toplutasima.BuildConfig.DEBUG) {
+        Log.d("EditDialog", "docId='$docId' record keys=${record.keys}")
+    }
 
     // BUG 3: Editable date with derived gun / gununTipi
     var tarih by remember(record) { mutableStateOf(record["tarih"]?.toString() ?: "") }
@@ -1130,7 +1132,7 @@ private fun EditRecordDialog(
         val month = parts.getOrNull(1)?.toIntOrNull() ?: 1
         val year = parts.getOrNull(2)?.toIntOrNull() ?: 2024
         DatePickerDialog(context, { _, y, m, d ->
-            val newDate = String.format("%02d.%02d.%04d", d, m + 1, y)
+            val newDate = String.format(java.util.Locale.US, "%02d.%02d.%04d", d, m + 1, y)
             tarih = newDate
             gun = FirestoreService.computeGun(newDate)
             gununTipi = FirestoreService.computeGununTipi(newDate)
