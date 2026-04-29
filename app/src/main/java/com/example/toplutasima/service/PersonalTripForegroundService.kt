@@ -170,12 +170,7 @@ class PersonalTripForegroundService : Service() {
     private suspend fun sendBatchToOrs() {
         val batch = synchronized(pendingWaypoints) {
             if (pendingWaypoints.size < 2) return
-            val copy = pendingWaypoints.toList()
-            // Son noktayı tutarak sürekliliği sağla
-            val lastPoint = pendingWaypoints.last()
-            pendingWaypoints.clear()
-            pendingWaypoints.add(lastPoint)
-            copy
+            pendingWaypoints.toList()
         }
 
         if (BuildConfig.DEBUG) Log.d(TAG, "ORS gönderiliyor: ${batch.size} waypoint")
@@ -186,6 +181,12 @@ class PersonalTripForegroundService : Service() {
             _liveDistanceKm.value = km
             updateNotification(String.format(Locale.US, "%.1f km", km))
             if (BuildConfig.DEBUG) Log.d(TAG, "ORS mesafesi eklendi: +${meters/1000.0} km, toplam: $km km")
+
+            synchronized(pendingWaypoints) {
+                val lastPoint = batch.last()
+                pendingWaypoints.removeAll(batch)
+                if (pendingWaypoints.isEmpty()) pendingWaypoints.add(lastPoint)
+            }
         } else {
             Log.w(TAG, "ORS yanıt vermedi, bu batch atlandı")
         }

@@ -140,16 +140,17 @@ class PersonalLocationHelper(private val context: Context) {
                     .post(body.toRequestBody("application/json".toMediaType()))
                     .build()
 
-                val response = httpClient.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    if (BuildConfig.DEBUG) Log.e(TAG, "ORS error ${response.code}: ${response.body?.string()}")
-                    return@withContext null
-                }
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        if (BuildConfig.DEBUG) Log.e(TAG, "ORS error ${response.code}: ${response.body?.string()}")
+                        return@withContext null
+                    }
 
-                val json = JSONObject(response.body?.string() ?: return@withContext null)
-                val routes = json.optJSONArray("routes") ?: return@withContext null
-                val summary = routes.getJSONObject(0).getJSONObject("summary")
-                summary.getDouble("distance") // metre
+                    val json = JSONObject(response.body?.string() ?: return@withContext null)
+                    val routes = json.optJSONArray("routes") ?: return@withContext null
+                    val summary = routes.getJSONObject(0).getJSONObject("summary")
+                    summary.getDouble("distance") // metre
+                }
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "fetchRouteDistanceMeters failed: ${e.message}")
                 null

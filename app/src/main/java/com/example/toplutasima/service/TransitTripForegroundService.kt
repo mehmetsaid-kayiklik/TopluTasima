@@ -1,27 +1,48 @@
 package com.example.toplutasima.service
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.VehicleType
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlin.coroutines.resume
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Toplu taşıma yolculuğu sırasında sürekli (ongoing) bildirim gösterir.
@@ -52,6 +73,7 @@ class TransitTripForegroundService : Service() {
         const val ACTION_STOP = "com.example.toplutasima.transit.STOP"
         const val ACTION_UPDATE_BOARDING = "com.example.toplutasima.transit.BOARDED"
         const val ACTION_NEXT_SEGMENT = "com.example.toplutasima.transit.NEXT_SEG"
+        const val ACTION_START_PROXIMITY_WATCH = "com.example.toplutasima.transit.PROXIMITY_WATCH"
 
         // Intent Extra anahtarları
         const val EXTRA_LINE = "line"
@@ -61,6 +83,9 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_SEGMENT_INDEX = "segmentIndex"
         const val EXTRA_TOTAL_SEGMENTS = "totalSegments"
         const val EXTRA_TRIP_ID = "tripId"
+        const val EXTRA_ALIGHTING_LAT = "alightingLat"
+        const val EXTRA_ALIGHTING_LNG = "alightingLng"
+        private const val PROXIMITY_WATCH_REQUEST_CODE = 9012
 
         // ViewModel tarafından gözlemlenen durum
         private val _isActive = MutableStateFlow(false)
@@ -80,6 +105,13 @@ class TransitTripForegroundService : Service() {
     private var currentTripId = ""
     private var hasBoarded = false
 
+    // Proximity alert alanları
+    private var alightingLat: Double = Double.NaN
+    private var alightingLng: Double = Double.NaN
+    private var proximityJob: Job? = null
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val fusedClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
+
     private fun logD(message: String) {
         if (BuildConfig.DEBUG) Log.d(TAG, message)
     }
@@ -90,7 +122,22 @@ class TransitTripForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        if (intent == null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(NOTIF_ID_TRACKING, buildTrackingNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                } else {
+                    startForeground(NOTIF_ID_TRACKING, buildTrackingNotification())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Yeniden başlatılırken startForeground başarısız: ${e.message}", e)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            return START_STICKY
+        }
+
+        when (intent.action) {
             ACTION_START -> {
                 readExtras(intent)
                 hasBoarded = false
@@ -116,16 +163,21 @@ class TransitTripForegroundService : Service() {
             ACTION_UPDATE_BOARDING -> {
                 hasBoarded = true
                 updateTrackingNotification()
-                scheduleReminder()
-                logD("Bindim kaydedildi, hatırlatma kuruldu")
+                scheduleReminder()                    // Fallback: koordinat yoksa direkt bildirim
+                scheduleProximityWatchAlarm()         // Yeni: 3dk öncesine proximity alarm
+                logD("Bindim kaydedildi, hatırlatma ve proximity alarm kuruldu")
             }
             ACTION_NEXT_SEGMENT -> {
-                cancelReminder()
+                cancelProximityWatchAlarm()           // Önceki segmentin watch'ını iptal et
                 readExtras(intent)
                 hasBoarded = false
                 updateTrackingNotification()
                 _activeSegmentIndex.value = currentSegmentIndex
                 logD("Sonraki segment bildirimi güncellendi")
+            }
+            ACTION_START_PROXIMITY_WATCH -> {
+                startProximityWatch()
+                logD("Proximity watch başlatıldı (alarm ile tetiklendi)")
             }
             ACTION_STOP -> {
                 stopTracking()
@@ -139,6 +191,8 @@ class TransitTripForegroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         cancelReminder()
+        cancelProximityWatchAlarm()
+        serviceScope.cancel()
         _isActive.value = false
     }
 
@@ -152,6 +206,9 @@ class TransitTripForegroundService : Service() {
         currentSegmentIndex = intent.getIntExtra(EXTRA_SEGMENT_INDEX, currentSegmentIndex)
         totalSegments = intent.getIntExtra(EXTRA_TOTAL_SEGMENTS, totalSegments)
         currentTripId = intent.getStringExtra(EXTRA_TRIP_ID) ?: currentTripId
+        // Proximity alert koordinatları (ACTION_START ve ACTION_NEXT_SEGMENT'te gelir)
+        if (intent.hasExtra(EXTRA_ALIGHTING_LAT)) alightingLat = intent.getDoubleExtra(EXTRA_ALIGHTING_LAT, Double.NaN)
+        if (intent.hasExtra(EXTRA_ALIGHTING_LNG)) alightingLng = intent.getDoubleExtra(EXTRA_ALIGHTING_LNG, Double.NaN)
     }
 
     // ── Takip Durdurma ───────────────────────────────────────────────────────
@@ -159,6 +216,7 @@ class TransitTripForegroundService : Service() {
     private fun stopTracking() {
         logD("Bildirim durduruluyor")
         cancelReminder()
+        cancelProximityWatchAlarm()
         // Hatırlatma bildirimini de kaldır
         val nm = getSystemService(NotificationManager::class.java)
         nm.cancel(NOTIF_ID_REMINDER)
@@ -199,7 +257,7 @@ class TransitTripForegroundService : Service() {
 
     // ── Takip Bildirimi ──────────────────────────────────────────────────────
 
-    private fun vehicleEmoji(): String = when (currentVehicleType) {
+    private fun vehicleEmoji(type: String = currentVehicleType): String = when (type) {
         VehicleType.UBAHN.key -> "🚇"
         VehicleType.SBAHN.key -> "🚆"
         VehicleType.RERB.key -> "🚂"
@@ -224,13 +282,28 @@ class TransitTripForegroundService : Service() {
         val arrText = if (currentPlannedArr.isNotBlank()) " ($currentPlannedArr)" else ""
         val text = "📍 İniş: $currentAlightingStop$arrText"
 
+        val contentIntent = Intent(this, com.example.toplutasima.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(this, CHANNEL_TRACKING)
             .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_directions)
+            .setContentIntent(contentPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
+
+        if (totalSegments > 1) {
+            builder.setProgress(totalSegments, currentSegmentIndex + 1, false)
+        }
 
         // Aksiyon butonları
         if (!hasBoarded) {
@@ -264,7 +337,9 @@ class TransitTripForegroundService : Service() {
         }
 
         try {
-            val arrTime = LocalTime.parse(currentPlannedArr.take(5), DateTimeFormatter.ofPattern("HH:mm"))
+            val timeString = currentPlannedArr.take(5)
+            val paddedTime = if (timeString.contains(":") && timeString.length < 5) timeString.padStart(5, '0') else timeString
+            val arrTime = LocalTime.parse(paddedTime, DateTimeFormatter.ofPattern("HH:mm"))
             val offsetMinutes = PrefsManager.reminderOffsetMinutes.toLong()
             val reminderTime = arrTime.plusMinutes(offsetMinutes)
             val now = LocalTime.now()
@@ -272,8 +347,16 @@ class TransitTripForegroundService : Service() {
             var delayMs = now.until(reminderTime, ChronoUnit.MILLIS)
             // Eğer geçmişte kaldıysa (gece yarısı geçişi veya zaten geçmiş)
             if (delayMs < 0) {
-                delayMs += 24 * 60 * 60 * 1000L
+                // Eğer hedef saat 12 saatten daha fazla geride görünüyorsa, yarına aittir (gece yarısı geçişi)
+                if (delayMs < -12 * 60 * 60 * 1000L) {
+                    delayMs += 24 * 60 * 60 * 1000L
+                } else {
+                    // Sadece birkaç saat/dakika geçmişteyse, gerçekten geçmiş demektir
+                    showReminderNotification()
+                    return
+                }
             }
+
             // Eğer çok kısa (5 saniye altı) ise hemen göster
             if (delayMs < 5_000L) {
                 showReminderNotification()
@@ -343,14 +426,7 @@ class TransitTripForegroundService : Service() {
     fun buildReminderNotification(
         line: String, alightingStop: String, plannedArr: String, vehicleType: String
     ): Notification {
-        val emoji = when (vehicleType) {
-            VehicleType.UBAHN.key -> "🚇"
-            VehicleType.SBAHN.key -> "🚆"
-            VehicleType.RERB.key -> "🚂"
-            VehicleType.FERNZUG.key -> "🚄"
-            VehicleType.STRASSENBAHN.key -> "🚋"
-            else -> "🚌"
-        }
+        val emoji = vehicleEmoji(vehicleType)
 
         return NotificationCompat.Builder(this, CHANNEL_REMINDER)
             .setContentTitle("⏰ İnmeniz gereken durak!")
@@ -381,4 +457,131 @@ class TransitTripForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
+
+    // ── Proximity Watch ───────────────────────────────────────────────────────
+
+    /**
+     * Bindim kaydedildikten sonra çağrılır.
+     * plannedArr - 3 dakikaya bir AlarmManager alarmı kurar.
+     * Alarm tetiklenince ACTION_START_PROXIMITY_WATCH → startProximityWatch() çalışır.
+     * Koordinat yoksa (manuel kayıt) sessizce çıkar — scheduleReminder() fallback olarak yeterli.
+     */
+    @SuppressLint("MissingPermission", "ScheduleExactAlarm")
+    private fun scheduleProximityWatchAlarm() {
+        if (alightingLat.isNaN() || alightingLng.isNaN()) return
+        if (currentPlannedArr.isBlank()) return
+        try {
+            val timeString = currentPlannedArr.take(5)
+            val paddedTime = if (timeString.contains(":") && timeString.length < 5)
+                timeString.padStart(5, '0') else timeString
+            val arrTime = LocalTime.parse(paddedTime, DateTimeFormatter.ofPattern("HH:mm"))
+            val watchTime = arrTime.minusMinutes(3)
+            val now = LocalTime.now()
+            var delayMs = now.until(watchTime, ChronoUnit.MILLIS)
+            if (delayMs < 0) {
+                if (delayMs < -12 * 60 * 60 * 1000L) delayMs += 24 * 60 * 60 * 1000L
+                else { startProximityWatch(); return }
+            }
+            if (delayMs < 5_000L) { startProximityWatch(); return }
+
+            val triggerAt = System.currentTimeMillis() + delayMs
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val pi = PendingIntent.getForegroundService(
+                this, PROXIMITY_WATCH_REQUEST_CODE,
+                Intent(this, TransitTripForegroundService::class.java).apply {
+                    action = ACTION_START_PROXIMITY_WATCH
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+            if (canExact) {
+                try { alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi) }
+                catch (e: SecurityException) { alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi) }
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
+            logD("Proximity watch alarmı kuruldu: ${delayMs / 1000}s sonra ($watchTime)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Proximity watch alarmı kurulamadı: ${e.message}")
+        }
+    }
+
+    /** Proximity watch alarmını ve coroutine'ini iptal eder. */
+    private fun cancelProximityWatchAlarm() {
+        proximityJob?.cancel()
+        proximityJob = null
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val pi = PendingIntent.getForegroundService(
+                this, PROXIMITY_WATCH_REQUEST_CODE,
+                Intent(this, TransitTripForegroundService::class.java).apply {
+                    action = ACTION_START_PROXIMITY_WATCH
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.cancel(pi)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * 30 saniyede bir GPS kontrol eder.
+     * İniş durağına ≤500m yaklaşıldığında bildirim gönderir ve döngüyü bitirir.
+     */
+    private fun startProximityWatch() {
+        if (alightingLat.isNaN() || alightingLng.isNaN()) return
+        if (!hasLocationPermission()) return
+        logD("Proximity watch başlıyor → hedef: ($alightingLat, $alightingLng)")
+        proximityJob?.cancel()
+        proximityJob = serviceScope.launch {
+            while (isActive) {
+                delay(30_000L)
+                try {
+                    val loc = getCurrentLocationSuspend() ?: continue
+                    val dist = haversineMeters(loc.first, loc.second, alightingLat, alightingLng)
+                    logD("Proximity check: ${dist.toInt()}m")
+                    if (dist <= 500.0) {
+                        showReminderNotification()
+                        cancelReminder()   // Fallback AlarmManager'ı da iptal et
+                        break
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Proximity check hatası: ${e.message}")
+                }
+            }
+        }
+    }
+
+    @Suppress("MissingPermission")
+    private suspend fun getCurrentLocationSuspend(): Pair<Double, Double>? {
+        if (!hasLocationPermission()) return null
+        val tokenSource = CancellationTokenSource()
+        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+            cont.invokeOnCancellation { tokenSource.cancel() }
+            fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, tokenSource.token)
+                .addOnSuccessListener { loc ->
+                    if (loc != null) cont.resume(loc.latitude to loc.longitude)
+                    else fusedClient.lastLocation
+                        .addOnSuccessListener { last -> cont.resume(if (last != null) last.latitude to last.longitude else null) }
+                        .addOnFailureListener { cont.resume(null) }
+                }
+                .addOnFailureListener { cont.resume(null) }
+        }
+    }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+
+    /** Haversine formülü ile iki koordinat arasındaki mesafeyi metre cinsinden hesaplar. */
+    private fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val R = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLng = Math.toRadians(lng2 - lng1)
+        val a = sin(dLat / 2).pow(2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)
+        return R * 2 * asin(sqrt(a))
+    }
 }
+

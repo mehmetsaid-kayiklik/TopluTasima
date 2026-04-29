@@ -28,7 +28,10 @@ data class Segment(
     val journeyRef: String = "",
     // stopNames içinde biniş/iniş pozisyonları (tüm hat listesinde)
     val stopFromIdx: Int = 0,
-    val stopToIdx: Int = -1
+    val stopToIdx: Int = -1,
+    // İniş durağının koordinatları — proximity alert için (yoksa NaN)
+    val toStopLat: Double = Double.NaN,
+    val toStopLng: Double = Double.NaN
 )
 
 data class TripResult(

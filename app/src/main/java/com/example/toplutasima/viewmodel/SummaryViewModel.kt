@@ -175,7 +175,7 @@ class SummaryViewModel(
             val month = monthNames[parts[0]] ?: return null
             val year = parts[1].toIntOrNull() ?: return null
             val trips = withContext(Dispatchers.IO) {
-                com.example.toplutasima.network.FirestoreService.fetchTrips()
+                com.example.toplutasima.network.FirestoreService.fetchTripsForMonth(parts[0], year.toString())
             }
             HeatmapUtils.buildHeatmapData(trips, year, month)
         } catch (_: Exception) {

@@ -2,6 +2,7 @@ package com.example.toplutasima
 
 import android.app.Activity
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -109,7 +110,11 @@ class MainActivity : ComponentActivity() {
                 onError = Color.White
             )
 
-            val baseScheme = if (isDarkTheme) modernDarkScheme else modernLightScheme
+            val baseScheme = if (PrefsManager.useMaterialYou && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            } else {
+                if (isDarkTheme) modernDarkScheme else modernLightScheme
+            }
 
             val dynamicScheme = baseScheme.copy(
                 background = parseColorHex(bgHex, baseScheme.background),

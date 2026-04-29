@@ -101,6 +101,8 @@ class TripPlanningUseCase(private val repository: TripRepository) {
         val segToIdx = if (exactJourney.toIdx >= segFromIdx) exactJourney.toIdx
                        else exactJourney.stopNames.size - 1
 
+        val toCoords = exactJourney.allStopCoords.getOrNull(segToIdx)
+
         return Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
             fromStop = exactJourney.stopNames.getOrElse(segFromIdx) { input.from },
@@ -113,7 +115,9 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             stopTimes = exactJourney.stopTimes,
             journeyRef = dep.journeyDetailRef,
             stopFromIdx = segFromIdx,
-            stopToIdx = segToIdx
+            stopToIdx = segToIdx,
+            toStopLat = toCoords?.first ?: Double.NaN,
+            toStopLng = toCoords?.second ?: Double.NaN
         )
     }
 
@@ -136,6 +140,8 @@ class TripPlanningUseCase(private val repository: TripRepository) {
         val leg1Distance = calcDistance(dep.typeTr, leg1Coords)
 
         val result = mutableListOf<Segment>()
+        val transferCoords = exactJourney.allStopCoords.getOrNull(transferIdx)
+
         result += Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
             fromStop = exactJourney.stopNames.getOrElse(segFromIdx) { input.from },
@@ -148,7 +154,9 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             stopTimes = exactJourney.stopTimes,
             journeyRef = dep.journeyDetailRef,
             stopFromIdx = segFromIdx,
-            stopToIdx = transferIdx
+            stopToIdx = transferIdx,
+            toStopLat = transferCoords?.first ?: Double.NaN,
+            toStopLng = transferCoords?.second ?: Double.NaN
         )
         // Sonraki bacakları rehber seferden ekle
         for (i in 1 until guideSegments.size) result += guideSegments[i]
@@ -164,6 +172,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
         val segToIdx = if (exactJourney.toIdx >= segFromIdx) exactJourney.toIdx
                        else exactJourney.stopNames.size - 1
         val distanceKm = calcDistance(dep.typeTr, exactJourney.coords, exactJourney.allStopCoords, exactJourney.fromIdx, exactJourney.toIdx)
+        val toCoords = exactJourney.allStopCoords.getOrNull(segToIdx)
         return Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
             fromStop = exactJourney.stopNames.getOrElse(segFromIdx) { input.from },
@@ -176,7 +185,9 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             stopTimes = exactJourney.stopTimes,
             journeyRef = dep.journeyDetailRef,
             stopFromIdx = segFromIdx,
-            stopToIdx = segToIdx
+            stopToIdx = segToIdx,
+            toStopLat = toCoords?.first ?: Double.NaN,
+            toStopLng = toCoords?.second ?: Double.NaN
         )
     }
 

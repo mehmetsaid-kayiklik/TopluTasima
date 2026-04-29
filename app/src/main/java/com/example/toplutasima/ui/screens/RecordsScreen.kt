@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,7 +106,8 @@ fun RecordsScreen(
                 errorMsg = state.errorMsg,
                 lang = lang,
                 onMonthClick = { viewModel.selectMonth(it) },
-                onTogglePersonal = { onTogglePersonal(true) }
+                onTogglePersonal = { onTogglePersonal(true) },
+                onRefresh = { viewModel.loadMonthSummaries() }
             )
         } else {
             // ── LEVEL 2: Day/Trip List ──
@@ -134,7 +136,8 @@ fun RecordsScreen(
                 showExportDialog = state.showExportDialog,
                 isExporting = state.isExporting,
                 onToggleExportDialog = { viewModel.toggleExportDialog() },
-                onExport = { format -> viewModel.exportMonth(format, context) }
+                onExport = { format -> viewModel.exportMonth(format, context) },
+                onRefresh = { state.selectedMonth?.let { viewModel.selectMonth(it) } }
             )
         }
 
@@ -194,6 +197,7 @@ fun RecordsScreen(
 }
 
 // ── LEVEL 1: Month List ──
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MonthListScreen(
     summaries: List<com.example.toplutasima.network.FirestoreService.MonthSummary>,
@@ -201,7 +205,8 @@ fun MonthListScreen(
     errorMsg: String,
     lang: com.example.toplutasima.ui.AppLanguage,
     onMonthClick: (com.example.toplutasima.network.FirestoreService.MonthSummary) -> Unit,
-    onTogglePersonal: () -> Unit = {}
+    onTogglePersonal: () -> Unit = {},
+    onRefresh: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Title + Kişisel toggle
@@ -229,7 +234,7 @@ fun MonthListScreen(
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                isLoading -> {
+                isLoading && summaries.isEmpty() -> {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.primary,
@@ -259,11 +264,16 @@ fun MonthListScreen(
                     )
                 }
                 else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    PullToRefreshBox(
+                        isRefreshing = isLoading,
+                        onRefresh = onRefresh,
+                        modifier = Modifier.fillMaxSize()
                     ) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                         items(summaries.size, key = { it -> summaries[it].sortKey }) { index ->
                             val s = summaries[index]
                             Card(
@@ -297,9 +307,10 @@ fun MonthListScreen(
         }
     }
 }
+}
 
 // ── LEVEL 2: Day List ──
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun DayListScreen(
     monthSummary: com.example.toplutasima.network.FirestoreService.MonthSummary,
@@ -326,7 +337,8 @@ fun DayListScreen(
     showExportDialog: Boolean = false,
     isExporting: Boolean = false,
     onToggleExportDialog: () -> Unit = {},
-    onExport: (ExportFormat) -> Unit = {}
+    onExport: (ExportFormat) -> Unit = {},
+    onRefresh: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // App Bar equivalent
@@ -441,7 +453,7 @@ fun DayListScreen(
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                isLoading -> {
+                isLoading && dayGroups.isEmpty() -> {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.primary,
@@ -498,12 +510,17 @@ fun DayListScreen(
                     }
                 }
                 else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 16.dp)
+                    PullToRefreshBox(
+                        isRefreshing = isLoading,
+                        onRefresh = onRefresh,
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        dayGroups.forEach { group ->
-                            stickyHeader(key = group.date) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 16.dp)
+                        ) {
+                            dayGroups.forEach { group ->
+                                stickyHeader(key = group.date) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -528,6 +545,7 @@ fun DayListScreen(
             }
         }
     }
+}
 }
 
 // ── Incomplete Records Banner ─────────────────────────────────────────────

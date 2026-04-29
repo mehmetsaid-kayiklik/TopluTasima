@@ -39,6 +39,8 @@ fun MainAppScreen(isDarkTheme: Boolean) {
     var showPersonal by remember { mutableStateOf(false) }
     val lang = LocaleManager.currentLanguage
     val rmvLogViewModel: RmvLogViewModel = koinViewModel()
+    val summaryViewModel: SummaryViewModel = koinViewModel()
+    val settingsViewModel: SettingsViewModel = koinViewModel()
     val navItems = listOf(
         NavItem(S.navRecord(lang), Icons.Filled.Create, Icons.Outlined.Create),
         NavItem(S.navSummary(lang), Icons.Filled.List, Icons.Outlined.List),
@@ -85,7 +87,6 @@ fun MainAppScreen(isDarkTheme: Boolean) {
                     onTogglePersonal = { showPersonal = it }
                 )
                 1 -> {
-                    val summaryViewModel: SummaryViewModel = koinViewModel()
                     SummaryScreen(
                         modifier = Modifier.padding(innerPadding),
                         viewModel = summaryViewModel,
@@ -104,7 +105,6 @@ fun MainAppScreen(isDarkTheme: Boolean) {
                     }
                 )
                 3 -> {
-                    val settingsViewModel: SettingsViewModel = koinViewModel()
                     SettingsScreen(
                         modifier = Modifier.padding(innerPadding),
                         isDarkTheme = isDarkTheme,

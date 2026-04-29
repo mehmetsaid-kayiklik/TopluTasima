@@ -45,6 +45,10 @@ object PrefsManager {
     var reminderOffsetMinutes by mutableStateOf(0)
         private set
 
+    /** Material You dinamik tema desteği */
+    var useMaterialYou by mutableStateOf(true)
+        private set
+
     // ── Init ─────────────────────────────────────────────────────────────────
 
     fun init(sharedPrefs: SharedPreferences) {
@@ -54,6 +58,7 @@ object PrefsManager {
         waypointIntervalSeconds = prefs.getInt("waypoint_interval_sec", 30)
         transitNotificationsEnabled = prefs.getBoolean("transit_notif_enabled", true)
         reminderOffsetMinutes = prefs.getInt("reminder_offset_min", 0)
+        useMaterialYou = prefs.getBoolean("use_material_you", true)
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────
@@ -61,6 +66,11 @@ object PrefsManager {
     fun changeThemeMode(mode: ThemeMode) {
         themeMode = mode
         prefs.edit().putString("theme_mode", mode.name).apply()
+    }
+
+    fun setMaterialYou(use: Boolean) {
+        useMaterialYou = use
+        prefs.edit().putBoolean("use_material_you", use).apply()
     }
 
     // ── Waypoint Aralığı ─────────────────────────────────────────────────────

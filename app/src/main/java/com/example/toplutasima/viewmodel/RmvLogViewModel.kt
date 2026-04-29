@@ -144,9 +144,7 @@ class RmvLogViewModel(
     private val nearbyManager: com.example.toplutasima.location.NearbyStopsManager
 ) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
-    private val notifPrefs = application.getSharedPreferences(
-        TransitNotificationReceiver.PREFS_NAME, Context.MODE_PRIVATE
-    )
+
     private var tripDetailJob: Job? = null
 
     private val _uiState = MutableStateFlow(
@@ -164,29 +162,8 @@ class RmvLogViewModel(
     private fun ctx(): Context = getApplication()
 
     init {
-        // Bildirim butonlarından gelen aksiyonları kontrol et
-        pollNotificationActions()
     }
 
-    /**
-     * Bildirim üzerindeki Bindim/İndim butonlarına basıldığında
-     * SharedPreferences'a yazılan pending action'ı periyodik olarak kontrol eder.
-     */
-    private fun pollNotificationActions() {
-        viewModelScope.launch {
-            while (isActive) {
-                val pending = notifPrefs.getString(TransitNotificationReceiver.KEY_PENDING_ACTION, null)
-                if (pending != null) {
-                    notifPrefs.edit().remove(TransitNotificationReceiver.KEY_PENDING_ACTION).apply()
-                    when (pending) {
-                        TransitNotificationReceiver.PENDING_BINDIM -> recordBindim()
-                        TransitNotificationReceiver.PENDING_INDIM -> recordIndim()
-                    }
-                }
-                delay(1_000L)  // 1 saniye aralıkla kontrol
-            }
-        }
-    }
 
     fun hasLocationPermission(): Boolean = nearbyManager.hasLocationPermission()
 
@@ -1145,6 +1122,8 @@ class RmvLogViewModel(
                 putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, segIdx)
                 putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
                 putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, segId)
+                if (!seg.toStopLat.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LAT, seg.toStopLat)
+                if (!seg.toStopLng.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LNG, seg.toStopLng)
             }
             ctx().startForegroundService(intent)
         } catch (e: Exception) {
@@ -1196,6 +1175,8 @@ class RmvLogViewModel(
                     putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, nextIdx)
                     putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
                     putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, nextSegId)
+                    if (!nextSeg.toStopLat.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LAT, nextSeg.toStopLat)
+                    if (!nextSeg.toStopLng.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LNG, nextSeg.toStopLng)
                 }
                 ctx().startService(intent)
             } catch (e: Exception) {

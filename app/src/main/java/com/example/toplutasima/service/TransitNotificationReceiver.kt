@@ -30,26 +30,17 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         const val ACTION_NOTIF_INDIM = "com.example.toplutasima.transit.NOTIF_INDIM"
         const val ACTION_REMINDER_TRIGGER = "com.example.toplutasima.transit.REMINDER"
 
-        // SharedPreferences anahtarları — ViewModel bu değerleri okur
-        const val PREFS_NAME = "transit_notif_actions"
-        const val KEY_PENDING_ACTION = "pending_action"
-        const val KEY_ACTION_TIMESTAMP = "action_timestamp"
-
-        const val PENDING_BINDIM = "bindim"
-        const val PENDING_INDIM = "indim"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_NOTIF_BINDIM -> {
                 Log.d(TAG, "Bildirimden Bindim aksiyonu alındı")
-                writePendingAction(context, PENDING_BINDIM)
                 updateActualFromNotification(context, intent, isBoarding = true)
             }
 
             ACTION_NOTIF_INDIM -> {
                 Log.d(TAG, "Bildirimden İndim aksiyonu alındı")
-                writePendingAction(context, PENDING_INDIM)
                 updateActualFromNotification(context, intent, isBoarding = false)
             }
 
@@ -58,18 +49,6 @@ class TransitNotificationReceiver : BroadcastReceiver() {
                 showReminderNotification(context, intent)
             }
         }
-    }
-
-    /**
-     * Aksiyonu SharedPreferences'a yazar. ViewModel bu değeri periyodik olarak
-     * veya LaunchedEffect ile kontrol eder.
-     */
-    private fun writePendingAction(context: Context, action: String) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_PENDING_ACTION, action)
-            .putLong(KEY_ACTION_TIMESTAMP, System.currentTimeMillis())
-            .apply()
     }
 
     private fun updateActualFromNotification(context: Context, intent: Intent, isBoarding: Boolean) {
