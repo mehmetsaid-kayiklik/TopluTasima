@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.toplutasima.data.AppEventBus
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.Departure
 import com.example.toplutasima.model.SeatingStatus
@@ -20,6 +21,7 @@ import com.example.toplutasima.service.TransitTripForegroundService
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.TripPlanningUseCase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -146,6 +148,7 @@ class RmvLogViewModel(
     private val prefs = application.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
 
     private var tripDetailJob: Job? = null
+    private var actualTimesRefreshJob: Job? = null
 
     private val _uiState = MutableStateFlow(
         RmvLogUiState(
@@ -162,6 +165,14 @@ class RmvLogViewModel(
     private fun ctx(): Context = getApplication()
 
     init {
+        // AppEventBus — bildirimden yapılan Bindim/İndim işlemlerini UI'a yansıt
+        viewModelScope.launch {
+            AppEventBus.events.collect { event ->
+                when (event) {
+                    is AppEventBus.Event.TripSynced -> handleTripSyncedFromNotif(event)
+                }
+            }
+        }
     }
 
 
@@ -693,7 +704,7 @@ class RmvLogViewModel(
                              else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=$segId)"
                 )
                 // ── Bildirimi güncelle (Bindim butonunu kaldır + hatırlatma kur) ──
-                if (ok) updateTransitNotificationBoarding()
+                if (ok) updateTransitNotificationBoarding(segId)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
@@ -1134,12 +1145,13 @@ class RmvLogViewModel(
     /**
      * Bindim kaydedildikten sonra bildirimi günceller (Bindim butonunu kaldırır + hatırlatma kurar).
      */
-    private fun updateTransitNotificationBoarding() {
+    private fun updateTransitNotificationBoarding(segId: String) {
         if (!PrefsManager.transitNotificationsEnabled) return
         if (!hasNotificationPermission()) return
         try {
             val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
                 action = TransitTripForegroundService.ACTION_UPDATE_BOARDING
+                putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, segId)
             }
             ctx().startService(intent)
         } catch (e: Exception) {
@@ -1198,6 +1210,82 @@ class RmvLogViewModel(
             ctx().startService(intent)
         } catch (_: Exception) {
             // Servis çalışmıyorsa hata vermesin
+        }
+    }
+
+    // ── AppEventBus: Bildirimden Bindim/İndim UI Sync ────────────────────────
+
+    /**
+     * Worker başarıyla Firestore'a yazdıktan sonra AppEventBus üzerinden bu event gelir.
+     * tripId → segmentIndex eşleşmesi bulunur; yanlış segmentin verisi yazılmaz.
+     *
+     * SharedFlow yalnızca canlı process için çalışır. ViewModel sonradan açılırsa
+     * bu event'i alamaz; bu yüzden [refreshActualTimesFromPrefs] de çağrılmalı.
+     */
+    private fun handleTripSyncedFromNotif(event: AppEventBus.Event.TripSynced) {
+        val s = _uiState.value
+        // tripId hangi segmente ait?
+        val segIdx = s.segmentIds.indexOfFirst { it == event.tripId }
+        if (segIdx < 0) return // Bu ViewModel'e ait değil, yoksay
+        if (segIdx != s.selectedSegmentIndex) {
+            refreshActualTimesFromPrefs()
+            return
+        }
+
+        fun formatTime(t: String) = t.replace(":", "").take(4)
+
+        if (event.isBoarding) {
+            _uiState.value = s.copy(
+                customBindimTime = formatTime(event.timestamp),
+                status = "Bindim ✅ (${event.timestamp}) — bildirimden"
+            )
+        } else {
+            val isLastSeg = segIdx >= (s.trip?.segments?.size ?: 1) - 1
+            _uiState.value = s.copy(
+                customIndimTime = formatTime(event.timestamp),
+                status = "İndim ✅ (${event.timestamp}) — bildirimden"
+            )
+            if (isLastSeg) {
+                stopTransitNotification()
+            }
+        }
+    }
+
+    /**
+     * ViewModel açıldığında veya resume edildiğinde çağrılır.
+     * DB'den mevcut segmentlerin gerçek biniş/iniş saatlerini tazeler.
+     * SharedFlow geçmişi yoktur; bu metod kaçırılan event'lerin telafisidir.
+     */
+    fun refreshActualTimesFromPrefs() {
+        val s = _uiState.value
+        val segmentIds = s.segmentIds
+        if (segmentIds.isEmpty()) return // Kayıt yüklü değil, gerek yok
+        val selectedIndex = s.selectedSegmentIndex
+        val selectedId = segmentIds.getOrNull(selectedIndex).orEmpty()
+        if (selectedId.isBlank()) return
+        actualTimesRefreshJob?.cancel()
+        actualTimesRefreshJob = viewModelScope.launch {
+            try {
+                val record = repository.fetchRecord(selectedId) ?: return@launch
+                val latest = _uiState.value
+                val latestSelectedId = latest.segmentIds.getOrNull(latest.selectedSegmentIndex).orEmpty()
+                if (latestSelectedId != selectedId) return@launch
+                val gercekBinis = record["gercekBinis"]?.toString().orEmpty()
+                val gercekInis = record["gercekInis"]?.toString().orEmpty()
+                fun toDigits(t: String) = t.replace(":", "").take(4)
+                val newBindim = if (gercekBinis.isNotBlank()) toDigits(gercekBinis)
+                                else latest.customBindimTime
+                val newIndim = if (gercekInis.isNotBlank()) toDigits(gercekInis)
+                               else latest.customIndimTime
+                if (newBindim != latest.customBindimTime || newIndim != latest.customIndimTime) {
+                    _uiState.value = latest.copy(
+                        customBindimTime = newBindim,
+                        customIndimTime = newIndim
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) { /* ağ hatası — sessizce geç */ }
         }
     }
 }

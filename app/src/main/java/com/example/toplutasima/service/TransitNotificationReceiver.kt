@@ -6,11 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.toplutasima.model.VehicleType
-import com.example.toplutasima.network.FirestoreService
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -18,8 +15,8 @@ import java.time.format.DateTimeFormatter
  * Bildirim üzerindeki aksiyon butonlarından ve hatırlatma alarm'ından
  * gelen Intent'leri işler.
  *
- * Bindim/İndim aksiyonları SharedPreferences üzerinden bir "pending action"
- * olarak yazılır ve ViewModel tarafından okunup işlenir.
+ * Bindim → Worker (DB) + servise ACTION_UPDATE_BOARDING (bildirim hızlı güncellenir)
+ * İndim  → Worker (DB) + servise ACTION_HANDLE_INDIM_FROM_NOTIF (son segment ise servis kapanır)
  */
 class TransitNotificationReceiver : BroadcastReceiver() {
 
@@ -29,19 +26,26 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         const val ACTION_NOTIF_BINDIM = "com.example.toplutasima.transit.NOTIF_BINDIM"
         const val ACTION_NOTIF_INDIM = "com.example.toplutasima.transit.NOTIF_INDIM"
         const val ACTION_REMINDER_TRIGGER = "com.example.toplutasima.transit.REMINDER"
-
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_NOTIF_BINDIM -> {
                 Log.d(TAG, "Bildirimden Bindim aksiyonu alındı")
-                updateActualFromNotification(context, intent, isBoarding = true)
+                val tripId = intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
+                // 1) DB'ye yaz (Worker)
+                enqueueWorker(context, tripId, isBoarding = true)
+                // 2) Servisi hemen güncelle — Bindim butonunu kaldır + hatırlatma kur
+                sendServiceIntent(context, TransitTripForegroundService.ACTION_UPDATE_BOARDING, tripId)
             }
 
             ACTION_NOTIF_INDIM -> {
                 Log.d(TAG, "Bildirimden İndim aksiyonu alındı")
-                updateActualFromNotification(context, intent, isBoarding = false)
+                val tripId = intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
+                // 1) DB'ye yaz (Worker)
+                enqueueWorker(context, tripId, isBoarding = false)
+                // 2) Servise bildir — son segmentte ise bildirim kapanır
+                sendServiceIntent(context, TransitTripForegroundService.ACTION_HANDLE_INDIM_FROM_NOTIF, tripId)
             }
 
             ACTION_REMINDER_TRIGGER -> {
@@ -51,10 +55,8 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun updateActualFromNotification(context: Context, intent: Intent, isBoarding: Boolean) {
-        val tripId = intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
+    private fun enqueueWorker(context: Context, tripId: String, isBoarding: Boolean) {
         if (tripId.isBlank()) return
-
         val timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
         val workData = androidx.work.Data.Builder()
@@ -75,6 +77,19 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
     }
 
+    /** Çalışan servise bir action intent'i gönderir. */
+    private fun sendServiceIntent(context: Context, action: String, tripId: String) {
+        try {
+            val intent = Intent(context, TransitTripForegroundService::class.java).apply {
+                this.action = action
+                putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, tripId)
+            }
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Servise intent gönderilemedi ($action): ${e.message}")
+        }
+    }
+
     /**
      * Hatırlatma bildirimini gösterir (AlarmManager tarafından tetiklenir).
      */
@@ -83,6 +98,7 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         val alightingStop = intent.getStringExtra(TransitTripForegroundService.EXTRA_ALIGHTING_STOP) ?: ""
         val plannedArr = intent.getStringExtra(TransitTripForegroundService.EXTRA_PLANNED_ARR) ?: ""
         val vehicleType = intent.getStringExtra(TransitTripForegroundService.EXTRA_VEHICLE_TYPE) ?: ""
+        val tripId = intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
 
         val emoji = when (vehicleType) {
             VehicleType.UBAHN.key -> "🚇"
@@ -93,13 +109,9 @@ class TransitNotificationReceiver : BroadcastReceiver() {
             else -> "🚌"
         }
 
-        // İndim aksiyon butonu
         val indimIntent = Intent(context, TransitNotificationReceiver::class.java).apply {
             action = ACTION_NOTIF_INDIM
-            putExtra(
-                TransitTripForegroundService.EXTRA_TRIP_ID,
-                intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
-            )
+            putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, tripId)
         }
         val indimPi = android.app.PendingIntent.getBroadcast(
             context,

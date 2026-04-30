@@ -496,6 +496,17 @@ object S {
         else -> "$minutes ${m(l, "dk", "Min.", "min")}"
     }
 
+    // ── Hatırlatma Türü ──
+    fun transitReminderTypeTitle(l: AppLanguage) = m(l, "Hatırlatma Türü", "Erinnerungstyp", "Reminder Type")
+    fun transitReminderTypeLocation(l: AppLanguage) = m(l, "📍 Konuma Dayalı", "📍 Standortbasiert", "📍 Location-Based")
+    fun transitReminderTypeTime(l: AppLanguage) = m(l, "⏰ Saate Dayalı", "⏰ Zeitbasiert", "⏰ Time-Based")
+    fun transitReminderTypeNone(l: AppLanguage) = m(l, "🔕 Kapalı", "🔕 Aus", "🔕 Off")
+    fun transitReminderTypeLocationDesc(l: AppLanguage) = m(l, "Durağa ≤500m yaklaştığında bildirim gelir (GPS gerekir)", "Benachrichtigung bei ≤500m Entfernung (GPS erforderlich)", "Alert when ≤500m from stop (GPS required)")
+    fun transitReminderTypeTimeDesc(l: AppLanguage) = m(l, "Planlanan iniş saatinde hatırlatma gönderilir", "Erinnerung zur geplanten Ausstiegszeit", "Reminder at planned alighting time")
+
+    // ── Sonraki segment bekleniyor ──
+    fun transitWaitingNextSegment(l: AppLanguage) = m(l, "Sonraki aktarma bekleniyor...", "Warte auf nächsten Anschluss...", "Waiting for next connection...")
+
     fun personalSummaryAvgDuration(l: AppLanguage) = m(l, "Ort. Süre", "Ø Dauer", "Avg. Duration")
     fun personalSummaryMonthly(l: AppLanguage) = m(l, "Aylık Kırılım", "Monatliche Aufschlüsselung", "Monthly Breakdown")
 

@@ -17,6 +17,14 @@ import kotlinx.serialization.json.Json
 import java.util.UUID
 
 /**
+ * İniş hatırlatması tetikleyici türü.
+ * LOCATION: Konuma dayalı (Proximity GPS)
+ * TIME    : Saate dayalı (AlarmManager)
+ * NONE    : Hatırlatma kapalı
+ */
+enum class TransitReminderType { LOCATION, TIME, NONE }
+
+/**
  * Centralized SharedPreferences manager for favorites, theme, etc.
  * Follows the same singleton-with-observable-state pattern as LocaleManager.
  */
@@ -49,6 +57,13 @@ object PrefsManager {
     var useMaterialYou by mutableStateOf(true)
         private set
 
+    /**
+     * İniş hatırlatma türü: LOCATION (GPS), TIME (alarm), NONE (kapalı).
+     * Varsayılan TIME — mevcut davranışı korur.
+     */
+    var transitReminderType by mutableStateOf(TransitReminderType.TIME)
+        private set
+
     // ── Init ─────────────────────────────────────────────────────────────────
 
     fun init(sharedPrefs: SharedPreferences) {
@@ -59,6 +74,7 @@ object PrefsManager {
         transitNotificationsEnabled = prefs.getBoolean("transit_notif_enabled", true)
         reminderOffsetMinutes = prefs.getInt("reminder_offset_min", 0)
         useMaterialYou = prefs.getBoolean("use_material_you", true)
+        transitReminderType = loadTransitReminderType()
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────
@@ -90,6 +106,17 @@ object PrefsManager {
     fun changeReminderOffset(minutes: Int) {
         reminderOffsetMinutes = minutes
         prefs.edit().putInt("reminder_offset_min", minutes).apply()
+    }
+
+    fun changeTransitReminderType(type: TransitReminderType) {
+        transitReminderType = type
+        prefs.edit().putString("transit_reminder_type", type.name).apply()
+    }
+
+    private fun loadTransitReminderType(): TransitReminderType {
+        val saved = prefs.getString("transit_reminder_type", TransitReminderType.TIME.name)
+            ?: TransitReminderType.TIME.name
+        return try { TransitReminderType.valueOf(saved) } catch (_: Exception) { TransitReminderType.TIME }
     }
 
     private fun loadThemeMode(): ThemeMode {

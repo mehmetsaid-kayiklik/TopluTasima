@@ -81,6 +81,9 @@ class TripRepository {
     suspend fun updateActual(id: String, actualDep: String?, actualArr: String?): Boolean =
         withContext(Dispatchers.IO) { FirestoreService.updateActual(id, actualDep, actualArr) }
 
+    suspend fun fetchRecord(id: String): Map<String, Any>? =
+        withContext(Dispatchers.IO) { FirestoreService.fetchRecord(id) }
+
     suspend fun updateStops(
         id: String,
         binisDuragi: String?, binisTime: String?,

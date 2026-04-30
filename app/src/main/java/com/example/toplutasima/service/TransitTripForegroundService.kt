@@ -19,6 +19,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
+import com.example.toplutasima.data.TransitReminderType
 import com.example.toplutasima.model.VehicleType
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -47,7 +48,7 @@ import kotlin.math.sqrt
 /**
  * Toplu taşıma yolculuğu sırasında sürekli (ongoing) bildirim gösterir.
  *
- * GPS takibi yapmaz — sadece bildirim yönetimi ve hatırlatma zamanlayıcısı.
+ * Konum bazlı hatırlatma açıkken kısa süreli proximity takibi de yapar.
  *
  * Çalışma akışı:
  *  1. Kaydet → ACTION_START: Bildirim göster (hat + iniş durağı + Bindim/İndim butonları)
@@ -74,6 +75,7 @@ class TransitTripForegroundService : Service() {
         const val ACTION_UPDATE_BOARDING = "com.example.toplutasima.transit.BOARDED"
         const val ACTION_NEXT_SEGMENT = "com.example.toplutasima.transit.NEXT_SEG"
         const val ACTION_START_PROXIMITY_WATCH = "com.example.toplutasima.transit.PROXIMITY_WATCH"
+        const val ACTION_HANDLE_INDIM_FROM_NOTIF = "com.example.toplutasima.transit.INDIM_FROM_NOTIF"
 
         // Intent Extra anahtarları
         const val EXTRA_LINE = "line"
@@ -82,10 +84,25 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_VEHICLE_TYPE = "vehicleType"
         const val EXTRA_SEGMENT_INDEX = "segmentIndex"
         const val EXTRA_TOTAL_SEGMENTS = "totalSegments"
+        // Legacy name: this is the Firestore id for the active segment record
+        // (RmvLogUiState.segmentIds[index]), not a parent TripResult id.
         const val EXTRA_TRIP_ID = "tripId"
         const val EXTRA_ALIGHTING_LAT = "alightingLat"
         const val EXTRA_ALIGHTING_LNG = "alightingLng"
         private const val PROXIMITY_WATCH_REQUEST_CODE = 9012
+
+        // SharedPreferences anahtarları — servis state'ini restart sonrası geri yükler
+        private const val PREFS_STATE_NAME = "transit_service_state"
+        private const val PKEY_LINE = "transit_state_line"
+        private const val PKEY_ALIGHTING_STOP = "transit_state_alighting_stop"
+        private const val PKEY_PLANNED_ARR = "transit_state_planned_arr"
+        private const val PKEY_VEHICLE_TYPE = "transit_state_vehicle_type"
+        private const val PKEY_SEG_IDX = "transit_state_seg_idx"
+        private const val PKEY_TOTAL_SEGS = "transit_state_total_segs"
+        private const val PKEY_TRIP_ID = "transit_state_trip_id"
+        private const val PKEY_LAT = "transit_state_lat"
+        private const val PKEY_LNG = "transit_state_lng"
+        private const val PKEY_HAS_BOARDED = "transit_state_has_boarded"
 
         // ViewModel tarafından gözlemlenen durum
         private val _isActive = MutableStateFlow(false)
@@ -102,6 +119,8 @@ class TransitTripForegroundService : Service() {
     private var currentVehicleType = ""
     private var currentSegmentIndex = 0
     private var totalSegments = 1
+    // Legacy name kept to avoid changing the existing intent/prefs contract.
+    // Holds the active segment record id, not a parent trip id.
     private var currentTripId = ""
     private var hasBoarded = false
 
@@ -110,6 +129,11 @@ class TransitTripForegroundService : Service() {
     private var alightingLng: Double = Double.NaN
     private var proximityJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /** LOCATION seçiliyken GPS/izin sorunu nedeniyle TIME'a düşüldü mü? */
+    private var usingTimeFallback = false
+
+    private lateinit var statePrefs: android.content.SharedPreferences
     private val fusedClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
 
     private fun logD(message: String) {
@@ -118,69 +142,105 @@ class TransitTripForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        statePrefs = getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
         createNotificationChannels()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    startForeground(NOTIF_ID_TRACKING, buildTrackingNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-                } else {
-                    startForeground(NOTIF_ID_TRACKING, buildTrackingNotification())
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Yeniden başlatılırken startForeground başarısız: ${e.message}", e)
+            if (!restoreServiceState() || !startForegroundForCurrentState(useLocationType = false)) {
                 stopSelf()
                 return START_NOT_STICKY
             }
             return START_STICKY
         }
 
+        if (intent.action != ACTION_START) {
+            restoreServiceState()
+        }
+
         when (intent.action) {
             ACTION_START -> {
                 readExtras(intent)
                 hasBoarded = false
-                try {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        startForeground(
-                            NOTIF_ID_TRACKING,
-                            buildTrackingNotification(),
-                            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                        )
-                    } else {
-                        startForeground(NOTIF_ID_TRACKING, buildTrackingNotification())
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "startForeground başarısız: ${e.message}", e)
+                persistServiceState()
+                if (!startForegroundForCurrentState(useLocationType = false)) {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                _isActive.value = true
-                _activeSegmentIndex.value = currentSegmentIndex
                 logD("Bildirim başladı")
             }
             ACTION_UPDATE_BOARDING -> {
+                if (!hasUsableServiceState() || !isNotificationActionForCurrentTrip(intent)) {
+                    return rejectNotificationAction(startId)
+                }
                 hasBoarded = true
+                usingTimeFallback = false
+                persistServiceState()
+                if (!startForegroundForCurrentState(useLocationType = false)) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+                // Her zaman önce mevcut alarmları temizle, sonra türe göre kur
+                cancelReminder()
+                cancelProximityWatchAlarm()
+                scheduleReminderByType()
                 updateTrackingNotification()
-                scheduleReminder()                    // Fallback: koordinat yoksa direkt bildirim
-                scheduleProximityWatchAlarm()         // Yeni: 3dk öncesine proximity alarm
-                logD("Bindim kaydedildi, hatırlatma ve proximity alarm kuruldu")
+                logD("Bindim kaydedildi, hatırlatma türü: ${PrefsManager.transitReminderType}")
             }
             ACTION_NEXT_SEGMENT -> {
-                cancelProximityWatchAlarm()           // Önceki segmentin watch'ını iptal et
+                // Önceki segmentten kalan HER İKİ alarmı da iptal et
+                cancelReminder()
+                cancelProximityWatchAlarm()
+                usingTimeFallback = false
                 readExtras(intent)
+                if (!hasUsableServiceState()) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 hasBoarded = false
+                persistServiceState()
+                if (!startForegroundForCurrentState(useLocationType = false)) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 updateTrackingNotification()
                 _activeSegmentIndex.value = currentSegmentIndex
                 logD("Sonraki segment bildirimi güncellendi")
             }
             ACTION_START_PROXIMITY_WATCH -> {
-                startProximityWatch()
+                if (!hasUsableServiceState()) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+                startProximityWatchInForeground()
                 logD("Proximity watch başlatıldı (alarm ile tetiklendi)")
+            }
+            ACTION_HANDLE_INDIM_FROM_NOTIF -> {
+                if (!hasUsableServiceState() || !isNotificationActionForCurrentTrip(intent)) {
+                    return rejectNotificationAction(startId)
+                }
+                if (!startForegroundForCurrentState(useLocationType = false)) {
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                logD("Bildirimden İndim alındı: segment $currentSegmentIndex / ${totalSegments - 1}")
+                if (currentSegmentIndex >= totalSegments - 1) {
+                    // Son segment — servisi ve bildirimleri tamamen kapat
+                    stopTracking()
+                } else {
+                    // Son segment değil — ara duruma geç
+                    // KNOWN LIMITATION: Sonraki segmentin verileri ViewModel'den gelir.
+                    // Uygulama kapalıysa bildirim "bekleniyor" modunda kalır;
+                    // uygulama açılınca ViewModel ACTION_NEXT_SEGMENT gönderir.
+                    updateTrackingNotificationWaiting()
+                }
             }
             ACTION_STOP -> {
                 stopTracking()
+            }
+            else -> {
+                Log.w(TAG, "Bilinmeyen servis action: ${intent.action}")
             }
         }
         return START_STICKY
@@ -217,12 +277,149 @@ class TransitTripForegroundService : Service() {
         logD("Bildirim durduruluyor")
         cancelReminder()
         cancelProximityWatchAlarm()
+        // State prefs'ini temizle
+        if (::statePrefs.isInitialized) statePrefs.edit().clear().apply()
         // Hatırlatma bildirimini de kaldır
         val nm = getSystemService(NotificationManager::class.java)
         nm.cancel(NOTIF_ID_REMINDER)
         _isActive.value = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    // ── State Persist / Restore ────────────────────────────────────────
+
+    /**
+     * Tüm segment state'ini SharedPreferences'a yazar.
+     * Restart (intent == null) veya alarm ile tetiklenmeden önce state kayıplarına karşı.
+     */
+    private fun persistServiceState() {
+        if (!::statePrefs.isInitialized) return
+        statePrefs.edit()
+            .putString(PKEY_LINE, currentLine)
+            .putString(PKEY_ALIGHTING_STOP, currentAlightingStop)
+            .putString(PKEY_PLANNED_ARR, currentPlannedArr)
+            .putString(PKEY_VEHICLE_TYPE, currentVehicleType)
+            .putInt(PKEY_SEG_IDX, currentSegmentIndex)
+            .putInt(PKEY_TOTAL_SEGS, totalSegments)
+            .putString(PKEY_TRIP_ID, currentTripId)
+            .putLong(PKEY_LAT, alightingLat.toBits())
+            .putLong(PKEY_LNG, alightingLng.toBits())
+            .putBoolean(PKEY_HAS_BOARDED, hasBoarded)
+            .apply()
+    }
+
+    /** Restart sonrası state'i geri yükler. */
+    private fun restoreServiceState(): Boolean {
+        if (!::statePrefs.isInitialized)
+            statePrefs = getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
+        if (!statePrefs.contains(PKEY_TRIP_ID)) {
+            Log.w(TAG, "Kayitli transit servis state'i bulunamadi")
+            return false
+        }
+        currentLine = statePrefs.getString(PKEY_LINE, "") ?: ""
+        currentAlightingStop = statePrefs.getString(PKEY_ALIGHTING_STOP, "") ?: ""
+        currentPlannedArr = statePrefs.getString(PKEY_PLANNED_ARR, "") ?: ""
+        currentVehicleType = statePrefs.getString(PKEY_VEHICLE_TYPE, "") ?: ""
+        currentSegmentIndex = statePrefs.getInt(PKEY_SEG_IDX, 0)
+        totalSegments = statePrefs.getInt(PKEY_TOTAL_SEGS, 1)
+        currentTripId = statePrefs.getString(PKEY_TRIP_ID, "") ?: ""
+        alightingLat = Double.fromBits(statePrefs.getLong(PKEY_LAT, Double.NaN.toBits()))
+        alightingLng = Double.fromBits(statePrefs.getLong(PKEY_LNG, Double.NaN.toBits()))
+        hasBoarded = statePrefs.getBoolean(PKEY_HAS_BOARDED, false)
+        logD("Servis state geri yüklendi: line=$currentLine seg=$currentSegmentIndex/$totalSegments")
+        return hasUsableServiceState()
+    }
+
+    private fun hasUsableServiceState(): Boolean {
+        val hasValidSegment = totalSegments > 0 && currentSegmentIndex in 0 until totalSegments
+        val hasTripId = currentTripId.isNotBlank()
+        if (!hasValidSegment || !hasTripId) {
+            Log.w(
+                TAG,
+                "Eksik transit state: tripId=$currentTripId seg=$currentSegmentIndex total=$totalSegments"
+            )
+        }
+        return hasValidSegment && hasTripId
+    }
+
+    private fun isNotificationActionForCurrentTrip(intent: Intent): Boolean {
+        val actionTripId = intent.getStringExtra(EXTRA_TRIP_ID).orEmpty()
+        val matches = actionTripId.isNotBlank() && actionTripId == currentTripId
+        if (!matches) {
+            Log.w(
+                TAG,
+                "Bildirim aksiyonu reddedildi: actionTripId=$actionTripId currentTripId=$currentTripId"
+            )
+        }
+        return matches
+    }
+
+    private fun rejectNotificationAction(startId: Int): Int {
+        if (hasUsableServiceState() && startForegroundForCurrentState(useLocationType = false)) {
+            return START_STICKY
+        }
+        stopSelf(startId)
+        return START_NOT_STICKY
+    }
+
+    private fun startForegroundForCurrentState(useLocationType: Boolean): Boolean {
+        if (!hasUsableServiceState()) return false
+        return try {
+            val notification = buildTrackingNotification()
+            when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> {
+                    val type = if (useLocationType) {
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                    } else {
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                    }
+                    startForeground(NOTIF_ID_TRACKING, notification, type)
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && useLocationType -> {
+                    startForeground(
+                        NOTIF_ID_TRACKING,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                    )
+                }
+                else -> startForeground(NOTIF_ID_TRACKING, notification)
+            }
+            _isActive.value = true
+            _activeSegmentIndex.value = currentSegmentIndex
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground basarisiz: ${e.message}", e)
+            false
+        }
+    }
+
+    // ── Hatırlatma Türüne Göre Kurulum ──────────────────────────────────
+
+    /**
+     * PrefsManager.transitReminderType'a göre doğru hatırlatmayı kurar.
+     * LOCATION için 3 koşulda fallback:
+     *   1. Koordinat NaN   2. Konum izni yok   3. GPS alınamaz (startProximityWatch içinde)
+     */
+    private fun scheduleReminderByType() {
+        when (PrefsManager.transitReminderType) {
+            TransitReminderType.LOCATION -> {
+                val hasCoords = !alightingLat.isNaN() && !alightingLng.isNaN()
+                val hasPermission = hasLocationPermission()
+                if (hasCoords && hasPermission) {
+                    scheduleProximityWatchAlarm()
+                    // Koşul 3 (GPS alınamaz) startProximityWatch() içinde ele alınır
+                } else {
+                    val reason = if (!hasPermission) "izin yok" else "koordinat yok"
+                    Log.w(TAG, "LOCATION seçili ama fallback TIME: $reason")
+                    usingTimeFallback = true
+                    scheduleReminder()
+                    // Fallback mesajı updateTrackingNotification() çağrısıyla gösterilecek
+                }
+            }
+            TransitReminderType.TIME -> scheduleReminder()
+            TransitReminderType.NONE -> logD("Hatırlatma türü NONE — hatırlatma kurulmadı")
+        }
     }
 
     // ── Bildirim Kanalları ────────────────────────────────────────────────────
@@ -280,7 +477,8 @@ class TransitTripForegroundService : Service() {
         }
 
         val arrText = if (currentPlannedArr.isNotBlank()) " ($currentPlannedArr)" else ""
-        val text = "📍 İniş: $currentAlightingStop$arrText"
+        val fallbackSuffix = if (usingTimeFallback) " · ⏰ Saat bazlı hatırlatma aktif" else ""
+        val text = "📍 İniş: $currentAlightingStop$arrText$fallbackSuffix"
 
         val contentIntent = Intent(this, com.example.toplutasima.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -325,6 +523,28 @@ class TransitTripForegroundService : Service() {
     private fun updateTrackingNotification() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIF_ID_TRACKING, buildTrackingNotification())
+    }
+
+    /** Bir sonraki segment bekleniyor ara durumu bildirimi. */
+    private fun updateTrackingNotificationWaiting() {
+        val contentIntent = Intent(this, com.example.toplutasima.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val contentPi = PendingIntent.getActivity(
+            this, 0, contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_TRACKING)
+            .setContentTitle("🔄 Aktarma bekleniyor")
+            .setContentText("Sonraki aktarma bekleniyor...")
+            .setSmallIcon(android.R.drawable.ic_menu_directions)
+            .setContentIntent(contentPi)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .build()
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIF_ID_TRACKING, notification)
     }
 
     // ── Hatırlatma Zamanlayıcısı ──────────────────────────────────────────────
@@ -480,9 +700,9 @@ class TransitTripForegroundService : Service() {
             var delayMs = now.until(watchTime, ChronoUnit.MILLIS)
             if (delayMs < 0) {
                 if (delayMs < -12 * 60 * 60 * 1000L) delayMs += 24 * 60 * 60 * 1000L
-                else { startProximityWatch(); return }
+                else { startProximityWatchInForeground(); return }
             }
-            if (delayMs < 5_000L) { startProximityWatch(); return }
+            if (delayMs < 5_000L) { startProximityWatchInForeground(); return }
 
             val triggerAt = System.currentTimeMillis() + delayMs
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -526,22 +746,64 @@ class TransitTripForegroundService : Service() {
     /**
      * 30 saniyede bir GPS kontrol eder.
      * İniş durağına ≤500m yaklaşıldığında bildirim gönderir ve döngüyü bitirir.
+     * Koşul 3 (GPS alınamaz): 3 ardışık başarısız lokasyon denemesinden sonra
+     * TIME fallback devreye girer ve proximity watch durur.
      */
+    private fun startProximityWatchInForeground() {
+        val hasCoords = !alightingLat.isNaN() && !alightingLng.isNaN()
+        if (!hasCoords || !hasLocationPermission()) {
+            fallbackToTimeReminder(if (!hasCoords) "koordinat yok" else "konum izni yok")
+            return
+        }
+        if (!startForegroundForCurrentState(useLocationType = true)) {
+            fallbackToTimeReminder("location foreground baslatilamadi")
+            return
+        }
+        startProximityWatch()
+    }
+
+    private fun fallbackToTimeReminder(reason: String) {
+        Log.w(TAG, "LOCATION hatirlatma TIME fallback'e dustu: $reason")
+        usingTimeFallback = true
+        if (!startForegroundForCurrentState(useLocationType = false)) {
+            stopSelf()
+            return
+        }
+        scheduleReminder()
+    }
+
     private fun startProximityWatch() {
         if (alightingLat.isNaN() || alightingLng.isNaN()) return
         if (!hasLocationPermission()) return
         logD("Proximity watch başlıyor → hedef: ($alightingLat, $alightingLng)")
         proximityJob?.cancel()
         proximityJob = serviceScope.launch {
+            var consecutiveNullCount = 0
             while (isActive) {
                 delay(30_000L)
                 try {
-                    val loc = getCurrentLocationSuspend() ?: continue
+                    val loc = getCurrentLocationSuspend()
+                    if (loc == null) {
+                        consecutiveNullCount++
+                        Log.w(TAG, "GPS alınamadı ($consecutiveNullCount/3)")
+                        if (consecutiveNullCount >= 3) {
+                            // Koşul 3: GPS alınamıyor — TIME fallback
+                            Log.w(TAG, "GPS sürekli alınamıyor, TIME fallback devreye girdi")
+                            usingTimeFallback = true
+                            startForegroundForCurrentState(useLocationType = false)
+                            scheduleReminder()
+                            updateTrackingNotification()
+                            break
+                        }
+                        continue
+                    }
+                    consecutiveNullCount = 0
                     val dist = haversineMeters(loc.first, loc.second, alightingLat, alightingLng)
                     logD("Proximity check: ${dist.toInt()}m")
                     if (dist <= 500.0) {
                         showReminderNotification()
                         cancelReminder()   // Fallback AlarmManager'ı da iptal et
+                        startForegroundForCurrentState(useLocationType = false)
                         break
                     }
                 } catch (e: Exception) {
@@ -550,6 +812,7 @@ class TransitTripForegroundService : Service() {
             }
         }
     }
+
 
     @Suppress("MissingPermission")
     private suspend fun getCurrentLocationSuspend(): Pair<Double, Double>? {
@@ -584,4 +847,3 @@ class TransitTripForegroundService : Service() {
         return R * 2 * asin(sqrt(a))
     }
 }
-

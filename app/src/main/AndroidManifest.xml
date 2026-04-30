@@ -55,7 +55,7 @@
         <!-- Toplu Taşıma — Bildirim Servisi -->
         <service
             android:name=".service.TransitTripForegroundService"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="specialUse|location"
             android:exported="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

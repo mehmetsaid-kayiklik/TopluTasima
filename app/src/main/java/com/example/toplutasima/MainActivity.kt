@@ -29,11 +29,6 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
 
-        // Initialize locale and preferences from SharedPreferences
-        val prefs = getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
-        LocaleManager.init(prefs)
-        PrefsManager.init(prefs)
-
         // Firebase Anonymous Auth — silent sign-in
         val auth = FirebaseAuth.getInstance()
         if (auth.currentUser == null) {

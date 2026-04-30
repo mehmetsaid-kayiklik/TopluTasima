@@ -202,6 +202,30 @@ object FirestoreService {
         return true
     }
 
+    // ── Fetch a single record by trip ID field ──
+    /**
+     * Tek bir kaydı "id" alanına göre sorgular ve döküman datasını döner.
+     * [RmvLogViewModel.refreshActualTimesFromPrefs] tarafından kullanılır:
+     * SharedFlow event'i kaçırılmışsa ViewModel açılışında DB'den güncel
+     * gercekBinis/gercekInis değerlerini tazeler.
+     *
+     * @return Döküman data map'i veya bulunamazsa null
+     */
+    suspend fun fetchRecord(tripId: String): Map<String, Any>? {
+        if (tripId.isBlank()) return null
+        return try {
+            val snapshot = db.collection(COLLECTION)
+                .whereEqualTo("id", tripId)
+                .limit(1)
+                .get().await()
+            if (snapshot.isEmpty) null
+            else snapshot.documents[0].data
+        } catch (e: Exception) {
+            logW("FirestoreService", "fetchRecord failed: ${e.message}")
+            null
+        }
+    }
+
     // ── Fetch all trips, sorted by sortDate descending ──
     // sortDate ("YYYY-MM-DD") alfabetik = kronolojik; orderBy("tarih") string
     // sıralamasının aksine ay/yıl geçişlerinde doğru çalışır.

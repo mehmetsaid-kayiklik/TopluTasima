@@ -15,8 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
@@ -33,7 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.UsageType
@@ -57,13 +60,30 @@ fun RMVLogScreen(
     onTogglePersonal: (Boolean) -> Unit = {}
 ) {
     val personalViewModel: PersonalTripViewModel = koinViewModel()
-    val personalState by personalViewModel.uiState.collectAsState()
-    val state by viewModel.uiState.collectAsState()
+    val personalState by personalViewModel.uiState.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scroll = rememberScrollState()
     val lang = LocaleManager.currentLanguage
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val destFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshActualTimesFromPrefs()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(state.segmentIds, state.selectedSegmentIndex) {
+        if (state.segmentIds.isNotEmpty()) {
+            viewModel.refreshActualTimesFromPrefs()
+        }
+    }
 
     Column(
         modifier = modifier.fillMaxSize().verticalScroll(scroll),

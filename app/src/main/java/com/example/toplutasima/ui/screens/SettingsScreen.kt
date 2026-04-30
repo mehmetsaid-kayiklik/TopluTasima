@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
@@ -41,7 +42,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE) }
     val lang = LocaleManager.currentLanguage
-    val settingsState by settingsViewModel.uiState.collectAsState()
+    val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var bgColorHex by remember { mutableStateOf(prefs.getString("bg_color", "") ?: "") }
     var btnColorHex by remember { mutableStateOf(prefs.getString("btn_color", "") ?: "") }
@@ -528,29 +529,65 @@ fun SettingsScreen(
                     )
                 }
 
-                // Hatırlatma offset seçimi
                 if (PrefsManager.transitNotificationsEnabled) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-                    Text(S.transitReminderTitle(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-                    val offsetOptions = listOf(-2, -1, 0, 1, 2)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        offsetOptions.forEach { minutes ->
-                            val selected = PrefsManager.reminderOffsetMinutes == minutes
+                    // ── Hatırlatma Türü ──
+                    Text(S.transitReminderTypeTitle(lang), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+
+                    val reminderTypes = listOf(
+                        com.example.toplutasima.data.TransitReminderType.LOCATION to S.transitReminderTypeLocation(lang),
+                        com.example.toplutasima.data.TransitReminderType.TIME     to S.transitReminderTypeTime(lang),
+                        com.example.toplutasima.data.TransitReminderType.NONE     to S.transitReminderTypeNone(lang)
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        reminderTypes.forEach { (type, label) ->
+                            val selected = PrefsManager.transitReminderType == type
                             FilterChip(
                                 selected = selected,
-                                onClick = { PrefsManager.changeReminderOffset(minutes) },
-                                label = { Text(S.transitReminderOption(minutes, lang), fontSize = 11.sp) },
+                                onClick = { PrefsManager.changeTransitReminderType(type) },
+                                label = { Text(label, fontSize = 11.sp) },
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                    }
+
+                    // Tür açıklaması
+                    val typeDesc = when (PrefsManager.transitReminderType) {
+                        com.example.toplutasima.data.TransitReminderType.LOCATION ->
+                            S.transitReminderTypeLocationDesc(lang)
+                        com.example.toplutasima.data.TransitReminderType.TIME ->
+                            S.transitReminderTypeTimeDesc(lang)
+                        com.example.toplutasima.data.TransitReminderType.NONE -> ""
+                    }
+                    if (typeDesc.isNotBlank()) {
+                        Text(typeDesc, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    // ── Hatırlatma Zamanı (yalnızca TIME seçiliyken) ──
+                    if (PrefsManager.transitReminderType == com.example.toplutasima.data.TransitReminderType.TIME) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        Text(S.transitReminderTitle(lang), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val offsetOptions = listOf(-2, -1, 0, 1, 2)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            offsetOptions.forEach { minutes ->
+                                val selected = PrefsManager.reminderOffsetMinutes == minutes
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { PrefsManager.changeReminderOffset(minutes) },
+                                    label = { Text(S.transitReminderOption(minutes, lang), fontSize = 11.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+
 
             RmvFooter(modifier = Modifier.padding(vertical = 8.dp))
         }
