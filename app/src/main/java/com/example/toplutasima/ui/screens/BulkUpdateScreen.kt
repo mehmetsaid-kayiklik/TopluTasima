@@ -13,13 +13,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.viewmodel.BulkUpdateMode
 import com.example.toplutasima.viewmodel.BulkUpdatePhase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
 
 @Composable
 fun BulkUpdateSection(viewModel: BulkUpdateViewModel) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Card(
         modifier = Modifier.fillMaxWidth(),

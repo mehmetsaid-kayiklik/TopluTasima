@@ -7,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -19,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
 import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.ui.AppLanguage
@@ -29,7 +29,7 @@ import java.util.Locale
 @Composable
 fun PersonalSummaryContent(lang: AppLanguage) {
     val vm: PersonalTripViewModel = koinViewModel()
-    val uiState by vm.uiState.collectAsState()
+    val uiState by vm.uiState.collectAsStateWithLifecycle()
     val trips = remember(uiState.trips) {
         uiState.trips.filter { it.durum == PersonalTrip.DURUM_TAMAMLANDI }
     }

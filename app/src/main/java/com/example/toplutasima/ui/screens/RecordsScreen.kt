@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.ui.LocaleManager
@@ -74,11 +74,11 @@ fun RecordsScreen(
     onRestoreRecord: ((Map<String, Any>) -> Unit)? = null,
     isActive: Boolean = true
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val lang = LocaleManager.currentLanguage
     val context = LocalContext.current
     val personalViewModel: PersonalTripViewModel = koinViewModel()
-    val personalState by personalViewModel.uiState.collectAsState()
+    val personalState by personalViewModel.uiState.collectAsStateWithLifecycle()
 
     // Edit dialog state
     var showDeleteConfirm by remember { mutableStateOf(false) }
