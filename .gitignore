@@ -15,3 +15,5 @@ local.properties
 *.py
 google-services.json
 app/release/
+# Captured Gradle/build log files — temporary debug artifacts, not source code
+build_errors.txt
