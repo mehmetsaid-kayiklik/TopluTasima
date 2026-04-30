@@ -69,5 +69,7 @@
 
 # -----------------------------------------------------------------------
 # WorkManager
-# (androidx.work ships its own consumer rules via AAR)
+# (androidx.work ships its own consumer rules via AAR, but Room reflection
+# for WorkDatabase_Impl sometimes gets stripped by R8)
 # -----------------------------------------------------------------------
+-keep class androidx.work.impl.WorkDatabase_Impl { *; }
