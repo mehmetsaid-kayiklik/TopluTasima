@@ -7,10 +7,30 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+// Priority 1: Always close the FileInputStream to avoid "too many open files" in CI.
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
-    if (file.exists()) load(file.inputStream())
+    if (file.exists()) file.inputStream().use { load(it) }
 }
+
+// Priority 2: Fail-fast helper — throws a Gradle build error if a required key is absent.
+// Resolution order: local.properties → environment variable → build error.
+// This allows CI pipelines to inject secrets as env vars without a local.properties file,
+// while still failing loudly when neither source provides a value.
+fun requiredLocalProperty(key: String): String =
+    localProperties.getProperty(key)
+        ?: System.getenv(key)
+        ?: error(
+            "\nMissing required key \"$key\".\n" +
+            "Provide it in local.properties OR as an environment variable named $key.\n" +
+            "Example (local.properties): $key=your-value-here"
+        )
+
+// Escapes a raw property value so it is safe to embed inside a double-quoted Kotlin/Java
+// string literal in generated BuildConfig code. Without this, a value containing a
+// backslash or double-quote would produce a malformed source file.
+fun String.escapeBuildConfigString(): String =
+    this.replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.example.toplutasima"
@@ -21,6 +41,8 @@ android {
     }
 
     defaultConfig {
+        // TODO: Replace "com.example.*" with a real reverse-domain ID before Play Store distribution.
+        //       e.g. "com.kayiklik.toplutasima". The Play Store rejects com.example.* namespaces.
         applicationId = "com.example.toplutasima"
         minSdk = 26
         targetSdk = 36
@@ -29,17 +51,31 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "RMV_ACCESS_ID", "\"${localProperties.getProperty("RMV_ACCESS_ID", "")}\"")
-        buildConfigField("String", "ORS_API_KEY", "\"${localProperties.getProperty("ORS_API_KEY", "")}\"")
+        // SECURITY TODO: BuildConfig fields are compiled into the DEX and are trivially
+        // extractable from the APK with apktool/jadx. Before any public distribution,
+        // replace these with a backend token-proxy or server-side secret delivery so
+        // credentials never ship inside the binary.
+        buildConfigField("String", "RMV_ACCESS_ID", "\"${requiredLocalProperty("RMV_ACCESS_ID").escapeBuildConfigString()}\"")
+        buildConfigField("String", "ORS_API_KEY",   "\"${requiredLocalProperty("ORS_API_KEY").escapeBuildConfigString()}\"")
     }
 
     buildTypes {
+        // Priority 3: Enable R8 minification and resource shrinking for release.
+        // This reduces APK size and obfuscates the binary, limiting reverse-engineering exposure.
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            // Note: applicationIdSuffix intentionally omitted — google-services.json only
+            // registers "com.example.toplutasima". Add a separate debug entry in Firebase
+            // console first if you want to use a .debug suffix in the future.
         }
     }
     compileOptions {
@@ -59,6 +95,7 @@ kotlin {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -73,19 +110,21 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Priority 4: All previously hardcoded strings are now resolved from libs.versions.toml.
+    // Versions are unchanged — only the declaration location has moved.
+    implementation(libs.okhttp)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.auth.ktx)
     // Dependency Injection — Koin
-    implementation("io.insert-koin:koin-android:3.5.6")
-    implementation("io.insert-koin:koin-androidx-compose:3.5.6")
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
     // Network — Retrofit + kotlinx.serialization
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.serialization.converter)
+    implementation(libs.kotlinx.serialization.json)
     // Location — Google Play Services
-    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation(libs.play.services.location)
     // WorkManager
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation(libs.work.runtime.ktx)
 }
