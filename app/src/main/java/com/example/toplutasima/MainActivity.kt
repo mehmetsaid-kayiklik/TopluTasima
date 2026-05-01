@@ -20,7 +20,6 @@ import com.example.toplutasima.ui.*
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.ui.navigation.MainAppScreen
-import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,12 +27,6 @@ class MainActivity : ComponentActivity() {
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
-
-        // Firebase Anonymous Auth — silent sign-in
-        val auth = FirebaseAuth.getInstance()
-        if (auth.currentUser == null) {
-            auth.signInAnonymously()
-        }
 
         setContent {
             val context = LocalContext.current

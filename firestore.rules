@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Private single-user app: keep the original top-level collections.
+    // These rules intentionally do not model accounts, ownership, or per-user paths.
+    match /trips/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /favorite_stops/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /personaltrips/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

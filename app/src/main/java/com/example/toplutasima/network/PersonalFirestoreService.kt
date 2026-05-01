@@ -1,8 +1,6 @@
 package com.example.toplutasima.network
 
 import com.example.toplutasima.model.PersonalTrip
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
@@ -16,29 +14,7 @@ import java.time.format.DateTimeFormatter
 object PersonalFirestoreService {
 
     private val db get() = FirebaseFirestore.getInstance()
-    private val auth get() = FirebaseAuth.getInstance()
-    private const val USERS_COLLECTION = "users"
     private const val COLLECTION = "personaltrips"
-
-    // Remote personal-trip data is scoped under users/{uid}/personaltrips.
-    // TODO: If old top-level personaltrips data must be preserved, run a
-    // one-time manual migration into the target user's subcollection.
-    // Do not auto-migrate here because anonymous UID ownership cannot be
-    // inferred reliably after reinstall or across devices.
-
-    private suspend fun currentUid(): String {
-        val existingUid = auth.currentUser?.uid
-        if (!existingUid.isNullOrBlank()) return existingUid
-
-        val signedInUser = auth.signInAnonymously().await().user
-        return signedInUser?.uid
-            ?: error("Firebase anonymous sign-in did not return a user id")
-    }
-
-    private suspend fun personalTripsCollection(): CollectionReference =
-        db.collection(USERS_COLLECTION)
-            .document(currentUid())
-            .collection(COLLECTION)
 
     // ── Yardımcılar (FirestoreService'tekiyle aynı mantık) ──────────────────
 
@@ -125,7 +101,7 @@ object PersonalFirestoreService {
             "yearMonth"   to computeYearMonth(trip.tarih),
             "createdAt"   to now
         )
-        val doc = personalTripsCollection().add(data).await()
+        val doc = db.collection(COLLECTION).add(data).await()
         return doc.id
     }
 
@@ -140,7 +116,7 @@ object PersonalFirestoreService {
                 clean["sortDate"] = computeSortDate(tarih)
                 clean["yearMonth"] = computeYearMonth(tarih)
             }
-            personalTripsCollection().document(docId).update(clean).await()
+            db.collection(COLLECTION).document(docId).update(clean).await()
             true
         } catch (e: CancellationException) {
             throw e
@@ -152,7 +128,7 @@ object PersonalFirestoreService {
      */
     suspend fun deleteTrip(docId: String): Boolean {
         return try {
-            personalTripsCollection().document(docId).delete().await()
+            db.collection(COLLECTION).document(docId).delete().await()
             true
         } catch (e: CancellationException) {
             throw e
@@ -163,7 +139,7 @@ object PersonalFirestoreService {
      * Tüm kişisel binişleri çeker — createdAt'e göre azalan sırayla.
      */
     suspend fun fetchAll(): List<PersonalTrip> {
-        val snap = personalTripsCollection().get().await()
+        val snap = db.collection(COLLECTION).get().await()
         return snap.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             data.toPersonalTrip(doc.id)
@@ -174,7 +150,7 @@ object PersonalFirestoreService {
      * Belirli bir aya ait binişleri çeker ("YYYY-MM" formatında).
      */
     suspend fun fetchForMonth(yearMonth: String): List<PersonalTrip> {
-        val snap = personalTripsCollection()
+        val snap = db.collection(COLLECTION)
             .whereEqualTo("yearMonth", yearMonth)
             .get().await()
         return snap.documents.mapNotNull { doc ->

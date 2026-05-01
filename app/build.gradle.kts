@@ -124,7 +124,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
-    implementation(libs.firebase.auth.ktx)
     // Dependency Injection — Koin
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
