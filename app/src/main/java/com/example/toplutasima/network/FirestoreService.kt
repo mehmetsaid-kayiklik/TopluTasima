@@ -6,7 +6,10 @@ import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.model.TicketStatus
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -26,7 +29,33 @@ object FirestoreService {
     )
 
     private val db get() = FirebaseFirestore.getInstance()
+    private val auth get() = FirebaseAuth.getInstance()
+    private const val USERS_COLLECTION = "users"
     private const val COLLECTION = "trips"
+    private const val FAV_COLLECTION = "favorite_stops"
+
+    // Remote trip and favorite-stop data is scoped under users/{uid}/...
+    // TODO: If old top-level trips/favorite_stops data must be preserved,
+    // run a one-time manual migration into the target user's subcollections.
+    // Do not auto-migrate here because anonymous UID ownership cannot be
+    // inferred reliably after reinstall or across devices.
+
+    private suspend fun currentUid(): String {
+        val existingUid = auth.currentUser?.uid
+        if (!existingUid.isNullOrBlank()) return existingUid
+
+        val signedInUser = auth.signInAnonymously().await().user
+        return signedInUser?.uid
+            ?: error("Firebase anonymous sign-in did not return a user id")
+    }
+
+    private suspend fun userCollection(collection: String): CollectionReference =
+        db.collection(USERS_COLLECTION)
+            .document(currentUid())
+            .collection(collection)
+
+    private suspend fun tripsCollection(): CollectionReference = userCollection(COLLECTION)
+    private suspend fun favoritesCollection(): CollectionReference = userCollection(FAV_COLLECTION)
 
     // ── Turkish month-number → name mapping ──
     private val MONTH_NAMES = mapOf(
@@ -169,14 +198,14 @@ object FirestoreService {
             if (!enriched.containsKey("sortDate"))  enriched["sortDate"]  = computeSortDate(tarih)
         }
         val ordered = buildOrderedMap(enriched)
-        val doc = db.collection(COLLECTION).add(ordered).await()
+        val doc = tripsCollection().add(ordered).await()
         return doc.id
     }
 
     // ── Update actual departure/arrival by trip ID field ──
     // Returns true if the record was found and updated, false if not found.
     suspend fun updateActual(tripId: String, actualDep: String?, actualArr: String?): Boolean {
-        val snapshot = db.collection(COLLECTION)
+        val snapshot = tripsCollection()
             .whereEqualTo("id", tripId)
             .get().await()
         if (snapshot.isEmpty) return false
@@ -214,12 +243,14 @@ object FirestoreService {
     suspend fun fetchRecord(tripId: String): Map<String, Any>? {
         if (tripId.isBlank()) return null
         return try {
-            val snapshot = db.collection(COLLECTION)
+            val snapshot = tripsCollection()
                 .whereEqualTo("id", tripId)
                 .limit(1)
                 .get().await()
             if (snapshot.isEmpty) null
             else snapshot.documents[0].data
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW("FirestoreService", "fetchRecord failed: ${e.message}")
             null
@@ -231,7 +262,7 @@ object FirestoreService {
     // sıralamasının aksine ay/yıl geçişlerinde doğru çalışır.
     // Eski kayıtlar (sortDate eksik) için tarih alanından türetilir.
     suspend fun fetchTrips(): List<Map<String, Any>> {
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         return snapshot.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             data + ("firestoreDocId" to doc.id)
@@ -245,7 +276,7 @@ object FirestoreService {
     // Optimizasyon: yearMonth alanı varsa gruplamak için sadece o alana bakılır.
     // Eski kayıtlar için tarih alanından ayrıştırma yapılır.
     suspend fun fetchMonthSummaries(): List<MonthSummary> {
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
 
         // (Year, MonthNum) -> Count
         val monthCounts = mutableMapOf<Pair<Int, Int>, Int>()
@@ -296,7 +327,7 @@ object FirestoreService {
         val yearMonth = "$year-$monthStr"
 
         // 1. Sunucu taraflı sorgu (yeni kayıtlar)
-        val serverSnapshot = db.collection(COLLECTION)
+        val serverSnapshot = tripsCollection()
             .whereEqualTo("yearMonth", yearMonth)
             .get().await()
         val serverDocs = serverSnapshot.documents.mapNotNull { doc ->
@@ -311,7 +342,7 @@ object FirestoreService {
         val filterMonth = monthNum.toIntOrNull() ?: return serverDocs
         val filterYear = year.toIntOrNull() ?: return serverDocs
 
-        val legacySnapshot = db.collection(COLLECTION).get().await()
+        val legacySnapshot = tripsCollection().get().await()
         val fallbackDocs = legacySnapshot.documents.mapNotNull { doc ->
             // yearMonth alanı zaten varsa sunucu sorgusunda yakalandı, atla
             if (!doc.getString("yearMonth").isNullOrBlank()) return@mapNotNull null
@@ -332,7 +363,7 @@ object FirestoreService {
 
     // ── Compute summary from trips, optionally filtered by "MonthName Year" ──
     suspend fun fetchSummary(sheetName: String = "Tümü"): Pair<SummaryData, List<String>> {
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         val allDocs = snapshot.documents.mapNotNull { it.data }
 
         // Extract month+year pairs for the dropdown
@@ -532,7 +563,7 @@ object FirestoreService {
         inisDuragi: String?, inisTime: String?,
         mesafe: String? = null, durakSayisi: String? = null
     ): Boolean {
-        val snapshot = db.collection(COLLECTION)
+        val snapshot = tripsCollection()
             .whereEqualTo("id", tripId)
             .get().await()
         if (snapshot.isEmpty) return false
@@ -560,7 +591,7 @@ object FirestoreService {
 
     // ── Bulk update mesafe & durakSayisi ──
     suspend fun bulkUpdate(tripId: String, mesafe: String, durakSayisi: Int): Boolean {
-        val snapshot = db.collection(COLLECTION)
+        val snapshot = tripsCollection()
             .whereEqualTo("id", tripId)
             .get().await()
         if (snapshot.isEmpty) return false
@@ -584,8 +615,10 @@ object FirestoreService {
                 if (!enriched.containsKey("sortDate"))  enriched["sortDate"]  = computeSortDate(tarih)
             }
             val ordered = buildOrderedMap(enriched)
-            db.collection(COLLECTION).add(ordered).await()
+            tripsCollection().add(ordered).await()
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             false
         }
@@ -595,7 +628,7 @@ object FirestoreService {
     // sortDate ("YYYY-MM-DD") ile client-side sıralama yapılır; eski kayıtlar
     // için tarih alanından otomatik türetilir.
     suspend fun fetchTripsFiltered(month: String = "Tümü", type: String = "Tümü"): List<Map<String, Any>> {
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
 
         // Parse "MonthName Year" filter if provided
         val filterMonthNum: String?
@@ -638,7 +671,7 @@ object FirestoreService {
     suspend fun updateTrip(docId: String, fields: Map<String, Any?>): Boolean {
         logD("FirestoreUpdate", "docId='$docId' isEmpty=${docId.isBlank()}")
         return try {
-            val docRef = db.collection(COLLECTION).document(docId)
+            val docRef = tripsCollection().document(docId)
             val cleanFields = fields.filterValues { it != null }.mapValues { it.value!! }
             val existing = docRef.get().await().data
             val updates = cleanFields.toMutableMap()
@@ -667,6 +700,8 @@ object FirestoreService {
 
             docRef.update(updates).await()
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             false
         }
@@ -675,8 +710,10 @@ object FirestoreService {
     // ── Delete trip by Firestore document ID ──
     suspend fun deleteTrip(docId: String): Boolean {
         return try {
-            db.collection(COLLECTION).document(docId).delete().await()
+            tripsCollection().document(docId).delete().await()
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             false
         }
@@ -693,7 +730,7 @@ object FirestoreService {
     // ── One-time migration: strip seconds from all time fields ──
     suspend fun migrateStripSeconds(): Int {
         val timeFields = listOf("planlananBinis", "gercekBinis", "planlananInis", "gercekInis")
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         var updatedCount = 0
 
         for (doc in snapshot.documents) {
@@ -721,7 +758,7 @@ object FirestoreService {
     // ── Update existing record by trip ID field (for post-save field changes) ──
     suspend fun updateExistingRecord(tripId: String, fields: Map<String, Any>): Boolean {
         return try {
-            val snapshot = db.collection(COLLECTION)
+            val snapshot = tripsCollection()
                 .whereEqualTo("id", tripId)
                 .get().await()
             if (snapshot.isEmpty) return false
@@ -734,7 +771,7 @@ object FirestoreService {
 
     // ── One-time migration: compute Yol Suresi for all trips ──
     suspend fun migrateYolSuresi(): Pair<Int, Int> { // returns (updated, total)
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         var updatedCount = 0
         val totalCount = snapshot.documents.size
 
@@ -769,7 +806,7 @@ object FirestoreService {
 
     // ── Fetch rows for bulk update ──
     suspend fun fetchRowsForBulkUpdate(): List<BulkUpdateRow> {
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         val results = mutableListOf<BulkUpdateRow>()
         for (doc in snapshot.documents) {
             val data = doc.data ?: continue
@@ -807,7 +844,7 @@ object FirestoreService {
 
     // ── Fetch all rows for Stop Name update ──
     suspend fun fetchAllRowsForStopNameUpdate(): List<BulkUpdateRow> {
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         return snapshot.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             BulkUpdateRow(
@@ -830,7 +867,7 @@ object FirestoreService {
     // Çalıştırıldıktan sonra fetchTripsForMonth tam koleksiyon okumak yerine
     // sunucu taraflı WHERE sorgusuyla yalnızca o aya ait dökümanları getirir.
     suspend fun migrateYearMonth(): Pair<Int, Int> { // (güncellenen, toplam)
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         val total = snapshot.documents.size
         var updated = 0
 
@@ -855,7 +892,7 @@ object FirestoreService {
     // "YYYY-MM-DD" formatında sortDate, orderBy için kronolojik sıralamayı garanti eder.
     // Migration sonrasında fetchTrips/fetchTripsFiltered doğru sırada çalışır.
     suspend fun migrateSortDate(): Pair<Int, Int> { // (güncellenen, toplam)
-        val snapshot = db.collection(COLLECTION).get().await()
+        val snapshot = tripsCollection().get().await()
         val total = snapshot.documents.size
         var updated = 0
 
@@ -877,11 +914,9 @@ object FirestoreService {
     }
 
     // ── Favorite Stops Firebase Backup ──────────────────────────────────────
-    private const val FAV_COLLECTION = "favorite_stops"
-
     suspend fun saveFavorite(fav: com.example.toplutasima.model.FavoriteStop) {
         try {
-            db.collection(FAV_COLLECTION).document(fav.id).set(
+            favoritesCollection().document(fav.id).set(
                 mapOf(
                     "id" to fav.id,
                     "stopId" to fav.stopId,
@@ -890,6 +925,8 @@ object FirestoreService {
                     "usageType" to fav.usageType.name
                 )
             ).await()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW("FirestoreFav", "saveFavorite failed: ${e.message}")
         }
@@ -897,7 +934,9 @@ object FirestoreService {
 
     suspend fun deleteFavorite(favId: String) {
         try {
-            db.collection(FAV_COLLECTION).document(favId).delete().await()
+            favoritesCollection().document(favId).delete().await()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW("FirestoreFav", "deleteFavorite failed: ${e.message}")
         }
@@ -905,7 +944,7 @@ object FirestoreService {
 
     suspend fun fetchAllFavorites(): List<com.example.toplutasima.model.FavoriteStop> {
         return try {
-            val snapshot = db.collection(FAV_COLLECTION).get().await()
+            val snapshot = favoritesCollection().get().await()
             snapshot.documents.mapNotNull { doc ->
                 val data = doc.data ?: return@mapNotNull null
                 val id = data["id"]?.toString() ?: return@mapNotNull null
@@ -922,9 +961,11 @@ object FirestoreService {
                     label = label, usageType = usageType
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logW("FirestoreFav", "fetchAllFavorites failed: ${e.message}")
-            throw e
+            emptyList()
         }
     }
 }

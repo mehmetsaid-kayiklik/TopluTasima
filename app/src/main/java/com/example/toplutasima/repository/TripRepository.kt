@@ -9,6 +9,7 @@ import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.network.RmvApiService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -73,6 +74,8 @@ class TripRepository {
 
             FirestoreService.saveTrip(data)
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             false
         }

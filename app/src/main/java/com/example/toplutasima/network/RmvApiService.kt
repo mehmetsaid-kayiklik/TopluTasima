@@ -10,6 +10,7 @@ import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.network.rmv.RmvCoordWrapper
 import com.example.toplutasima.network.rmv.RmvStopLocation
 import com.example.toplutasima.network.rmv.rmvApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -102,6 +103,8 @@ object RmvApiService {
                     wrapper.stopLocation?.let { addRmvStop(it) }
                 }
                 stops
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logE("RmvApi", "searchStopOptions error: ${e.message}")
                 emptyList()
@@ -168,6 +171,8 @@ object RmvApiService {
 
                 logD("RmvApi", "searchNearbyStops: found ${stops.size} stops")
                 stops.sortedBy { it.distanceMeters }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logE("RmvApi", "searchNearbyStops error: ${e.message}", e)
                 emptyList()
@@ -230,6 +235,8 @@ object RmvApiService {
                 date = date,
                 time = time
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logE("RmvApi", "fetchDepartureBoard error: ${e.message}")
             return@withContext emptyList()
@@ -496,6 +503,8 @@ object RmvApiService {
                         meters / 1000.0
                     } else 0.0
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) { logE("ORSDiag", "ORS EXCEPTION: ${e.message}"); 0.0 }
         }
     }

@@ -5,10 +5,15 @@ import android.content.Context
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.di.appModule
 import com.example.toplutasima.ui.LocaleManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
 class TopluTasimaApp : Application() {
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
 
@@ -17,7 +22,7 @@ class TopluTasimaApp : Application() {
         // bu yüzden init Application seviyesinde yapılmalı.
         val prefs = getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
         LocaleManager.init(prefs)
-        PrefsManager.init(prefs)
+        PrefsManager.init(prefs, appScope)
 
         startKoin {
             androidContext(this@TopluTasimaApp)

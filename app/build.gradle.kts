@@ -26,6 +26,9 @@ fun requiredLocalProperty(key: String): String =
             "Example (local.properties): $key=your-value-here"
         )
 
+fun optionalLocalProperty(key: String): String? =
+    localProperties.getProperty(key) ?: System.getenv(key)
+
 // Escapes a raw property value so it is safe to embed inside a double-quoted Kotlin/Java
 // string literal in generated BuildConfig code. Without this, a value containing a
 // backslash or double-quote would produce a malformed source file.
@@ -65,8 +68,12 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // TODO: Replace debug signing with a real release signingConfig before distribution.
-            signingConfig = signingConfigs.getByName("debug")
+            // Private/local builds can opt into debug signing explicitly:
+            // ALLOW_DEBUG_RELEASE_SIGNING=true ./gradlew assembleRelease
+            // Public distribution must use a real release signingConfig instead.
+            if (optionalLocalProperty("ALLOW_DEBUG_RELEASE_SIGNING")?.toBooleanStrictOrNull() == true) {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

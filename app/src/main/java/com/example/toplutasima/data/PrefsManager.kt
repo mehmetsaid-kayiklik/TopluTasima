@@ -8,9 +8,9 @@ import com.example.toplutasima.model.FavoriteStop
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
 import com.example.toplutasima.network.FirestoreService
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -31,6 +31,7 @@ enum class TransitReminderType { LOCATION, TIME, NONE }
 object PrefsManager {
 
     private lateinit var prefs: SharedPreferences
+    private var appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     // ── Observable state ─────────────────────────────────────────────────────
@@ -66,8 +67,9 @@ object PrefsManager {
 
     // ── Init ─────────────────────────────────────────────────────────────────
 
-    fun init(sharedPrefs: SharedPreferences) {
+    fun init(sharedPrefs: SharedPreferences, scope: CoroutineScope = appScope) {
         prefs = sharedPrefs
+        appScope = scope
         favorites = loadFavorites()
         themeMode = loadThemeMode()
         waypointIntervalSeconds = prefs.getInt("waypoint_interval_sec", 30)
@@ -126,7 +128,6 @@ object PrefsManager {
 
     // ── Favorites CRUD ───────────────────────────────────────────────────────
 
-    @OptIn(DelicateCoroutinesApi::class)
     fun addFavorite(stopId: String, stopName: String, label: String, usageType: UsageType): FavoriteStop {
         val fav = FavoriteStop(
             id = UUID.randomUUID().toString(),
@@ -138,18 +139,16 @@ object PrefsManager {
         favorites = favorites + fav
         saveFavorites()
         // Fire-and-forget Firebase backup
-        GlobalScope.launch(Dispatchers.IO) { FirestoreService.saveFavorite(fav) }
+        appScope.launch { FirestoreService.saveFavorite(fav) }
         return fav
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     fun removeFavorite(id: String) {
         favorites = favorites.filter { it.id != id }
         saveFavorites()
-        GlobalScope.launch(Dispatchers.IO) { FirestoreService.deleteFavorite(id) }
+        appScope.launch { FirestoreService.deleteFavorite(id) }
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     fun updateFavorite(id: String, label: String? = null, usageType: UsageType? = null) {
         favorites = favorites.map { fav ->
             if (fav.id == id) {
@@ -163,7 +162,7 @@ object PrefsManager {
         // Sync updated favorite to Firebase
         val updated = favorites.find { it.id == id }
         if (updated != null) {
-            GlobalScope.launch(Dispatchers.IO) { FirestoreService.saveFavorite(updated) }
+            appScope.launch { FirestoreService.saveFavorite(updated) }
         }
     }
 

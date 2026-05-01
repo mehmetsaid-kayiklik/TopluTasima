@@ -10,6 +10,7 @@ import com.example.toplutasima.BuildConfig
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -151,6 +152,8 @@ class PersonalLocationHelper(private val context: Context) {
                     val summary = routes.getJSONObject(0).getJSONObject("summary")
                     summary.getDouble("distance") // metre
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "fetchRouteDistanceMeters failed: ${e.message}")
                 null
