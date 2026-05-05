@@ -1,6 +1,7 @@
 package com.example.toplutasima.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,7 @@ fun AddPersonalTripDialog(
     editingTrip: PersonalTrip?,
     lang: AppLanguage,
     viewModel: PersonalTripViewModel,
+    readyPlates: List<String> = emptyList(),
     onDismiss: () -> Unit
 ) {
     val todayStr = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
@@ -95,6 +97,21 @@ fun AddPersonalTripDialog(
                     singleLine = true,
                     placeholder = { Text("34 ABC 123", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 )
+
+                if (readyPlates.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        readyPlates.forEach { plate ->
+                            AssistChip(
+                                onClick = { plaka = plate },
+                                label = { Text(plate, fontSize = 12.sp, maxLines = 1) },
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
 
                 // ── Tarih ───────────────────────────────────────────────
                 OutlinedTextField(

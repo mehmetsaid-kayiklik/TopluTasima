@@ -1488,6 +1488,7 @@ fun PersonalRecordsContent(
             editingTrip = uiState.editingTrip,
             lang = lang,
             viewModel = viewModel,
+            readyPlates = uiState.readyPlates,
             onDismiss = { viewModel.closeDialog() }
         )
     }

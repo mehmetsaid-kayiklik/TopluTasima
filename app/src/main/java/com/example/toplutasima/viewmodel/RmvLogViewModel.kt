@@ -102,6 +102,8 @@ data class RmvLogUiState(
     val changeStopSegIdx: Int = -1,
     val changeStopMode: String = "",  // "binis" or "inis"
     val changeStopSelectedIdx: Int = -1,
+    val changeStopManualText: String = "",
+    val isLoadingStopsForEdit: Boolean = false,
     // ── Yakındaki duraklar ──
     val nearbyStops: List<com.example.toplutasima.network.RmvApiService.NearbyStop> = emptyList(),
     val nearbyLoading: Boolean = false,
@@ -842,7 +844,8 @@ class RmvLogViewModel(
         _uiState.value = _uiState.value.copy(
             changeStopSegIdx = segIdx,
             changeStopMode = mode,
-            changeStopSelectedIdx = -1
+            changeStopSelectedIdx = -1,
+            changeStopManualText = ""
         )
     }
 
@@ -850,8 +853,118 @@ class RmvLogViewModel(
         _uiState.value = _uiState.value.copy(
             changeStopSegIdx = -1,
             changeStopMode = "",
-            changeStopSelectedIdx = -1
+            changeStopSelectedIdx = -1,
+            changeStopManualText = ""
         )
+    }
+
+    fun updateChangeStopManualText(text: String) {
+        _uiState.value = _uiState.value.copy(changeStopManualText = text)
+    }
+
+    /**
+     * ✏️ butonuna basıldığında çağrılır.
+     * Segment'te stopNames varsa direkt dialog açar.
+     * Yoksa (geri yüklenmiş kayıt), API'den durak listesini çekip sonra açar.
+     */
+    fun fetchStopsForChangeStop(segIdx: Int) {
+        val s = _uiState.value
+        val seg = s.trip?.segments?.getOrNull(segIdx) ?: return
+
+        // Durak listesi zaten varsa direkt dialog aç
+        if (seg.stopNames.size > 1) {
+            showChangeStopDialog(segIdx, "")
+            return
+        }
+
+        // stopNames yok → API'den çek
+        _uiState.value = s.copy(
+            isLoadingStopsForEdit = true,
+            status = S.loadingStopList(lang())
+        )
+        viewModelScope.launch {
+            try {
+                // 1. Biniş ve iniş durak ID'lerini ara
+                val fromOpts = repository.searchStops(seg.fromStop.trim(), 3)
+                val fromId = fromOpts.firstOrNull()?.id
+                    ?: throw Exception(S.errorStopNotFound(lang()))
+
+                val toOpts = repository.searchStops(seg.toStop.trim(), 3)
+                val toId = toOpts.firstOrNull()?.id
+                    ?: throw Exception(S.errorStopNotFound(lang()))
+
+                // 2. Kalkış listesi çek (kayıtlı planlanan saati kullan)
+                val apiDate = RmvApiService.convertToApiDate(s.date)
+                val searchTime = seg.dep.take(5).ifBlank {
+                    java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                }
+                val deps = repository.fetchDepartures(fromId, toId, apiDate, searchTime)
+
+                // 3. Hat numarasına göre en uygun kalkışı bul
+                val matchingDep = deps.firstOrNull { dep ->
+                    dep.line.contains(seg.line, ignoreCase = true) ||
+                    seg.line.contains(dep.line, ignoreCase = true)
+                } ?: deps.firstOrNull()
+                    ?: throw Exception(S.statusNoDepartures(lang()))
+
+                // 4. Seyahat planını çek
+                val input = TripPlanningUseCase.PlanInput(
+                    dep = matchingDep,
+                    fromId = fromId,
+                    toId = toId,
+                    from = seg.fromStop,
+                    to = seg.toStop,
+                    date = s.date
+                )
+                val newTrip = tripPlanner.plan(input)
+                val newSeg = newTrip.segments.firstOrNull()
+                    ?: throw Exception("Segment bulunamadı")
+
+                // 5. Durak detaylarını (stopNames, stopTimes, journeyRef) çek
+                val details = runCatching { repository.fetchSegmentDetails(newSeg) }
+                    .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
+
+                val stopNames = details.stopNames.ifEmpty { newSeg.stopNames }
+                val stopTimes = details.stopTimes.ifEmpty { newSeg.stopTimes }
+
+                if (stopNames.size <= 1) throw Exception(S.errorStopNotFound(lang()))
+
+                // 6. Mevcut segmenti sadece durak meta verisiyle güncelle
+                //    (orijinal dep/arr/fromStop/toStop korunur)
+                val current = _uiState.value
+                val currentTrip = current.trip ?: return@launch
+                val currentSeg = currentTrip.segments.getOrNull(segIdx) ?: return@launch
+
+                val updatedSeg = currentSeg.copy(
+                    stopNames   = stopNames,
+                    stopTimes   = stopTimes,
+                    journeyRef  = newSeg.journeyRef,
+                    stopFromIdx = newSeg.stopFromIdx,
+                    stopToIdx   = newSeg.stopToIdx,
+                    distanceKm  = if (details.distanceKm > 0) details.distanceKm else newSeg.distanceKm,
+                    stopCount   = if (details.stopCount > 0) details.stopCount else newSeg.stopCount
+                )
+                val newSegs = currentTrip.segments.toMutableList()
+                newSegs[segIdx] = updatedSeg
+
+                _uiState.value = current.copy(
+                    trip = currentTrip.copy(segments = newSegs),
+                    fromId = fromId,
+                    toId   = toId,
+                    isLoadingStopsForEdit = false,
+                    status = S.statusReady(lang())
+                )
+
+                // 7. Artık dialog açılabilir
+                showChangeStopDialog(segIdx, "")
+
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingStopsForEdit = false,
+                    status = "${S.errorPrefix(lang())}: ${e.message}"
+                )
+            }
+        }
     }
 
     fun selectChangeStop(stopIdx: Int) {
@@ -867,10 +980,19 @@ class RmvLogViewModel(
                 if (segIdx < 0 || segIdx >= trip.segments.size) return@launch
                 val seg = trip.segments[segIdx]
                 val selectedIdx = s.changeStopSelectedIdx
-                if (selectedIdx < 0 || selectedIdx >= seg.stopNames.size) return@launch
+                // Manuel modda (stopNames boş) selectedIdx=-1 geçerli; liste modunda sınır kontrolü yap
+                if (seg.stopNames.isNotEmpty() && (selectedIdx < 0 || selectedIdx >= seg.stopNames.size)) return@launch
 
-                val newStopName = seg.stopNames[selectedIdx]
-                val newTime = seg.stopTimes.getOrElse(selectedIdx) { "" }
+                val newStopName = if (seg.stopNames.isNotEmpty()) {
+                    // Liste modunda seçilen durak
+                    seg.stopNames[selectedIdx]
+                } else {
+                    // Manuel giriş modu
+                    val manualText = s.changeStopManualText.trim()
+                    if (manualText.isBlank()) return@launch
+                    manualText
+                }
+                val newTime = if (seg.stopNames.isNotEmpty()) seg.stopTimes.getOrElse(selectedIdx) { "" } else ""
                 val segId = s.segmentIds.getOrElse(segIdx) { "" }
                 if (segId.isBlank()) return@launch
 
@@ -880,9 +1002,9 @@ class RmvLogViewModel(
 
                 // stopNames artık tüm hattı kapsıyor; seg.stopFromIdx / stopToIdx
                 // mevcut biniş-iniş pozisyonlarını tutuyor.
-                val currentFromIdx = if (isBinis) selectedIdx else seg.stopFromIdx
-                val currentToIdx   = if (!isBinis) selectedIdx else
-                    seg.stopToIdx.takeIf { it >= 0 } ?: (seg.stopNames.size - 1)
+                val currentFromIdx = if (isBinis) maxOf(0, selectedIdx) else seg.stopFromIdx
+                val currentToIdx   = if (!isBinis) maxOf(0, selectedIdx) else
+                    seg.stopToIdx.takeIf { it >= 0 } ?: maxOf(0, seg.stopNames.size - 1)
                 val newStopCount = maxOf(0, currentToIdx - currentFromIdx)
 
                 var newDistanceKm = seg.distanceKm

@@ -43,6 +43,7 @@ data class PersonalTripUiState(
     val formSurucu: Boolean? = null,
     val formYolcuSayisi: String = "",
     val formNot: String = "",
+    val readyPlates: List<String> = emptyList(),
     val formAracMenuOpen: Boolean = false,
     val formHavaMenuOpen: Boolean = false
 )
@@ -88,7 +89,11 @@ class PersonalTripViewModel(
                     repository.getForMonth(_uiState.value.selectedYearMonth!!)
                 else
                     repository.getAll()
-                _uiState.value = _uiState.value.copy(trips = trips, isLoading = false)
+                _uiState.value = _uiState.value.copy(
+                    trips = trips,
+                    readyPlates = buildReadyPlates(trips),
+                    isLoading = false
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -104,6 +109,13 @@ class PersonalTripViewModel(
     }
 
     // ── İnline Form ──────────────────────────────────────────────────────────
+
+    private fun buildReadyPlates(trips: List<PersonalTrip>): List<String> =
+        trips.asSequence()
+            .map { it.plaka.trim().uppercase(Locale.ROOT) }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .toList()
 
     fun updateFormField(field: String, value: String) {
         _uiState.value = _uiState.value.copy(
@@ -122,11 +134,12 @@ class PersonalTripViewModel(
         _uiState.value = _uiState.value.copy(formSurucu = value)
     }
 
-    fun resetForm() {
-        _uiState.value = _uiState.value.copy(
+    fun resetForm(keepPlate: Boolean = false, keepWeather: Boolean = false) {
+        val current = _uiState.value
+        _uiState.value = current.copy(
             formAracTuru = "Otomobil",
-            formPlaka = "",
-            formHavaDurumu = "Bilinmiyor",
+            formPlaka = if (keepPlate) current.formPlaka else "",
+            formHavaDurumu = if (keepWeather) current.formHavaDurumu else "Bilinmiyor",
             formTarih = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")),
             formSurucu = null,
             formYolcuSayisi = "",
@@ -156,7 +169,7 @@ class PersonalTripViewModel(
                     not         = s.formNot
                 )
                 repository.saveDraft(trip)
-                resetForm()
+                resetForm(keepPlate = true, keepWeather = true)
                 _uiState.value = _uiState.value.copy(statusMessage = "✅ Kayıt eklendi")
                 load()
             } catch (e: Exception) {

@@ -173,8 +173,27 @@ class PersonalTripForegroundService : Service() {
             pendingWaypoints.toList()
         }
 
-        if (BuildConfig.DEBUG) Log.d(TAG, "ORS gönderiliyor: ${batch.size} waypoint")
-        val meters = locationHelper.fetchRouteDistanceMeters(batch)
+        // GPS drift filtresi: birbirine 30m'den yakın ardışık noktaları ele
+        // Bu hem GPS titreşiminden kaynaklanan sahte mesafeyi önler
+        // hem de ORS'e giden nokta sayısını azaltır
+        val filtered = mutableListOf<Pair<Double, Double>>()
+        filtered.add(batch.first())
+        for (i in 1 until batch.size) {
+            val prev = filtered.last()
+            val curr = batch[i]
+            val distM = haversineMeters(prev.first, prev.second, curr.first, curr.second)
+            if (distM >= 30.0) {   // 30m'den kısa hareketi yoksay
+                filtered.add(curr)
+            }
+        }
+
+        if (filtered.size < 2) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "Filtreleme sonrası yeterli waypoint yok, batch atlandı")
+            return
+        }
+
+        if (BuildConfig.DEBUG) Log.d(TAG, "ORS gönderiliyor: ${batch.size} → filtre sonrası ${filtered.size} waypoint")
+        val meters = locationHelper.fetchRouteDistanceMeters(filtered)
         if (meters != null) {
             totalDistanceMeters += meters
             val km = totalDistanceMeters / 1000.0
@@ -184,12 +203,23 @@ class PersonalTripForegroundService : Service() {
 
             synchronized(pendingWaypoints) {
                 val lastPoint = batch.last()
-                pendingWaypoints.removeAll(batch)
+                pendingWaypoints.removeAll(batch.toSet())
                 if (pendingWaypoints.isEmpty()) pendingWaypoints.add(lastPoint)
             }
         } else {
             Log.w(TAG, "ORS yanıt vermedi, bu batch atlandı")
         }
+    }
+
+    /** Haversine formülü ile iki koordinat arasındaki mesafeyi metre cinsinden hesaplar. */
+    private fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val R = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLng = Math.toRadians(lng2 - lng1)
+        val a = Math.sin(dLat / 2).let { it * it } +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLng / 2).let { it * it }
+        return R * 2 * Math.asin(Math.sqrt(a))
     }
 
     // ── Bildirim ─────────────────────────────────────────────────────────────

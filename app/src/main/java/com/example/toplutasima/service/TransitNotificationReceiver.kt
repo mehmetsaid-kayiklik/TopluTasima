@@ -124,7 +124,7 @@ class TransitNotificationReceiver : BroadcastReceiver() {
             .setContentTitle("⏰ İnmeniz gereken durak!")
             .setContentText("$emoji $line → 📍 $alightingStop ($plannedArr)")
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setAutoCancel(true)
+            .setAutoCancel(false)   // İndim'e basılana kadar bildirim kalıcı kalsın
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .addAction(0, "İndim 🏁", indimPi)

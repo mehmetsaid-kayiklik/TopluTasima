@@ -656,13 +656,25 @@ fun RMVLogScreen(
                                             )
                                         }
                                     }
-                                    // Change stop button (visible only after saving)
-                                    if (state.segmentIds.isNotEmpty() && s.stopNames.size > 1) {
+                                    // Change stop button — segmentIds doluysa her zaman göster
+                                    if (state.segmentIds.isNotEmpty()) {
                                         IconButton(
-                                            onClick = { viewModel.showChangeStopDialog(idx, "") },
-                                            modifier = Modifier.size(32.dp)
+                                            onClick = {
+                                                if (!state.isLoadingStopsForEdit) {
+                                                    viewModel.fetchStopsForChangeStop(idx)
+                                                }
+                                            },
+                                            modifier = Modifier.size(32.dp),
+                                            enabled = !state.isLoadingStopsForEdit
                                         ) {
-                                            Text("✏️", fontSize = 16.sp)
+                                            if (state.isLoadingStopsForEdit) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                            } else {
+                                                Text("✏️", fontSize = 16.sp)
+                                            }
                                         }
                                     }
                                 }
@@ -1101,7 +1113,6 @@ fun RMVLogScreen(
                             Text(S.selectNewStop(lang), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(4.dp))
 
-                            // Stop list
                             seg.stopNames.forEachIndexed { stopIdx, name ->
                                 val time = seg.stopTimes.getOrElse(stopIdx) { "" }
                                 val isSelected = state.changeStopSelectedIdx == stopIdx
@@ -1134,7 +1145,6 @@ fun RMVLogScreen(
                                 }
                             }
 
-                            // Preview
                             if (state.changeStopSelectedIdx >= 0) {
                                 val newName = seg.stopNames.getOrElse(state.changeStopSelectedIdx) { "" }
                                 val newTime = seg.stopTimes.getOrElse(state.changeStopSelectedIdx) { "" }

@@ -230,6 +230,10 @@ class TransitTripForegroundService : Service() {
                     stopTracking()
                 } else {
                     // Son segment değil — ara duruma geç
+                    // Hatırlatma bildirimini temizle (İndim basıldı)
+                    getSystemService(NotificationManager::class.java).cancel(NOTIF_ID_REMINDER)
+                    cancelReminder()
+                    cancelProximityWatchAlarm()
                     // KNOWN LIMITATION: Sonraki segmentin verileri ViewModel'den gelir.
                     // Uygulama kapalıysa bildirim "bekleniyor" modunda kalır;
                     // uygulama açılınca ViewModel ACTION_NEXT_SEGMENT gönderir.
@@ -644,22 +648,31 @@ class TransitTripForegroundService : Service() {
      * Hatırlatma bildirimini oluşturur. Receiver'dan da çağrılabilmesi için companion'dan erişilebilir.
      */
     fun buildReminderNotification(
-        line: String, alightingStop: String, plannedArr: String, vehicleType: String
+        line: String, alightingStop: String, plannedArr: String, vehicleType: String,
+        tripId: String = currentTripId
     ): Notification {
         val emoji = vehicleEmoji(vehicleType)
+
+        // İndim PendingIntent — tripId açıkça set ediliyor
+        val indimIntent = Intent(this, TransitNotificationReceiver::class.java).apply {
+            action = TransitNotificationReceiver.ACTION_NOTIF_INDIM
+            putExtra(EXTRA_TRIP_ID, tripId)
+        }
+        val indimPi = PendingIntent.getBroadcast(
+            this,
+            TransitNotificationReceiver.ACTION_NOTIF_INDIM.hashCode(),
+            indimIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         return NotificationCompat.Builder(this, CHANNEL_REMINDER)
             .setContentTitle("⏰ İnmeniz gereken durak!")
             .setContentText("$emoji $line → 📍 $alightingStop ($plannedArr)")
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setAutoCancel(true)
+            .setAutoCancel(false)   // Mevcut bildirimi koru, otomatik kapanmasın
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .addAction(
-                0,
-                "İndim 🏁",
-                createActionPendingIntent(TransitNotificationReceiver.ACTION_NOTIF_INDIM)
-            )
+            .addAction(0, "İndim 🏁", indimPi)
             .build()
     }
 
@@ -800,7 +813,7 @@ class TransitTripForegroundService : Service() {
                     consecutiveNullCount = 0
                     val dist = haversineMeters(loc.first, loc.second, alightingLat, alightingLng)
                     logD("Proximity check: ${dist.toInt()}m")
-                    if (dist <= 500.0) {
+                    if (dist <= 250.0) {   // Proximity eşiği: 250m
                         showReminderNotification()
                         cancelReminder()   // Fallback AlarmManager'ı da iptal et
                         startForegroundForCurrentState(useLocationType = false)

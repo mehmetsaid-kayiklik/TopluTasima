@@ -2,7 +2,9 @@ package com.example.toplutasima.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -89,6 +91,21 @@ fun PersonalTripsContent(
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                         placeholder = { Text("34 ABC 123", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     )
+                }
+
+                if (uiState.readyPlates.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        uiState.readyPlates.forEach { plate ->
+                            AssistChip(
+                                onClick = { viewModel.updateFormField("plaka", plate) },
+                                label = { Text(plate, fontSize = 12.sp, maxLines = 1) },
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
                 }
 
                 // Hava + Tarih
@@ -229,6 +246,7 @@ fun PersonalTripsContent(
             editingTrip = uiState.editingTrip,
             lang = lang,
             viewModel = viewModel,
+            readyPlates = uiState.readyPlates,
             onDismiss = { viewModel.closeDialog() }
         )
     }

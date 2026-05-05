@@ -229,6 +229,9 @@ object S {
     fun stopUpdated(l: AppLanguage) = m(l, "Durak güncellendi ✅", "Haltestelle aktualisiert ✅", "Stop updated ✅")
     fun stopUpdateFailed(l: AppLanguage) = m(l, "Durak güncellenemedi", "Aktualisierung fehlgeschlagen", "Stop update failed")
     fun savingStopChange(l: AppLanguage) = m(l, "Durak güncelleniyor...", "Haltestelle wird aktualisiert...", "Updating stop...")
+    fun enterNewStopManually(l: AppLanguage) = m(l, "Yeni durak adını girin:", "Neuen Haltestellennamen eingeben:", "Enter new stop name:")
+    fun loadingStopList(l: AppLanguage) = m(l, "⏳ Durak listesi yükleniyor...", "⏳ Haltestellenliste wird geladen...", "⏳ Loading stop list...")
+    fun errorStopNotFound(l: AppLanguage) = m(l, "Durak bulunamadı", "Haltestelle nicht gefunden", "Stop not found")
 
 
 
@@ -501,7 +504,7 @@ object S {
     fun transitReminderTypeLocation(l: AppLanguage) = m(l, "📍 Konuma Dayalı", "📍 Standortbasiert", "📍 Location-Based")
     fun transitReminderTypeTime(l: AppLanguage) = m(l, "⏰ Saate Dayalı", "⏰ Zeitbasiert", "⏰ Time-Based")
     fun transitReminderTypeNone(l: AppLanguage) = m(l, "🔕 Kapalı", "🔕 Aus", "🔕 Off")
-    fun transitReminderTypeLocationDesc(l: AppLanguage) = m(l, "Durağa ≤500m yaklaştığında bildirim gelir (GPS gerekir)", "Benachrichtigung bei ≤500m Entfernung (GPS erforderlich)", "Alert when ≤500m from stop (GPS required)")
+    fun transitReminderTypeLocationDesc(l: AppLanguage) = m(l, "Durağa ≤250m yaklaştığında bildirim gelir (GPS gerekir)", "Benachrichtigung bei ≤250m Entfernung (GPS erforderlich)", "Alert when ≤250m from stop (GPS required)")
     fun transitReminderTypeTimeDesc(l: AppLanguage) = m(l, "Planlanan iniş saatinde hatırlatma gönderilir", "Erinnerung zur geplanten Ausstiegszeit", "Reminder at planned alighting time")
 
     // ── Sonraki segment bekleniyor ──
