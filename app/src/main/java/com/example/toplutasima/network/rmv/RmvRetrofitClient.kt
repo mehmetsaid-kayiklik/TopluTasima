@@ -27,7 +27,8 @@ interface RmvApi {
         @Query("input") input: String,
         @Query("type") type: String = "S",
         @Query("maxNo") maxNo: Int = 3,
-        @Query("format") format: String = "json"
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
     ): RmvLocationResponse
 
     @GET("departureBoard")
@@ -36,7 +37,8 @@ interface RmvApi {
         @Query("id") stopId: String,
         @Query("date") date: String,
         @Query("time") time: String,
-        @Query("format") format: String = "json"
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
     ): RmvDepartureBoardResponse
 
     @GET("trip")
@@ -47,14 +49,16 @@ interface RmvApi {
         @Query("date") date: String,
         @Query("time") time: String,
         @Query("numF") numF: Int = 1,
-        @Query("format") format: String = "json"
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
     ): kotlinx.serialization.json.JsonObject     // too polymorphic → parse manually
 
     @GET("journeyDetail")
     suspend fun getJourneyDetail(
         @Query("accessId") accessId: String,
         @Query("id") ref: String,
-        @Query("format") format: String = "json"
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
     ): kotlinx.serialization.json.JsonObject     // too polymorphic → parse manually
 
     @GET("location.nearbystops")
@@ -65,7 +69,8 @@ interface RmvApi {
         @Query("maxNo") maxNo: Int = 8,
         @Query("r") radiusMeters: Int = 500,      // meters
         @Query("type") type: String = "S",
-        @Query("format") format: String = "json"
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
     ): kotlinx.serialization.json.JsonObject      // polymorphic → parse manually
 }
 

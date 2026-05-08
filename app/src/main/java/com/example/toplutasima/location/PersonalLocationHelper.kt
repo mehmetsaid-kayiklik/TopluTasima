@@ -7,6 +7,7 @@ import android.location.Geocoder
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.toplutasima.BuildConfig
+import com.example.toplutasima.network.ApiErrors
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -125,6 +126,7 @@ class PersonalLocationHelper(private val context: Context) {
         if (waypoints.size < 2) return null
         return withContext(Dispatchers.IO) {
             try {
+                val requestId = ApiErrors.newRequestId()
                 // ORS beklentisi: [[lng, lat], [lng, lat], ...]
                 val coords = JSONArray().apply {
                     waypoints.forEach { (lat, lng) ->
@@ -138,16 +140,25 @@ class PersonalLocationHelper(private val context: Context) {
                     .addHeader("Authorization", BuildConfig.ORS_API_KEY)
                     .addHeader("Content-Type", "application/json; charset=utf-8")
                     .addHeader("Accept", "application/json")
+                    .addHeader("X-Request-Id", requestId)
                     .post(body.toRequestBody("application/json".toMediaType()))
                     .build()
 
                 httpClient.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
-                        if (BuildConfig.DEBUG) Log.e(TAG, "ORS error ${response.code}: ${response.body?.string()}")
+                        val apiError = ApiErrors.fromHttpStatus(
+                            provider = "ORS",
+                            endpoint = "directions/driving-car",
+                            requestId = requestId,
+                            statusCode = response.code,
+                            body = responseBody
+                        )
+                        if (BuildConfig.DEBUG) Log.e(TAG, apiError.message ?: "ORS HTTP ${response.code}", apiError)
                         return@withContext null
                     }
 
-                    val json = JSONObject(response.body?.string() ?: return@withContext null)
+                    val json = JSONObject(responseBody)
                     val routes = json.optJSONArray("routes") ?: return@withContext null
                     val summary = routes.getJSONObject(0).getJSONObject("summary")
                     summary.getDouble("distance") // metre

@@ -3,9 +3,13 @@ package com.example.toplutasima.network
 import android.util.Log
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.BulkUpdateRow
+import com.example.toplutasima.model.DelayBucketStats
+import com.example.toplutasima.model.LineReliabilityStats
+import com.example.toplutasima.model.RoutePairStats
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.model.TicketStatus
+import com.example.toplutasima.model.TimeSlotStats
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
@@ -213,6 +217,32 @@ object FirestoreService {
      *
      * @return Döküman data map'i veya bulunamazsa null
      */
+    suspend fun clearActual(tripId: String, clearDep: Boolean, clearArr: Boolean): Boolean {
+        val snapshot = db.collection(COLLECTION)
+            .whereEqualTo("id", tripId)
+            .get().await()
+        if (snapshot.isEmpty) return false
+        val docRef = snapshot.documents[0].reference
+        val existingData = snapshot.documents[0].data ?: return false
+        val updates = mutableMapOf<String, Any>()
+        if (clearDep) {
+            updates["gercekBinis"] = ""
+            updates["gecikme"] = 0
+        }
+        if (clearArr) updates["gercekInis"] = ""
+
+        val finalGercekBinis = if (clearDep) "" else existingData["gercekBinis"]?.toString()
+        val finalGercekInis = if (clearArr) "" else existingData["gercekInis"]?.toString()
+        updates["gercekYolSuresi"] = if (!finalGercekBinis.isNullOrBlank() && !finalGercekInis.isNullOrBlank()) {
+            computeYolSuresi(finalGercekBinis, finalGercekInis)
+        } else {
+            ""
+        }
+
+        if (updates.isNotEmpty()) docRef.update(updates).await()
+        return true
+    }
+
     suspend fun fetchRecord(tripId: String): Map<String, Any>? {
         if (tripId.isBlank()) return null
         return try {
@@ -403,6 +433,44 @@ object FirestoreService {
         val dailyDuration = mutableMapOf<String, Double>()
         val lineMaxDelays = mutableMapOf<String, Double>()
         val lineTotalDelays = mutableMapOf<String, Double>()
+        val timeSlotTotals = mutableMapOf<String, Triple<Int, Double, Int>>() // trips, delay, onTime
+        val delayBuckets = linkedMapOf("zero" to 0, "low" to 0, "medium" to 0, "high" to 0)
+        data class LineAgg(var trips: Int = 0, var delay: Double = 0.0, var onTime: Int = 0, var maxDelay: Int = 0)
+        data class RouteAgg(
+            var trips: Int = 0,
+            var durationSum: Double = 0.0,
+            var durationCount: Int = 0,
+            var delay: Double = 0.0,
+            var fastest: Int = Int.MAX_VALUE,
+            var slowest: Int = 0
+        )
+        val lineReliabilityAgg = mutableMapOf<String, LineAgg>()
+        val routeAgg = mutableMapOf<Pair<String, String>, RouteAgg>()
+        var shortestTrip: Pair<String, Int>? = null
+        var longestTrip: Pair<String, Int>? = null
+        var longestDistanceTrip: Pair<String, Double>? = null
+
+        fun timeToMinutes(time: String): Int? {
+            val parts = time.trim().split(":")
+            if (parts.size < 2) return null
+            val hour = parts[0].toIntOrNull() ?: return null
+            val minute = parts[1].toIntOrNull() ?: return null
+            if (hour !in 0..23 || minute !in 0..59) return null
+            return hour * 60 + minute
+        }
+
+        fun timeSlotKey(time: String): String {
+            val hour = (timeToMinutes(time) ?: return "unknown") / 60
+            return when (hour) {
+                in 5..10 -> "morning"
+                in 11..15 -> "noon"
+                in 16..20 -> "evening"
+                else -> "night"
+            }
+        }
+
+        fun routeTitle(line: String, from: String, to: String): String =
+            listOf(line.ifBlank { "-" }, "$from → $to").joinToString(" • ")
 
         for (row in rows) {
             val tarih = row["tarih"]?.toString() ?: continue
@@ -421,6 +489,7 @@ object FirestoreService {
             val from = row["binisDuragi"]?.toString() ?: ""
             val to = row["inisDuragi"]?.toString() ?: ""
             val day = row["gun"]?.toString() ?: ""
+            val plannedDep = row["planlananBinis"]?.toString() ?: ""
 
             if (types.containsKey(type)) types[type] = types[type]!! + 1
             if (line.isNotBlank()) lines[line] = (lines[line] ?: 0) + 1
@@ -432,13 +501,14 @@ object FirestoreService {
             if (weather.isNotBlank()) weatherCounts[weather] = (weatherCounts[weather] ?: 0) + 1
 
             val mesafe = row["mesafe"]?.toString() ?: ""
+            val distanceKm = mesafe.replace(Regex("[^0-9.,]"), "").replace(',', '.').toDoubleOrNull()
             if (mesafe.isNotBlank()) {
-                val numPart = mesafe.replace(Regex("[^0-9.,]"), "").replace(',', '.').toDoubleOrNull()
-                if (numPart != null) totalDistanceKm += numPart
+                if (distanceKm != null) totalDistanceKm += distanceKm
             }
 
             val plannedMin = row["planlananYolSuresi"]?.toString()?.toDoubleOrNull()
             val actualMin = row["gercekYolSuresi"]?.toString()?.toDoubleOrNull()
+            val bestDuration = actualMin ?: plannedMin
 
             if (plannedMin != null) totalPlanned += plannedMin
             if (actualMin != null) {
@@ -446,28 +516,75 @@ object FirestoreService {
                 dailyDuration[tarih] = (dailyDuration[tarih] ?: 0.0) + actualMin
             }
 
+            val routeDisplay = if (from.isNotBlank() && to.isNotBlank()) routeTitle(line, from, to) else line.ifBlank { "-" }
+            if (bestDuration != null && bestDuration > 0) {
+                val durationInt = Math.round(bestDuration).toInt()
+                if (shortestTrip == null || durationInt < shortestTrip!!.second) shortestTrip = routeDisplay to durationInt
+                if (longestTrip == null || durationInt > longestTrip!!.second) longestTrip = routeDisplay to durationInt
+            }
+            if (distanceKm != null && distanceKm > 0.0) {
+                if (longestDistanceTrip == null || distanceKm > longestDistanceTrip!!.second) {
+                    longestDistanceTrip = routeDisplay to distanceKm
+                }
+            }
+
             dailyTrips[tarih] = (dailyTrips[tarih] ?: 0) + 1
 
             // Delay: use stored gecikme field (gercekBinis - planlananBinis in minutes)
             val gecikme = row["gecikme"]?.toString()?.toDoubleOrNull()?.toInt() ?: 0
+            val onTime = gecikme <= 3
+            when {
+                gecikme <= 0 -> delayBuckets["zero"] = (delayBuckets["zero"] ?: 0) + 1
+                gecikme <= 5 -> delayBuckets["low"] = (delayBuckets["low"] ?: 0) + 1
+                gecikme <= 10 -> delayBuckets["medium"] = (delayBuckets["medium"] ?: 0) + 1
+                else -> delayBuckets["high"] = (delayBuckets["high"] ?: 0) + 1
+            }
+
+            val prevType = typeOnTime[type] ?: Pair(0, 0)
+            typeOnTime[type] = Pair(prevType.first + 1, prevType.second + if (onTime) 1 else 0)
+
+            val slotKey = timeSlotKey(plannedDep)
+            if (slotKey != "unknown") {
+                val prev = timeSlotTotals[slotKey] ?: Triple(0, 0.0, 0)
+                timeSlotTotals[slotKey] = Triple(
+                    prev.first + 1,
+                    prev.second + gecikme.toDouble(),
+                    prev.third + if (onTime) 1 else 0
+                )
+            }
+
+            if (line.isNotBlank()) {
+                val agg = lineReliabilityAgg.getOrPut(line) { LineAgg() }
+                agg.trips++
+                agg.delay += gecikme.toDouble()
+                if (onTime) agg.onTime++
+                if (gecikme > agg.maxDelay) agg.maxDelay = gecikme
+            }
+
+            if (from.isNotBlank() && to.isNotBlank()) {
+                val agg = routeAgg.getOrPut(from to to) { RouteAgg() }
+                agg.trips++
+                agg.delay += gecikme.toDouble()
+                if (bestDuration != null && bestDuration > 0) {
+                    val durationInt = Math.round(bestDuration).toInt()
+                    agg.durationSum += bestDuration
+                    agg.durationCount++
+                    if (durationInt < agg.fastest) agg.fastest = durationInt
+                    if (durationInt > agg.slowest) agg.slowest = durationInt
+                }
+            }
+
             if (gecikme > 0) {
                 totalDelay += gecikme.toDouble()
                 delayCount++
                 if (gecikme.toDouble() > maxDelay) maxDelay = gecikme.toDouble()
 
-                val prev = typeOnTime[type] ?: Pair(0, 0)
-                typeOnTime[type] = Pair(prev.first + 1, prev.second + if (gecikme <= 3) 1 else 0)
-
                 if (line.isNotBlank()) {
                     if (!lineMaxDelays.containsKey(line) || gecikme.toDouble() > lineMaxDelays[line]!!) {
                         lineMaxDelays[line] = gecikme.toDouble()
                     }
-                    lineTotalDelays[line] = (lineTotalDelays[line] ?: 0.0) + gecikme.toDouble()
+                lineTotalDelays[line] = (lineTotalDelays[line] ?: 0.0) + gecikme.toDouble()
                 }
-            } else {
-                // gecikme == 0 means on-time
-                val prev = typeOnTime[type] ?: Pair(0, 0)
-                typeOnTime[type] = Pair(prev.first + 1, prev.second + 1)
             }
         }
 
@@ -498,6 +615,46 @@ object FirestoreService {
             .associate { it.key to it.value }
             .let { LinkedHashMap(it) }
 
+        val timeSlotStats = listOf("morning", "noon", "evening", "night").mapNotNull { key ->
+            val stats = timeSlotTotals[key] ?: return@mapNotNull null
+            TimeSlotStats(
+                key = key,
+                trips = stats.first,
+                avgDelay = if (stats.first > 0) stats.second / stats.first else 0.0,
+                punctualityRate = if (stats.first > 0) Math.round(stats.third.toDouble() / stats.first * 100).toInt() else 0
+            )
+        }
+
+        val lineReliability = lineReliabilityAgg.entries
+            .sortedWith(compareByDescending<Map.Entry<String, LineAgg>> { it.value.trips }.thenBy { it.key })
+            .take(7)
+            .map { (line, stats) ->
+                LineReliabilityStats(
+                    line = line,
+                    trips = stats.trips,
+                    avgDelay = if (stats.trips > 0) stats.delay / stats.trips else 0.0,
+                    punctualityRate = if (stats.trips > 0) Math.round(stats.onTime.toDouble() / stats.trips * 100).toInt() else 0,
+                    maxDelay = stats.maxDelay
+                )
+            }
+
+        val routePairs = routeAgg.entries
+            .sortedWith(compareByDescending<Map.Entry<Pair<String, String>, RouteAgg>> { it.value.trips }.thenBy { it.key.first })
+            .take(7)
+            .map { (route, stats) ->
+                RoutePairStats(
+                    fromStop = route.first,
+                    toStop = route.second,
+                    trips = stats.trips,
+                    avgDurationMin = if (stats.durationCount > 0) Math.round(stats.durationSum / stats.durationCount).toInt() else 0,
+                    avgDelay = if (stats.trips > 0) stats.delay / stats.trips else 0.0,
+                    fastestMin = if (stats.fastest == Int.MAX_VALUE) 0 else stats.fastest,
+                    slowestMin = stats.slowest
+                )
+            }
+
+        val delayDistribution = delayBuckets.map { (key, count) -> DelayBucketStats(key, count) }
+
         val summaryData = SummaryData(
             totalTrips = totalTrips,
             seatedCount = seatedCount,
@@ -523,7 +680,17 @@ object FirestoreService {
             recordTotalDelayLineMin = Math.round(recordTotalDelayLine?.value ?: 0.0).toInt(),
             weatherCounts = weatherCounts,
             totalDistanceKm = Math.round(totalDistanceKm * 100) / 100.0,
-            topLines = topLines
+            topLines = topLines,
+            timeSlotStats = timeSlotStats,
+            lineReliability = lineReliability,
+            routePairs = routePairs,
+            delayDistribution = delayDistribution,
+            recordShortestTrip = shortestTrip?.first ?: "-",
+            recordShortestTripMin = shortestTrip?.second ?: 0,
+            recordLongestTrip = longestTrip?.first ?: "-",
+            recordLongestTripMin = longestTrip?.second ?: 0,
+            recordLongestDistanceTrip = longestDistanceTrip?.first ?: "-",
+            recordLongestDistanceKm = Math.round((longestDistanceTrip?.second ?: 0.0) * 100) / 100.0
         )
 
         return Pair(summaryData, sortedMonths)

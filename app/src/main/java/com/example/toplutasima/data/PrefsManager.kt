@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.toplutasima.model.FavoriteStop
+import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
 import com.example.toplutasima.network.FirestoreService
@@ -12,6 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.UUID
@@ -33,6 +36,16 @@ object PrefsManager {
     private lateinit var prefs: SharedPreferences
     private var appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private const val STOP_CACHE_KEY = "stop_search_cache"
+    private const val STOP_CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
+    private const val STOP_CACHE_MAX_ENTRIES = 30
+
+    @Serializable
+    private data class StopSearchCacheEntry(
+        val query: String,
+        val createdAt: Long,
+        val options: List<StopOption>
+    )
 
     // ── Observable state ─────────────────────────────────────────────────────
 
@@ -193,6 +206,36 @@ object PrefsManager {
 
     // ── Internal ─────────────────────────────────────────────────────────────
 
+    fun getCachedStops(query: String, max: Int): List<StopOption> {
+        val normalized = normalizeStopQuery(query)
+        if (normalized.isBlank()) return emptyList()
+        val now = System.currentTimeMillis()
+        return loadStopSearchCache()
+            .firstOrNull { it.query == normalized && now - it.createdAt <= STOP_CACHE_TTL_MS }
+            ?.options
+            ?.take(max)
+            .orEmpty()
+    }
+
+    fun saveStopSearch(query: String, options: List<StopOption>) {
+        val normalized = normalizeStopQuery(query)
+        if (normalized.isBlank() || options.isEmpty()) return
+        val fresh = StopSearchCacheEntry(
+            query = normalized,
+            createdAt = System.currentTimeMillis(),
+            options = options
+        )
+        val entries = (listOf(fresh) + loadStopSearchCache().filterNot { it.query == normalized })
+            .take(STOP_CACHE_MAX_ENTRIES)
+        prefs.edit().putString(STOP_CACHE_KEY, json.encodeToString(entries)).apply()
+    }
+
+    fun stopSearchCacheSize(): Int = loadStopSearchCache().size
+
+    fun clearStopSearchCache() {
+        prefs.edit().remove(STOP_CACHE_KEY).apply()
+    }
+
     private fun loadFavorites(): List<FavoriteStop> {
         val raw = prefs.getString("favorite_stops", null) ?: return emptyList()
         return try { json.decodeFromString<List<FavoriteStop>>(raw) } catch (_: Exception) { emptyList() }
@@ -201,4 +244,18 @@ object PrefsManager {
     private fun saveFavorites() {
         prefs.edit().putString("favorite_stops", json.encodeToString(favorites)).apply()
     }
+
+    private fun loadStopSearchCache(): List<StopSearchCacheEntry> {
+        val raw = prefs.getString(STOP_CACHE_KEY, null) ?: return emptyList()
+        val now = System.currentTimeMillis()
+        return try {
+            json.decodeFromString<List<StopSearchCacheEntry>>(raw)
+                .filter { now - it.createdAt <= STOP_CACHE_TTL_MS }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun normalizeStopQuery(query: String): String =
+        query.trim().lowercase().replace(Regex("\\s+"), " ")
 }

@@ -945,6 +945,13 @@ fun RMVLogScreen(
                             shape = RoundedCornerShape(10.dp)
                         ) { Text(S.boarded(lang)) }
                     }
+                    if (state.customBindimTime.isNotBlank()) {
+                        TextButton(
+                            onClick = { viewModel.undoBindim() },
+                            enabled = state.segmentIds.isNotEmpty(),
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text(S.undoBoarded(lang)) }
+                    }
 
                     // İndim
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -972,6 +979,13 @@ fun RMVLogScreen(
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
                         ) { Text(S.alighted(lang)) }
+                    }
+                    if (state.customIndimTime.isNotBlank()) {
+                        TextButton(
+                            onClick = { viewModel.undoIndim() },
+                            enabled = state.segmentIds.isNotEmpty(),
+                            modifier = Modifier.align(Alignment.End)
+                        ) { Text(S.undoAlighted(lang)) }
                     }
                 }
             }
@@ -1031,9 +1045,14 @@ fun RMVLogScreen(
                                 )
                                 // Sadece biniş→iniş arasındaki durakları göster
                                 val fromIdx = seg.stopFromIdx.coerceIn(0, seg.stopNames.lastIndex)
-                                val toIdx = if (seg.stopToIdx >= fromIdx) seg.stopToIdx.coerceAtMost(seg.stopNames.lastIndex)
-                                            else seg.stopNames.lastIndex
-                                seg.stopNames.subList(fromIdx, toIdx + 1).forEachIndexed { idx, name ->
+                                val toIdx = (seg.stopToIdx.takeIf { it >= 0 } ?: seg.stopNames.lastIndex)
+                                    .coerceIn(0, seg.stopNames.lastIndex)
+                                val visibleStops = if (toIdx >= fromIdx) {
+                                    seg.stopNames.subList(fromIdx, toIdx + 1)
+                                } else {
+                                    seg.stopNames.subList(toIdx, fromIdx + 1).asReversed()
+                                }
+                                visibleStops.forEachIndexed { idx, name ->
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),

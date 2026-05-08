@@ -2,8 +2,10 @@ package com.example.toplutasima
 
 import android.app.Application
 import android.content.Context
+import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.di.appModule
+import com.example.toplutasima.diagnostics.AppErrorReporter
 import com.example.toplutasima.ui.LocaleManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +18,7 @@ class TopluTasimaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppErrorReporter.install(this)
 
         // PrefsManager ve LocaleManager'ı burada başlat.
         // Service / Worker / BroadcastReceiver, MainActivity'den önce çalışabilir;
@@ -23,6 +26,9 @@ class TopluTasimaApp : Application() {
         val prefs = getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
         LocaleManager.init(prefs)
         PrefsManager.init(prefs, appScope)
+        if (OfflineQueueStore.pendingCount(this) > 0) {
+            OfflineQueueStore.scheduleSync(this)
+        }
 
         startKoin {
             androidContext(this@TopluTasimaApp)

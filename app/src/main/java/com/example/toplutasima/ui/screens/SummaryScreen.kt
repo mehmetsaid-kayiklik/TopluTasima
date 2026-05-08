@@ -8,6 +8,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Alignment
@@ -17,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,6 +35,7 @@ import com.example.toplutasima.ui.components.SummaryCard
 import com.example.toplutasima.ui.components.formatMin
 import com.example.toplutasima.ui.components.HeatmapCalendar
 import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.usecase.HeatmapMetric
 import com.example.toplutasima.viewmodel.SummaryViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,6 +48,7 @@ fun SummaryScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val lang = LocaleManager.currentLanguage
+    var heatmapMetric by remember(state.selectedSheet) { mutableStateOf(HeatmapMetric.TRIPS) }
 
     // Translate sheet display name (month names + "Tümü")
     fun displaySheet(name: String): String {
@@ -205,6 +211,41 @@ fun SummaryScreen(
                                 }
                             }
 
+                            val worstLine = s.lineReliability.minByOrNull { it.punctualityRate }
+                            val slowestRoute = s.routePairs.maxByOrNull { it.avgDelay }
+                            val busiestSlot = s.timeSlotStats.maxByOrNull { it.trips }
+                            if (worstLine != null || slowestRoute != null || busiestSlot != null) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text(S.smartInsights(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        worstLine?.let {
+                                            Text(
+                                                "${S.insightWeakLine(lang)}: ${it.line} - %${it.punctualityRate}, +${String.format(java.util.Locale.US, "%.1f", it.avgDelay)} ${S.minutesShort(lang)}",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                        busiestSlot?.let {
+                                            Text(
+                                                "${S.insightBusySlot(lang)}: ${S.timeSlotName(it.key, lang)} - ${it.trips} ${S.tripsShort(lang)}",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                        slowestRoute?.let {
+                                            Text(
+                                                "${S.insightSlowRoute(lang)}: ${it.fromStop} → ${it.toStop} - +${String.format(java.util.Locale.US, "%.1f", it.avgDelay)} ${S.minutesShort(lang)}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                             // Araç Türleri
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -264,6 +305,41 @@ fun SummaryScreen(
                                 }
                             }
 
+                            // Saat Dilimi Analizi
+                            if (s.timeSlotStats.isNotEmpty()) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(S.timeSlotAnalysis(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.height(12.dp))
+                                        val slotMax = s.timeSlotStats.maxOfOrNull { it.trips }?.toFloat() ?: 1f
+                                        s.timeSlotStats.forEach { slot ->
+                                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                    Text(S.timeSlotName(slot.key, lang), style = MaterialTheme.typography.bodyMedium)
+                                                    Text("${slot.trips} ${S.tripsShort(lang)}", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                                                }
+                                                Spacer(Modifier.height(3.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { if (slotMax > 0) slot.trips / slotMax else 0f },
+                                                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                )
+                                                Text(
+                                                    "${S.avgShort(lang)} +${String.format(java.util.Locale.US, "%.1f", slot.avgDelay)} ${S.minutesShort(lang)} • ${S.punctualShort(lang)} %${slot.punctualityRate}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             // Hatlara Göre Sefer (Top 7)
                             if (s.topLines.isNotEmpty()) {
                                 Card(
@@ -287,6 +363,47 @@ fun SummaryScreen(
                                                     modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
                                                     color = MaterialTheme.colorScheme.tertiary,
                                                     trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Durak Çifti Analizi
+                            if (s.routePairs.isNotEmpty()) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(S.routePairAnalysis(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.height(12.dp))
+                                        val routeMax = s.routePairs.maxOfOrNull { it.trips }?.toFloat() ?: 1f
+                                        s.routePairs.forEach { route ->
+                                            Column(modifier = Modifier.padding(vertical = 5.dp)) {
+                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                    Text(
+                                                        "${route.fromStop} → ${route.toStop}",
+                                                        modifier = Modifier.weight(1f),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                    Text("${route.trips}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                                                }
+                                                Spacer(Modifier.height(3.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { if (routeMax > 0) route.trips / routeMax else 0f },
+                                                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                                                    color = MaterialTheme.colorScheme.tertiary,
+                                                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                )
+                                                Text(
+                                                    "${S.avgShort(lang)} ${formatMin(route.avgDurationMin, lang)} • +${String.format(java.util.Locale.US, "%.1f", route.avgDelay)} ${S.minutesShort(lang)} • ${route.fastestMin}-${route.slowestMin} ${S.minutesShort(lang)}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
                                         }
@@ -350,6 +467,16 @@ fun SummaryScreen(
                             SummaryCard(S.recordTotalDelayed(lang), "${s.recordTotalDelayLine} (${s.recordTotalDelayLineMin} ${S.minutesShort(lang)})")
                             SummaryCard(S.recordFreqLine(lang), s.freqLine)
                             SummaryCard(S.recordFreqFrom(lang), s.freqFrom)
+                            SummaryCard(S.recordFreqTo(lang), s.freqTo)
+                            if (s.recordShortestTripMin > 0) {
+                                SummaryCard(S.recordShortestTrip(lang), "${s.recordShortestTrip} (${formatMin(s.recordShortestTripMin, lang)})")
+                            }
+                            if (s.recordLongestTripMin > 0) {
+                                SummaryCard(S.recordLongestTrip(lang), "${s.recordLongestTrip} (${formatMin(s.recordLongestTripMin, lang)})")
+                            }
+                            if (s.recordLongestDistanceKm > 0) {
+                                SummaryCard(S.recordLongestDistance(lang), "${s.recordLongestDistanceTrip} (${String.format(java.util.Locale.US, "%.2f km", s.recordLongestDistanceKm)})")
+                            }
 
                             // ── Heatmap Calendar ──
                             if (state.heatmapData != null) {
@@ -361,7 +488,22 @@ fun SummaryScreen(
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         Text(S.heatmapTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        HeatmapCalendar(data = hm, modifier = Modifier.fillMaxWidth())
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            listOf(
+                                                HeatmapMetric.TRIPS to S.heatmapMetricTrips(lang),
+                                                HeatmapMetric.AVG_DELAY to S.heatmapMetricDelay(lang),
+                                                HeatmapMetric.TICKET_CONTROL to S.heatmapMetricTicket(lang),
+                                                HeatmapMetric.SEATED to S.heatmapMetricSeated(lang)
+                                            ).forEach { (metric, label) ->
+                                                FilterChip(
+                                                    selected = heatmapMetric == metric,
+                                                    onClick = { heatmapMetric = metric },
+                                                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                        }
+                                        HeatmapCalendar(data = hm, metric = heatmapMetric, lang = lang, modifier = Modifier.fillMaxWidth())
                                         Spacer(Modifier.height(4.dp))
                                         // Streak cards
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -404,6 +546,41 @@ fun SummaryScreen(
                             }
 
                         } else if (state.selectedInnerTab == 1) {
+                            // Gecikme Dağılımı
+                            if (s.delayDistribution.isNotEmpty()) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(S.delayDistribution(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.height(12.dp))
+                                        val bucketMax = s.delayDistribution.maxOfOrNull { it.count }?.toFloat() ?: 1f
+                                        s.delayDistribution.forEach { bucket ->
+                                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                    Text(S.delayBucketName(bucket.key, lang), style = MaterialTheme.typography.bodyMedium)
+                                                    Text("${bucket.count}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                }
+                                                Spacer(Modifier.height(4.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { if (bucketMax > 0) bucket.count / bucketMax else 0f },
+                                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                                    color = when (bucket.key) {
+                                                        "zero" -> SuccessGreen
+                                                        "low" -> MaterialTheme.colorScheme.primary
+                                                        "medium" -> WarningAmber
+                                                        else -> ErrorRed
+                                                    },
+                                                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             // Dakiklik oranları
                             Text(S.punctualityRates(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Card(
@@ -436,10 +613,45 @@ fun SummaryScreen(
                                 }
                             }
 
+                            // Hat Güvenilirliği
+                            if (s.lineReliability.isNotEmpty()) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(S.lineReliability(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.height(12.dp))
+                                        s.lineReliability.forEach { line ->
+                                            Column(modifier = Modifier.padding(vertical = 5.dp)) {
+                                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                    Text(line.line, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                                    Text("%${line.punctualityRate}", fontWeight = FontWeight.Bold, color = if (line.punctualityRate > 80) SuccessGreen else if (line.punctualityRate > 50) WarningAmber else ErrorRed)
+                                                }
+                                                Spacer(Modifier.height(4.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { line.punctualityRate / 100f },
+                                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                                    color = if (line.punctualityRate > 80) SuccessGreen else if (line.punctualityRate > 50) WarningAmber else ErrorRed,
+                                                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                                )
+                                                Text(
+                                                    "${line.trips} ${S.tripsShort(lang)} • ${S.avgShort(lang)} +${String.format(java.util.Locale.US, "%.1f", line.avgDelay)} ${S.minutesShort(lang)} • ${S.maxShort(lang)} +${line.maxDelay} ${S.minutesShort(lang)}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             SummaryCard(S.totalPlanned(lang), formatMin(s.totalPlannedMin, lang))
                             SummaryCard(S.totalActual(lang), formatMin(s.totalActualMin, lang))
                             SummaryCard(S.totalDelay(lang), "${s.totalDelay} ${S.minutes(lang)}")
                             SummaryCard(S.avgDelay(lang), String.format(java.util.Locale.US, "%.1f ${S.minutes(lang)}", s.avgDelay))
+
                         } else if (state.selectedInnerTab == 2) {
                             // ── Tab 2: Monthly Comparison ──
                             Text(S.comparisonTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

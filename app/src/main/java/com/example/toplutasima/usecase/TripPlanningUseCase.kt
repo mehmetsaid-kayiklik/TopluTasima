@@ -37,7 +37,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
                 dep.time, input.fromId, input.toId
             )
         }
-        if (rawJourney.coords.isEmpty()) {
+        if (rawJourney.coords.isEmpty() || rawJourney.stopNames.isEmpty()) {
             throw IllegalStateException("Segment verisi bulunamadı")
         }
 
@@ -97,9 +97,9 @@ class TripPlanningUseCase(private val repository: TripRepository) {
     ): Segment {
         // Tüm hat durağı stopNames'te saklanıyor.
         // fromIdx/toIdx biniş-iniş arasındaki koordinatları sınırlar (mesafe için).
-        val segFromIdx = exactJourney.fromIdx
-        val segToIdx = if (exactJourney.toIdx >= segFromIdx) exactJourney.toIdx
-                       else exactJourney.stopNames.size - 1
+        val segFromIdx = exactJourney.fromIdx.coerceIn(0, exactJourney.stopNames.lastIndex)
+        val segToIdx = (if (exactJourney.toIdx >= 0) exactJourney.toIdx else exactJourney.stopNames.lastIndex)
+            .coerceIn(0, exactJourney.stopNames.lastIndex)
 
         val toCoords = exactJourney.allStopCoords.getOrNull(segToIdx)
 
@@ -110,7 +110,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = exactJourney.stopTimes.getOrElse(segToIdx) { "" },
             distanceKm = calcDistance(dep.typeTr, exactJourney.coords, exactJourney.allStopCoords, exactJourney.fromIdx, exactJourney.toIdx), // coords zaten from→to arası
-            stopCount = maxOf(0, segToIdx - segFromIdx),
+            stopCount = kotlin.math.abs(segToIdx - segFromIdx),
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
             journeyRef = dep.journeyDetailRef,
@@ -132,12 +132,18 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             it.contains(transferStop, ignoreCase = true) || transferStop.contains(it, ignoreCase = true)
         }
 
-        if (transferIdx == -1) return listOf(buildFallbackSegment(dep, input, exactJourney))
+        if (transferIdx == -1 || transferIdx < exactJourney.fromIdx) {
+            return listOf(buildFallbackSegment(dep, input, exactJourney))
+        }
 
-        // Koordinatlar for leg1 = fromIdx → transferIdx (mesafe için)
+        // For transfer journeys, the first vehicle may continue beyond the transfer stop.
         val segFromIdx = exactJourney.fromIdx
-        val leg1Coords = exactJourney.coords // coords zaten fromIdx→toIdx arası (JourneySegment'ten)
-        val leg1Distance = calcDistance(dep.typeTr, leg1Coords)
+        val fullJourneyCoords = exactJourney.coords
+
+        val clippedLeg1Coords = exactJourney.allStopCoords
+            .takeIf { it.size > transferIdx }
+            ?.subList(segFromIdx, transferIdx + 1)
+            ?: fullJourneyCoords.take(transferIdx - segFromIdx + 1)
 
         val result = mutableListOf<Segment>()
         val transferCoords = exactJourney.allStopCoords.getOrNull(transferIdx)
@@ -148,7 +154,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             toStop = exactJourney.stopNames.getOrElse(transferIdx) { transferStop },
             dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = exactJourney.stopTimes.getOrElse(transferIdx) { "" },
-            distanceKm = calcDistance(dep.typeTr, leg1Coords, exactJourney.allStopCoords, exactJourney.fromIdx, transferIdx),
+            distanceKm = calcDistance(dep.typeTr, clippedLeg1Coords, exactJourney.allStopCoords, segFromIdx, transferIdx),
             stopCount = maxOf(0, transferIdx - segFromIdx),
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
@@ -168,9 +174,9 @@ class TripPlanningUseCase(private val repository: TripRepository) {
         input: PlanInput,
         exactJourney: RmvApiService.JourneySegment
     ): Segment {
-        val segFromIdx = exactJourney.fromIdx
-        val segToIdx = if (exactJourney.toIdx >= segFromIdx) exactJourney.toIdx
-                       else exactJourney.stopNames.size - 1
+        val segFromIdx = exactJourney.fromIdx.coerceIn(0, exactJourney.stopNames.lastIndex)
+        val segToIdx = (if (exactJourney.toIdx >= 0) exactJourney.toIdx else exactJourney.stopNames.lastIndex)
+            .coerceIn(0, exactJourney.stopNames.lastIndex)
         val distanceKm = calcDistance(dep.typeTr, exactJourney.coords, exactJourney.allStopCoords, exactJourney.fromIdx, exactJourney.toIdx)
         val toCoords = exactJourney.allStopCoords.getOrNull(segToIdx)
         return Segment(

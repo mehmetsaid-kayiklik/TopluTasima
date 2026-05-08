@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.data.AppEventBus
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.Departure
+import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.TicketStatus
@@ -166,6 +167,22 @@ class RmvLogViewModel(
     private fun lang() = LocaleManager.currentLanguage
     private fun ctx(): Context = getApplication()
 
+    private fun applySegmentDetails(seg: Segment, details: RmvApiService.SegmentDetails): Segment {
+        val stopNames = details.stopNames.ifEmpty { seg.stopNames }
+        val stopTimes = details.stopTimes.ifEmpty { seg.stopTimes }
+        val hasResolvedRange = details.fromIdx >= 0 && details.toIdx >= 0
+        return seg.copy(
+            distanceKm = if (details.distanceKm > 0) details.distanceKm else seg.distanceKm,
+            stopCount = if (details.stopCount > 0) details.stopCount else seg.stopCount,
+            stopNames = stopNames,
+            stopTimes = stopTimes,
+            stopFromIdx = if (hasResolvedRange) details.fromIdx else seg.stopFromIdx,
+            stopToIdx = if (hasResolvedRange) details.toIdx else seg.stopToIdx,
+            toStopLat = if (!details.toStopLat.isNaN()) details.toStopLat else seg.toStopLat,
+            toStopLng = if (!details.toStopLng.isNaN()) details.toStopLng else seg.toStopLng
+        )
+    }
+
     init {
         // AppEventBus — bildirimden yapılan Bindim/İndim işlemlerini UI'a yansıt
         viewModelScope.launch {
@@ -191,12 +208,23 @@ class RmvLogViewModel(
     fun fetchNearbyStops() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(nearbyLoading = true)
-            val stops = nearbyManager.fetchNearbyStops()
-            _uiState.value = _uiState.value.copy(
-                nearbyStops = stops,
-                nearbyLoading = false,
-                nearbyHasLoaded = true
-            )
+            try {
+                val stops = nearbyManager.fetchNearbyStops()
+                _uiState.value = _uiState.value.copy(
+                    nearbyStops = stops,
+                    nearbyLoading = false,
+                    nearbyHasLoaded = true
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    nearbyStops = emptyList(),
+                    nearbyLoading = false,
+                    nearbyHasLoaded = true,
+                    status = "${S.errorPrefix(lang())}: ${e.message}"
+                )
+            }
         }
     }
 
@@ -467,8 +495,19 @@ class RmvLogViewModel(
     fun searchFrom() {
         viewModelScope.launch {
             try {
+                val query = _uiState.value.from.trim()
+                val cached = PrefsManager.getCachedStops(query, 3)
+                if (cached.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        fromOptions = cached,
+                        fromMenuOpen = true,
+                        status = S.statusFromReady(lang())
+                    )
+                    return@launch
+                }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingFrom(lang()), fromOptions = emptyList())
-                val opts = repository.searchStops(_uiState.value.from.trim(), 3)
+                val opts = repository.searchStops(query, 3)
+                PrefsManager.saveStopSearch(query, opts)
                 _uiState.value = _uiState.value.copy(
                     fromOptions = opts,
                     fromMenuOpen = true,
@@ -483,8 +522,19 @@ class RmvLogViewModel(
     fun searchTo() {
         viewModelScope.launch {
             try {
+                val query = _uiState.value.to.trim()
+                val cached = PrefsManager.getCachedStops(query, 3)
+                if (cached.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        toOptions = cached,
+                        toMenuOpen = true,
+                        status = S.statusToReady(lang())
+                    )
+                    return@launch
+                }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingTo(lang()), toOptions = emptyList())
-                val opts = repository.searchStops(_uiState.value.to.trim(), 3)
+                val opts = repository.searchStops(query, 3)
+                PrefsManager.saveStopSearch(query, opts)
                 _uiState.value = _uiState.value.copy(
                     toOptions = opts,
                     toMenuOpen = true,
@@ -570,7 +620,16 @@ class RmvLogViewModel(
                         val detailsList = finalTrip.segments.map { seg ->
                             ensureActive()
                             if (seg.stopNames.isNotEmpty()) {
-                                RmvApiService.SegmentDetails(seg.distanceKm, seg.stopCount, seg.stopNames, seg.stopTimes)
+                                RmvApiService.SegmentDetails(
+                                    distanceKm = seg.distanceKm,
+                                    stopCount = seg.stopCount,
+                                    stopNames = seg.stopNames,
+                                    stopTimes = seg.stopTimes,
+                                    fromIdx = seg.stopFromIdx,
+                                    toIdx = seg.stopToIdx,
+                                    toStopLat = seg.toStopLat,
+                                    toStopLng = seg.toStopLng
+                                )
                             } else {
                                 runCatching { repository.fetchSegmentDetails(seg) }
                                     .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
@@ -582,7 +641,7 @@ class RmvLogViewModel(
                         if (currentTrip.segments.size != expectedSegmentCount) return@launch
                         val updatedSegs = currentTrip.segments.mapIndexed { idx, seg ->
                             val d = detailsList[idx]
-                            seg.copy(distanceKm = d.distanceKm, stopCount = d.stopCount, stopNames = d.stopNames, stopTimes = d.stopTimes)
+                            applySegmentDetails(seg, d)
                         }
                         _uiState.value = current.copy(
                             trip = currentTrip.copy(segments = updatedSegs),
@@ -623,7 +682,7 @@ class RmvLogViewModel(
                         if (currentTrip.segments.size != expectedSegmentCount) return@launch
                         val updatedSegs = currentTrip.segments.mapIndexed { idx, seg ->
                             val d = detailsList[idx]
-                            seg.copy(distanceKm = d.distanceKm, stopCount = d.stopCount, stopNames = d.stopNames, stopTimes = d.stopTimes)
+                            applySegmentDetails(seg, d)
                         }
                         _uiState.value = current.copy(trip = currentTrip.copy(segments = updatedSegs))
                     } catch (_: Exception) { }
@@ -736,6 +795,46 @@ class RmvLogViewModel(
     }
 
     // ── Kayıt geri yükleme ───────────────────────────────────────────────────
+
+    fun undoBindim() {
+        viewModelScope.launch {
+            try {
+                val s = _uiState.value
+                val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
+                if (segId.isBlank()) return@launch
+                _uiState.value = s.copy(status = S.statusSaving(lang()))
+                val ok = repository.clearActual(segId, clearDep = true, clearArr = false)
+                _uiState.value = _uiState.value.copy(
+                    customBindimTime = "",
+                    status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=$segId)"
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
+            }
+        }
+    }
+
+    fun undoIndim() {
+        viewModelScope.launch {
+            try {
+                val s = _uiState.value
+                val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
+                if (segId.isBlank()) return@launch
+                _uiState.value = s.copy(status = S.statusSaving(lang()))
+                val ok = repository.clearActual(segId, clearDep = false, clearArr = true)
+                _uiState.value = _uiState.value.copy(
+                    customIndimTime = "",
+                    status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=$segId)"
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
+            }
+        }
+    }
 
     fun restoreRecord(record: Map<String, Any>) {
         clearForm()
@@ -935,14 +1034,17 @@ class RmvLogViewModel(
                 val currentTrip = current.trip ?: return@launch
                 val currentSeg = currentTrip.segments.getOrNull(segIdx) ?: return@launch
 
+                val detailRangeResolved = details.fromIdx >= 0 && details.toIdx >= 0
                 val updatedSeg = currentSeg.copy(
                     stopNames   = stopNames,
                     stopTimes   = stopTimes,
                     journeyRef  = newSeg.journeyRef,
-                    stopFromIdx = newSeg.stopFromIdx,
-                    stopToIdx   = newSeg.stopToIdx,
+                    stopFromIdx = if (detailRangeResolved) details.fromIdx else newSeg.stopFromIdx,
+                    stopToIdx   = if (detailRangeResolved) details.toIdx else newSeg.stopToIdx,
                     distanceKm  = if (details.distanceKm > 0) details.distanceKm else newSeg.distanceKm,
-                    stopCount   = if (details.stopCount > 0) details.stopCount else newSeg.stopCount
+                    stopCount   = if (details.stopCount > 0) details.stopCount else newSeg.stopCount,
+                    toStopLat   = if (!details.toStopLat.isNaN()) details.toStopLat else newSeg.toStopLat,
+                    toStopLng   = if (!details.toStopLng.isNaN()) details.toStopLng else newSeg.toStopLng
                 )
                 val newSegs = currentTrip.segments.toMutableList()
                 newSegs[segIdx] = updatedSeg
@@ -1005,7 +1107,7 @@ class RmvLogViewModel(
                 val currentFromIdx = if (isBinis) maxOf(0, selectedIdx) else seg.stopFromIdx
                 val currentToIdx   = if (!isBinis) maxOf(0, selectedIdx) else
                     seg.stopToIdx.takeIf { it >= 0 } ?: maxOf(0, seg.stopNames.size - 1)
-                val newStopCount = maxOf(0, currentToIdx - currentFromIdx)
+                val newStopCount = kotlin.math.abs(currentToIdx - currentFromIdx)
 
                 var newDistanceKm = seg.distanceKm
                 if (seg.journeyRef.isNotBlank()) {

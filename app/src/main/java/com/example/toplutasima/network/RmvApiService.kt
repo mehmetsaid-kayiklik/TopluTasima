@@ -7,7 +7,6 @@ import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.model.TripResult
-import com.example.toplutasima.network.rmv.RmvCoordWrapper
 import com.example.toplutasima.network.rmv.RmvStopLocation
 import com.example.toplutasima.network.rmv.rmvApi
 import kotlinx.coroutines.CancellationException
@@ -16,7 +15,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -36,9 +34,20 @@ object RmvApiService {
         if (BuildConfig.DEBUG) { if (t != null) Log.e(tag, msg, t) else Log.e(tag, msg) }
     }
 
-    private const val RMV_BASE = "https://www.rmv.de/hapi"
     private val RMV_ACCESS_ID = BuildConfig.RMV_ACCESS_ID
     private val ORS_API_KEY = BuildConfig.ORS_API_KEY
+
+    private suspend fun <T> rmvCall(endpoint: String, block: suspend (String) -> T): T {
+        val requestId = ApiErrors.newRequestId()
+        logD("RmvRequest", "$endpoint requestId=$requestId")
+        return try {
+            block(requestId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiErrors.fromThrowable("RMV", endpoint, requestId, e)
+        }
+    }
 
     data class JourneySegment(
         val stopCount: Int,
@@ -68,11 +77,14 @@ object RmvApiService {
         if (input.isBlank()) return emptyList()
         return withContext(Dispatchers.IO) {
             try {
-                val response = rmvApi.searchStops(
-                    accessId = RMV_ACCESS_ID,
-                    input = input,
-                    maxNo = max
-                )
+                val response = rmvCall("location.name") { requestId ->
+                    rmvApi.searchStops(
+                        accessId = RMV_ACCESS_ID,
+                        input = input,
+                        maxNo = max,
+                        requestId = requestId
+                    )
+                }
                 val stops = mutableListOf<StopOption>()
 
                 fun addRmvStop(s: RmvStopLocation) {
@@ -105,6 +117,9 @@ object RmvApiService {
                 stops
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: ApiRequestException) {
+                logE("RmvApi", "searchStopOptions error: ${e.message}", e)
+                throw e
             } catch (e: Exception) {
                 logE("RmvApi", "searchStopOptions error: ${e.message}")
                 emptyList()
@@ -119,13 +134,16 @@ object RmvApiService {
     suspend fun searchNearbyStops(lat: Double, lon: Double, radiusMeters: Int = 500, max: Int = 8): List<NearbyStop> {
         return withContext(Dispatchers.IO) {
             try {
-                val json = rmvApi.getNearbyStops(
-                    accessId = RMV_ACCESS_ID,
-                    lat = lat,
-                    lon = lon,
-                    maxNo = max,
-                    radiusMeters = radiusMeters
-                )
+                val json = rmvCall("location.nearbystops") { requestId ->
+                    rmvApi.getNearbyStops(
+                        accessId = RMV_ACCESS_ID,
+                        lat = lat,
+                        lon = lon,
+                        maxNo = max,
+                        radiusMeters = radiusMeters,
+                        requestId = requestId
+                    )
+                }
                 val stops = mutableListOf<NearbyStop>()
 
                 fun extractStop(obj: JsonObject) {
@@ -173,6 +191,9 @@ object RmvApiService {
                 stops.sortedBy { it.distanceMeters }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: ApiRequestException) {
+                logE("RmvApi", "searchNearbyStops error: ${e.message}", e)
+                throw e
             } catch (e: Exception) {
                 logE("RmvApi", "searchNearbyStops error: ${e.message}", e)
                 emptyList()
@@ -192,14 +213,17 @@ object RmvApiService {
         val validLineDirections = mutableMapOf<String, MutableSet<String>>()
         if (destId.isNotBlank()) {
             try {
-                val tripJson = rmvApi.getTrip(
-                    accessId = RMV_ACCESS_ID,
-                    originId = stopId,
-                    destId = destId,
-                    date = date,
-                    time = time,
-                    numF = 6
-                )
+                val tripJson = rmvCall("trip.departure-filter") { requestId ->
+                    rmvApi.getTrip(
+                        accessId = RMV_ACCESS_ID,
+                        originId = stopId,
+                        destId = destId,
+                        date = date,
+                        time = time,
+                        numF = 6,
+                        requestId = requestId
+                    )
+                }
                 val trips = when (val t = tripJson["Trip"]) {
                     is JsonArray -> t
                     is JsonObject -> JsonArray(listOf(t))
@@ -222,6 +246,8 @@ object RmvApiService {
                     }
                 }
                 logD("DepartureBoard", "Valid line+direction combos: $validLineDirections")
+            } catch (e: ApiRequestException) {
+                throw e
             } catch (_: Exception) { /* proceed without filtering */ }
         }
 
@@ -229,13 +255,19 @@ object RmvApiService {
         val minTime = try { LocalTime.parse(time.trim().take(5)) } catch (_: Exception) { null }
 
         val response = try {
-            rmvApi.getDepartures(
-                accessId = RMV_ACCESS_ID,
-                stopId = stopId,
-                date = date,
-                time = time
-            )
+            rmvCall("departureBoard") { requestId ->
+                rmvApi.getDepartures(
+                    accessId = RMV_ACCESS_ID,
+                    stopId = stopId,
+                    date = date,
+                    time = time,
+                    requestId = requestId
+                )
+            }
         } catch (e: CancellationException) {
+            throw e
+        } catch (e: ApiRequestException) {
+            logE("RmvApi", "fetchDepartureBoard error: ${e.message}", e)
             throw e
         } catch (e: Exception) {
             logE("RmvApi", "fetchDepartureBoard error: ${e.message}")
@@ -329,13 +361,16 @@ object RmvApiService {
         fromId: String = "",
         toId: String = ""
     ): JourneySegment = withContext(Dispatchers.IO) {
-        val url = "$RMV_BASE/journeyDetail?accessId=${ApiClient.encode(RMV_ACCESS_ID)}&id=${ApiClient.encode(ref)}&format=json"
-        val req = Request.Builder().url(url).get().build()
-        ApiClient.http.newCall(req).execute().use { res ->
-            val body = res.body?.string().orEmpty()
-            logD("JourneyDiag", "journeyDetail HTTP ${res.code}, bodyLen=${body.length}")
-            if (!res.isSuccessful) return@withContext JourneySegment(0, emptyList())
-            val json = JSONObject(body)
+        val response = rmvCall("journeyDetail") { requestId ->
+            rmvApi.getJourneyDetail(
+                accessId = RMV_ACCESS_ID,
+                ref = ref,
+                requestId = requestId
+            )
+        }
+        val body = response.toString()
+        logD("JourneyDiag", "journeyDetail Retrofit bodyLen=${body.length}")
+        val json = JSONObject(body)
 
             val stopsRaw = json.optJSONObject("JourneyDetail")?.opt("Stops")?.let { s ->
                 when (s) { is JSONObject -> s.opt("Stop"); else -> s }
@@ -398,63 +433,87 @@ object RmvApiService {
 
             val fromExtId = extractExtId(fromId)
             val toExtId = extractExtId(toId)
-            logD("JourneyDiag", "fromExtId='$fromExtId' toExtId='$toExtId'")
-
-            for (i in stopList.indices) {
-                val s = stopList[i]
-                if (fromIdx == -1 && fromExtId.isNotBlank() && s.extId.contains(fromExtId)) { fromIdx = i }
-                if (toIdx == -1 && toExtId.isNotBlank() && s.extId.contains(toExtId)) { toIdx = i }
-            }
-
             val boardingTime = boardingDepTime.take(5)
-            if (fromIdx == -1 && boardingTime.isNotBlank()) {
-                for (i in stopList.indices) {
-                    val s = stopList[i]
-                    val nameMatch = s.name.contains(fromStop, ignoreCase = true) || fromStop.contains(s.name, ignoreCase = true)
-                    if (nameMatch && s.depTime == boardingTime) { fromIdx = i; break }
+            logD("JourneyDiag", "fromExtId='$fromExtId' toExtId='$toExtId' boardingTime='$boardingTime'")
+
+            fun StopInfo.matchesExtId(extId: String): Boolean =
+                extId.isNotBlank() && this.extId.contains(extId)
+
+            fun StopInfo.matchesName(stopName: String): Boolean =
+                stopName.isNotBlank() &&
+                    (name.contains(stopName, ignoreCase = true) || stopName.contains(name, ignoreCase = true))
+
+            fun StopInfo.matchesFuzzy(stopName: String): Boolean =
+                stopName.isNotBlank() && StopNameUtils.fuzzyMatch(stopName, name)
+
+            fun findFirstIndex(indices: Iterable<Int>, predicate: (StopInfo) -> Boolean): Int {
+                for (i in indices) {
+                    if (predicate(stopList[i])) return i
                 }
+                return -1
             }
 
-            for (i in stopList.indices) {
-                val n = stopList[i].name
-                if (fromIdx == -1 && (n.contains(fromStop, ignoreCase = true) || fromStop.contains(n, ignoreCase = true))) fromIdx = i
-                if (toIdx == -1 && (n.contains(toStop, ignoreCase = true) || toStop.contains(n, ignoreCase = true))) toIdx = i
+            fun firstResolved(vararg attempts: () -> Int): Int {
+                for (attempt in attempts) {
+                    val idx = attempt()
+                    if (idx != -1) return idx
+                }
+                return -1
             }
 
-            if (fromIdx == -1) {
-                for (i in stopList.indices) {
-                    if (StopNameUtils.fuzzyMatch(fromStop, stopList[i].name)) { fromIdx = i; break }
-                }
-            }
-            if (toIdx == -1) {
-                for (i in stopList.indices) {
-                    if (StopNameUtils.fuzzyMatch(toStop, stopList[i].name)) { toIdx = i; break }
-                }
-            }
+            fun allIndices(): Iterable<Int> = stopList.indices
 
-            if (fromIdx == -1 && boardingTime.isNotBlank()) {
-                for (i in stopList.indices) {
-                    if (stopList[i].depTime == boardingTime) { fromIdx = i; break }
+            fun indicesAfter(index: Int): Iterable<Int> =
+                if (index >= 0 && index < stopList.lastIndex) (index + 1)..stopList.lastIndex else emptyList()
+
+            fromIdx = firstResolved(
+                {
+                    if (boardingTime.isNotBlank()) {
+                        findFirstIndex(allIndices()) { it.matchesExtId(fromExtId) && it.depTime == boardingTime }
+                    } else -1
+                },
+                {
+                    if (boardingTime.isNotBlank()) {
+                        findFirstIndex(allIndices()) { it.matchesName(fromStop) && it.depTime == boardingTime }
+                    } else -1
+                },
+                {
+                    if (boardingTime.isNotBlank()) {
+                        findFirstIndex(allIndices()) { it.matchesFuzzy(fromStop) && it.depTime == boardingTime }
+                    } else -1
+                },
+                { findFirstIndex(allIndices()) { it.matchesExtId(fromExtId) } },
+                { findFirstIndex(allIndices()) { it.matchesName(fromStop) } },
+                { findFirstIndex(allIndices()) { it.matchesFuzzy(fromStop) } },
+                {
+                    if (boardingTime.isNotBlank()) {
+                        findFirstIndex(allIndices()) { it.depTime == boardingTime }
+                    } else -1
                 }
-            }
+            )
+
+            toIdx = firstResolved(
+                { findFirstIndex(indicesAfter(fromIdx)) { it.matchesExtId(toExtId) } },
+                { findFirstIndex(indicesAfter(fromIdx)) { it.matchesName(toStop) } },
+                { findFirstIndex(indicesAfter(fromIdx)) { it.matchesFuzzy(toStop) } },
+                { findFirstIndex(allIndices()) { it.matchesExtId(toExtId) } },
+                { findFirstIndex(allIndices()) { it.matchesName(toStop) } },
+                { findFirstIndex(allIndices()) { it.matchesFuzzy(toStop) } }
+            )
 
             logD("JourneyDiag", "IDX-RESOLVE fromIdx=$fromIdx toIdx=$toIdx (before resolve) fromStop='$fromStop' toStop='$toStop'")
 
-            var resolvedFrom = if (fromIdx != -1) fromIdx else 0
-            var resolvedTo = if (toIdx != -1) toIdx else stopList.size - 1
+            val resolvedFrom = if (fromIdx != -1) fromIdx else 0
+            val resolvedTo = if (toIdx != -1) toIdx else stopList.size - 1
 
-            // Ters yön: dönüş yolculuğunda toIdx < fromIdx olabilir (duraklar gidiş sırasında listelenir)
-            // Bu durumda indeksleri swap et — mesafe aynıdır.
-            if (resolvedTo < resolvedFrom) {
-                logD("JourneyDiag", "SWAP resolvedFrom=$resolvedFrom resolvedTo=$resolvedTo")
-                val tmp = resolvedFrom
-                resolvedFrom = resolvedTo
-                resolvedTo = tmp
+            // Mesafe hesabi icin sadece segment koordinatlari; from/to anlami korunur.
+            val segmentStops = if (resolvedTo >= resolvedFrom) {
+                stopList.subList(resolvedFrom, resolvedTo + 1)
+            } else {
+                stopList.subList(resolvedTo, resolvedFrom + 1).asReversed()
             }
-
-            // Mesafe hesabı için sadece segment koordinatları (biniş→iniş arası)
-            val segmentCoords = stopList.subList(resolvedFrom, resolvedTo + 1).map { Pair(it.lat, it.lon) }
-            val segStopCount = maxOf(0, resolvedTo - resolvedFrom)
+            val segmentCoords = segmentStops.map { Pair(it.lat, it.lon) }
+            val segStopCount = kotlin.math.abs(resolvedTo - resolvedFrom)
 
             // Durak listesi: tüm hat (dialog'da seçim yapılabilsin)
             val allNames = stopList.map { it.name }
@@ -473,7 +532,6 @@ object RmvApiService {
                 toIdx = resolvedTo,
                 allStopCoords = allStopCoords
             )
-        }
     }
 
     // ── 4. ORS distance — OkHttp (suspend) ───────────────────────────────────
@@ -482,6 +540,7 @@ object RmvApiService {
         if (coords.size < 2) return 0.0
         return withContext(Dispatchers.IO) {
             try {
+                val requestId = ApiErrors.newRequestId()
                 val coordArray = org.json.JSONArray()
                 for (c in coords) coordArray.put(org.json.JSONArray().put(c.second).put(c.first))
                 val jsonBody = JSONObject().put("coordinates", coordArray).toString()
@@ -489,6 +548,7 @@ object RmvApiService {
                 val req = Request.Builder()
                     .url("https://api.openrouteservice.org/v2/directions/driving-car/geojson")
                     .addHeader("Authorization", ORS_API_KEY)
+                    .addHeader("X-Request-Id", requestId)
                     .post(reqBody)
                     .build()
                 ApiClient.http.newCall(req).execute().use { res ->
@@ -501,7 +561,17 @@ object RmvApiService {
                         var meters = 0.0
                         for (i in 0 until segments.length()) meters += segments.optJSONObject(i)?.optDouble("distance", 0.0) ?: 0.0
                         meters / 1000.0
-                    } else 0.0
+                    } else {
+                        val apiError = ApiErrors.fromHttpStatus(
+                            provider = "ORS",
+                            endpoint = "directions/driving-car",
+                            requestId = requestId,
+                            statusCode = res.code,
+                            body = respBody
+                        )
+                        logE("ORSDiag", apiError.message ?: "ORS HTTP ${res.code}", apiError)
+                        0.0
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -682,10 +752,18 @@ object RmvApiService {
         originId: String, destId: String, date: String, time: String, preferredLine: String = ""
     ): TripResult = withContext(Dispatchers.IO) {
         val numTrips = if (preferredLine.isNotBlank()) 6 else 1
-        val url = "$RMV_BASE/trip?accessId=${ApiClient.encode(RMV_ACCESS_ID)}&originId=${ApiClient.encode(originId)}&destId=${ApiClient.encode(destId)}&date=${ApiClient.encode(date)}&time=${ApiClient.encode(time)}&numF=$numTrips&format=json"
-        ApiClient.http.newCall(Request.Builder().url(url).get().build()).execute().use { res ->
-            val body = res.body?.string().orEmpty()
-            if (!res.isSuccessful) throw IllegalStateException("RMV trip HTTP ${res.code}: ${body.take(200)}")
+        val body = rmvCall("trip") { requestId ->
+            rmvApi.getTrip(
+                accessId = RMV_ACCESS_ID,
+                originId = originId,
+                destId = destId,
+                date = date,
+                time = time,
+                numF = numTrips,
+                requestId = requestId
+            )
+        }.toString()
+        run {
             val json = JSONObject(body)
             val trips = when (val t = json.opt("Trip")) {
                 is JSONArray -> t
@@ -711,7 +789,16 @@ object RmvApiService {
 
     // ── 7. Segment details (suspend wrapper) ─────────────────────────────────
 
-    data class SegmentDetails(val distanceKm: Double, val stopCount: Int, val stopNames: List<String>, val stopTimes: List<String> = emptyList())
+    data class SegmentDetails(
+        val distanceKm: Double,
+        val stopCount: Int,
+        val stopNames: List<String>,
+        val stopTimes: List<String> = emptyList(),
+        val fromIdx: Int = 0,
+        val toIdx: Int = -1,
+        val toStopLat: Double = Double.NaN,
+        val toStopLng: Double = Double.NaN
+    )
 
     suspend fun fetchSegmentDetails(seg: Segment): SegmentDetails = withContext(NonCancellable + Dispatchers.IO) {
         try {
@@ -733,7 +820,17 @@ object RmvApiService {
                 else -> calculateDistanceRail(journeySegment.coords, journeySegment.allStopCoords, journeySegment.fromIdx, journeySegment.toIdx)
             }
         } else 0.0
-        return SegmentDetails(distanceKm, journeySegment.stopCount, journeySegment.stopNames, journeySegment.stopTimes)
+        val toCoords = journeySegment.allStopCoords.getOrNull(journeySegment.toIdx)
+        return SegmentDetails(
+            distanceKm = distanceKm,
+            stopCount = journeySegment.stopCount,
+            stopNames = journeySegment.stopNames,
+            stopTimes = journeySegment.stopTimes,
+            fromIdx = journeySegment.fromIdx,
+            toIdx = journeySegment.toIdx,
+            toStopLat = toCoords?.first ?: Double.NaN,
+            toStopLng = toCoords?.second ?: Double.NaN
+        )
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

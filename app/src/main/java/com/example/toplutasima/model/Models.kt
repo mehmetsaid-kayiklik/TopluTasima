@@ -1,7 +1,9 @@
 package com.example.toplutasima.model
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class StopOption(val id: String, val name: String)
 
 data class Departure(
@@ -41,6 +43,36 @@ data class TripResult(
     val durationMin: Int
 )
 
+data class TimeSlotStats(
+    val key: String,
+    val trips: Int,
+    val avgDelay: Double,
+    val punctualityRate: Int
+)
+
+data class LineReliabilityStats(
+    val line: String,
+    val trips: Int,
+    val avgDelay: Double,
+    val punctualityRate: Int,
+    val maxDelay: Int
+)
+
+data class RoutePairStats(
+    val fromStop: String,
+    val toStop: String,
+    val trips: Int,
+    val avgDurationMin: Int,
+    val avgDelay: Double,
+    val fastestMin: Int,
+    val slowestMin: Int
+)
+
+data class DelayBucketStats(
+    val key: String,
+    val count: Int
+)
+
 data class SummaryData(
     val totalTrips: Int,
     val seatedCount: Int,
@@ -66,7 +98,17 @@ data class SummaryData(
     val recordTotalDelayLineMin: Int = 0,
     val weatherCounts: Map<String, Int> = emptyMap(),
     val totalDistanceKm: Double = 0.0,
-    val topLines: Map<String, Int> = emptyMap()
+    val topLines: Map<String, Int> = emptyMap(),
+    val timeSlotStats: List<TimeSlotStats> = emptyList(),
+    val lineReliability: List<LineReliabilityStats> = emptyList(),
+    val routePairs: List<RoutePairStats> = emptyList(),
+    val delayDistribution: List<DelayBucketStats> = emptyList(),
+    val recordShortestTrip: String = "-",
+    val recordShortestTripMin: Int = 0,
+    val recordLongestTrip: String = "-",
+    val recordLongestTripMin: Int = 0,
+    val recordLongestDistanceTrip: String = "-",
+    val recordLongestDistanceKm: Double = 0.0
 )
 
 data class NavItem(

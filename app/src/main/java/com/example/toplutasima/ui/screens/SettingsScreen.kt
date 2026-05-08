@@ -21,7 +21,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
+import com.example.toplutasima.diagnostics.AppErrorReporter
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
 import com.example.toplutasima.ui.AppLanguage
@@ -54,6 +56,10 @@ fun SettingsScreen(
     var showRestoreDialog by remember { mutableStateOf(false) }
     var restoreRunning by remember { mutableStateOf(false) }
     var restoreResult by remember { mutableStateOf("") }
+    var pendingQueueCount by remember { mutableStateOf(OfflineQueueStore.pendingCount(context)) }
+    var stopCacheCount by remember { mutableStateOf(PrefsManager.stopSearchCacheSize()) }
+    var lastCrashReport by remember { mutableStateOf(AppErrorReporter.lastCrash(context)) }
+    var lastNonFatalReport by remember { mutableStateOf(AppErrorReporter.lastNonFatal(context)) }
 
     fun parsePreviewColor(hex: String): Color {
         return try {
@@ -588,6 +594,81 @@ fun SettingsScreen(
             }
         }
 
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(S.diagnosticsTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+                Text(
+                    S.offlineQueueStatus(pendingQueueCount, lang),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            OfflineQueueStore.scheduleSync(context)
+                            pendingQueueCount = OfflineQueueStore.pendingCount(context)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text(S.offlineSyncNow(lang), fontSize = 12.sp) }
+                    OutlinedButton(
+                        onClick = {
+                            OfflineQueueStore.clear(context)
+                            pendingQueueCount = 0
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text(S.offlineQueueClear(lang), fontSize = 12.sp) }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                Text(
+                    S.stopCacheStatus(stopCacheCount, lang),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(
+                    onClick = {
+                        PrefsManager.clearStopSearchCache()
+                        stopCacheCount = 0
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text(S.stopCacheClear(lang), fontSize = 12.sp) }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                val reportPreview = lastCrashReport.ifBlank { lastNonFatalReport }
+                Text(
+                    if (reportPreview.isBlank()) S.noCrashReport(lang) else S.lastCrashReport(lang),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (reportPreview.isNotBlank()) {
+                    Text(
+                        reportPreview.lines().take(5).joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            AppErrorReporter.clear(context)
+                            lastCrashReport = ""
+                            lastNonFatalReport = ""
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text(S.clearCrashReport(lang), fontSize = 12.sp) }
+                }
+            }
+        }
 
             RmvFooter(modifier = Modifier.padding(vertical = 8.dp))
         }

@@ -5,11 +5,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.example.toplutasima.network.ApiRequestException
 import com.example.toplutasima.network.RmvApiService
 import com.example.toplutasima.repository.TripRepository
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -49,6 +51,11 @@ class NearbyStopsManager(
 
         return try {
             repository.searchNearbyStops(location.first, location.second, radiusMeters)
+        } catch (e: ApiRequestException) {
+            Log.e(TAG, "Nearby stops API error: ${e.message}", e)
+            throw e
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Nearby stops API error: ${e.message}")
             emptyList()

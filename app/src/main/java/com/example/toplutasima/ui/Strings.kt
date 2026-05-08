@@ -98,6 +98,8 @@ object S {
     fun now(l: AppLanguage) = m(l, "Şu an", "Jetzt", "Now")
     fun boarded(l: AppLanguage) = m(l, "🚏 Bindim", "🚏 Eingestiegen", "🚏 Boarded")
     fun alighted(l: AppLanguage) = m(l, "🏁 İndim", "🏁 Ausgestiegen", "🏁 Alighted")
+    fun undoBoarded(l: AppLanguage) = m(l, "Bindim'i geri al", "Einstieg zurücknehmen", "Undo boarded")
+    fun undoAlighted(l: AppLanguage) = m(l, "İndim'i geri al", "Ausstieg zurücknehmen", "Undo alighted")
 
     // ── Status ──
     fun statusLabel(l: AppLanguage) = m(l, "Durum", "Status", "Status")
@@ -134,6 +136,36 @@ object S {
     fun totalDistance(l: AppLanguage) = m(l, "📏  Toplam Mesafe", "📏  Gesamtentfernung", "📏  Total Distance")
     fun tabTripsRecords(l: AppLanguage) = m(l, "🚌  Yolculuk & Rekorlar", "🚌  Fahrten & Rekorde", "🚌  Trips & Records")
     fun tabDurationDelay(l: AppLanguage) = m(l, "⏱️  Süre & Gecikme", "⏱️  Dauer & Verspätung", "⏱️  Duration & Delay")
+    fun smartInsights(l: AppLanguage) = m(l, "Akıllı Özet", "Kurzübersicht", "Smart Insights")
+    fun insightWeakLine(l: AppLanguage) = m(l, "En riskli hat", "Riskanteste Linie", "Riskiest line")
+    fun insightBusySlot(l: AppLanguage) = m(l, "En yoğun saat", "Häufigster Zeitraum", "Busiest slot")
+    fun insightSlowRoute(l: AppLanguage) = m(l, "En geciken rota", "Verspätungsreichste Route", "Most delayed route")
+    fun timeSlotAnalysis(l: AppLanguage) = m(l, "🕒  Saat Dilimi Analizi", "🕒  Analyse nach Tageszeit", "🕒  Time Slot Analysis")
+    fun routePairAnalysis(l: AppLanguage) = m(l, "🧭  Durak Çifti Analizi", "🧭  Haltestellenpaar-Analyse", "🧭  Stop Pair Analysis")
+    fun lineReliability(l: AppLanguage) = m(l, "📡  Hat Güvenilirliği", "📡  Linienzuverlässigkeit", "📡  Line Reliability")
+    fun delayDistribution(l: AppLanguage) = m(l, "📊  Gecikme Dağılımı", "📊  Verspätungsverteilung", "📊  Delay Distribution")
+    fun recordShortestTrip(l: AppLanguage) = m(l, "⚡  En Kısa Yolculuk", "⚡  Kürzeste Fahrt", "⚡  Shortest Trip")
+    fun recordLongestTrip(l: AppLanguage) = m(l, "🛤️  En Uzun Yolculuk", "🛤️  Längste Fahrt", "🛤️  Longest Trip")
+    fun recordLongestDistance(l: AppLanguage) = m(l, "📏  En Uzun Mesafe", "📏  Längste Strecke", "📏  Longest Distance")
+    fun recordFreqTo(l: AppLanguage) = m(l, "🎯  En Sık İniş Durağı", "🎯  Häufigste Ausstiegshaltestelle", "🎯  Most Used Alighting Stop")
+    fun avgShort(l: AppLanguage) = m(l, "Ort.", "Ø", "Avg.")
+    fun maxShort(l: AppLanguage) = m(l, "Maks.", "Max.", "Max")
+    fun punctualShort(l: AppLanguage) = m(l, "Dakik", "Pünktlich", "On time")
+    fun tripsShort(l: AppLanguage) = m(l, "sefer", "Fahrten", "trips")
+    fun timeSlotName(key: String, l: AppLanguage): String = when (key) {
+        "morning" -> m(l, "Sabah", "Morgen", "Morning")
+        "noon" -> m(l, "Öğlen", "Mittag", "Noon")
+        "evening" -> m(l, "Akşam", "Abend", "Evening")
+        "night" -> m(l, "Gece", "Nacht", "Night")
+        else -> key
+    }
+    fun delayBucketName(key: String, l: AppLanguage): String = when (key) {
+        "zero" -> m(l, "0 dk", "0 Min.", "0 min")
+        "low" -> m(l, "1-5 dk", "1-5 Min.", "1-5 min")
+        "medium" -> m(l, "6-10 dk", "6-10 Min.", "6-10 min")
+        "high" -> m(l, "10+ dk", "10+ Min.", "10+ min")
+        else -> key
+    }
 
     // ── Vehicle type display names ──
     fun vehicleTypeName(key: String, l: AppLanguage): String = when (key) {
@@ -210,6 +242,7 @@ object S {
     fun statusSaving(l: AppLanguage) = m(l, "Kaydediliyor...", "Wird gespeichert...", "Saving...")
     fun statusBoarded(time: String, l: AppLanguage) = m(l, "Bindim ✅ ($time)", "Eingestiegen ✅ ($time)", "Boarded ✅ ($time)")
     fun statusAlighted(time: String, l: AppLanguage) = m(l, "İndim ✅ ($time)", "Ausgestiegen ✅ ($time)", "Alighted ✅ ($time)")
+    fun statusUndoDone(l: AppLanguage) = m(l, "Geri alındı ✅", "Zurückgenommen ✅", "Undone ✅")
     fun errorPrefix(l: AppLanguage) = m(l, "Hata", "Fehler", "Error")
     fun unknownError(l: AppLanguage) = m(l, "Bilinmeyen Hata", "Unbekannter Fehler", "Unknown Error")
 
@@ -433,6 +466,16 @@ object S {
 
     // ── Heatmap / Streak ──
     fun heatmapTitle(l: AppLanguage) = m(l, "📅 Aktivite Haritası", "📅 Aktivitätskarte", "📅 Activity Map")
+    fun heatmapMetricTrips(l: AppLanguage) = m(l, "Sefer", "Fahrten", "Trips")
+    fun heatmapMetricDelay(l: AppLanguage) = m(l, "Gecikme", "Versp.", "Delay")
+    fun heatmapMetricTicket(l: AppLanguage) = m(l, "Bilet", "Kontrolle", "Ticket")
+    fun heatmapMetricSeated(l: AppLanguage) = m(l, "Oturma", "Sitzplatz", "Seated")
+    fun heatmapMetricValue(metric: com.example.toplutasima.usecase.HeatmapMetric, value: Int, l: AppLanguage): String = when (metric) {
+        com.example.toplutasima.usecase.HeatmapMetric.TRIPS -> m(l, "$value sefer", "$value Fahrten", "$value trips")
+        com.example.toplutasima.usecase.HeatmapMetric.AVG_DELAY -> m(l, "$value dk ort. gecikme", "$value Min. Ø Versp.", "$value min avg delay")
+        com.example.toplutasima.usecase.HeatmapMetric.TICKET_CONTROL -> m(l, "$value kontrol", "$value Kontrollen", "$value checks")
+        com.example.toplutasima.usecase.HeatmapMetric.SEATED -> m(l, "$value oturma", "$value Sitzplätze", "$value seated")
+    }
     fun streakCurrent(l: AppLanguage) = m(l, "🔥 Mevcut Seri", "🔥 Aktuelle Serie", "🔥 Current Streak")
     fun streakLongest(l: AppLanguage) = m(l, "🏆 En Uzun Seri", "🏆 Längste Serie", "🏆 Longest Streak")
     fun streakActiveDays(l: AppLanguage) = m(l, "📅 Aktif Gün", "📅 Aktive Tage", "📅 Active Days")
@@ -509,6 +552,16 @@ object S {
 
     // ── Sonraki segment bekleniyor ──
     fun transitWaitingNextSegment(l: AppLanguage) = m(l, "Sonraki aktarma bekleniyor...", "Warte auf nächsten Anschluss...", "Waiting for next connection...")
+
+    fun diagnosticsTitle(l: AppLanguage) = m(l, "Tanılama ve Yerel Veri", "Diagnose und lokale Daten", "Diagnostics and Local Data")
+    fun offlineQueueStatus(count: Int, l: AppLanguage) = m(l, "Bekleyen offline işlem: $count", "Ausstehende Offline-Aktionen: $count", "Pending offline actions: $count")
+    fun offlineSyncNow(l: AppLanguage) = m(l, "Şimdi eşitle", "Jetzt synchronisieren", "Sync now")
+    fun offlineQueueClear(l: AppLanguage) = m(l, "Kuyruğu temizle", "Warteschlange leeren", "Clear queue")
+    fun stopCacheStatus(count: Int, l: AppLanguage) = m(l, "Durak arama cache: $count sorgu", "Haltestellen-Cache: $count Suchen", "Stop search cache: $count queries")
+    fun stopCacheClear(l: AppLanguage) = m(l, "Durak cache temizle", "Haltestellen-Cache leeren", "Clear stop cache")
+    fun noCrashReport(l: AppLanguage) = m(l, "Kayıtlı çökme raporu yok", "Kein Absturzbericht gespeichert", "No crash report saved")
+    fun lastCrashReport(l: AppLanguage) = m(l, "Son hata raporu", "Letzter Fehlerbericht", "Latest error report")
+    fun clearCrashReport(l: AppLanguage) = m(l, "Hata raporunu temizle", "Fehlerbericht löschen", "Clear error report")
 
     fun personalSummaryAvgDuration(l: AppLanguage) = m(l, "Ort. Süre", "Ø Dauer", "Avg. Duration")
     fun personalSummaryMonthly(l: AppLanguage) = m(l, "Aylık Kırılım", "Monatliche Aufschlüsselung", "Monthly Breakdown")

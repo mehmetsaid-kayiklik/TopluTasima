@@ -26,7 +26,7 @@ import org.koin.dsl.module
 val appModule = module {
 
     // ── Repository ──────────────────────────────────────────────────────────
-    single { TripRepository() }
+    single { TripRepository(androidContext()) }
     single { PersonalTripRepository() }       // Kişisel Araç — "personaltrips"
 
     // ── Use Case ────────────────────────────────────────────────────────────
