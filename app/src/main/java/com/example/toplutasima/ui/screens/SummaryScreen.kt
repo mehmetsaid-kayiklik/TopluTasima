@@ -1,10 +1,12 @@
 package com.example.toplutasima.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -211,41 +213,6 @@ fun SummaryScreen(
                                 }
                             }
 
-                            val worstLine = s.lineReliability.minByOrNull { it.punctualityRate }
-                            val slowestRoute = s.routePairs.maxByOrNull { it.avgDelay }
-                            val busiestSlot = s.timeSlotStats.maxByOrNull { it.trips }
-                            if (worstLine != null || slowestRoute != null || busiestSlot != null) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                                ) {
-                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Text(S.smartInsights(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        worstLine?.let {
-                                            Text(
-                                                "${S.insightWeakLine(lang)}: ${it.line} - %${it.punctualityRate}, +${String.format(java.util.Locale.US, "%.1f", it.avgDelay)} ${S.minutesShort(lang)}",
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                        }
-                                        busiestSlot?.let {
-                                            Text(
-                                                "${S.insightBusySlot(lang)}: ${S.timeSlotName(it.key, lang)} - ${it.trips} ${S.tripsShort(lang)}",
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                        }
-                                        slowestRoute?.let {
-                                            Text(
-                                                "${S.insightSlowRoute(lang)}: ${it.fromStop} → ${it.toStop} - +${String.format(java.util.Locale.US, "%.1f", it.avgDelay)} ${S.minutesShort(lang)}",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
                             // Araç Türleri
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -372,6 +339,7 @@ fun SummaryScreen(
 
                             // Durak Çifti Analizi
                             if (s.routePairs.isNotEmpty()) {
+                                var expandedRoutePairKeys by remember(s.routePairs) { mutableStateOf(setOf<String>()) }
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -382,16 +350,42 @@ fun SummaryScreen(
                                         Spacer(Modifier.height(12.dp))
                                         val routeMax = s.routePairs.maxOfOrNull { it.trips }?.toFloat() ?: 1f
                                         s.routePairs.forEach { route ->
-                                            Column(modifier = Modifier.padding(vertical = 5.dp)) {
+                                            val routeKey = "${route.fromStop}\u0000${route.toStop}"
+                                            val expanded = routeKey in expandedRoutePairKeys
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        expandedRoutePairKeys =
+                                                            if (expanded) expandedRoutePairKeys - routeKey
+                                                            else expandedRoutePairKeys + routeKey
+                                                    }
+                                                    .animateContentSize()
+                                                    .padding(vertical = 5.dp)
+                                            ) {
                                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                                     Text(
                                                         "${route.fromStop} → ${route.toStop}",
                                                         modifier = Modifier.weight(1f),
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
+                                                        maxLines = if (expanded) Int.MAX_VALUE else 1,
+                                                        overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis,
                                                         style = MaterialTheme.typography.bodyMedium
                                                     )
                                                     Text("${route.trips}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                                                }
+                                                if (expanded) {
+                                                    Spacer(Modifier.height(6.dp))
+                                                    Text(
+                                                        "${S.boardingStop(lang)}: ${route.fromStop}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    Text(
+                                                        "${S.alightingStop(lang)}: ${route.toStop}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
                                                 }
                                                 Spacer(Modifier.height(3.dp))
                                                 LinearProgressIndicator(
@@ -540,6 +534,41 @@ fun SummaryScreen(
                                                     Text(S.streakDays(lang), style = MaterialTheme.typography.labelSmall)
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+
+                            val worstLine = s.lineReliability.minByOrNull { it.punctualityRate }
+                            val slowestRoute = s.routePairs.maxByOrNull { it.avgDelay }
+                            val busiestSlot = s.timeSlotStats.maxByOrNull { it.trips }
+                            if (worstLine != null || slowestRoute != null || busiestSlot != null) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text(S.smartInsights(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        worstLine?.let {
+                                            Text(
+                                                "${S.insightWeakLine(lang)}: ${it.line} - %${it.punctualityRate}, +${String.format(java.util.Locale.US, "%.1f", it.avgDelay)} ${S.minutesShort(lang)}",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                        busiestSlot?.let {
+                                            Text(
+                                                "${S.insightBusySlot(lang)}: ${S.timeSlotName(it.key, lang)} - ${it.trips} ${S.tripsShort(lang)}",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                        slowestRoute?.let {
+                                            Text(
+                                                "${S.insightSlowRoute(lang)}: ${it.fromStop} → ${it.toStop} - +${String.format(java.util.Locale.US, "%.1f", it.avgDelay)} ${S.minutesShort(lang)}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }

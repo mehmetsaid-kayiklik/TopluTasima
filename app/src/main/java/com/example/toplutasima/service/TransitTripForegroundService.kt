@@ -21,9 +21,13 @@ import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.TransitReminderType
 import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.worker.TransitActionWorker
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -63,7 +67,7 @@ class TransitTripForegroundService : Service() {
 
         // Bildirim kanal ID'leri
         const val CHANNEL_TRACKING = "transit_trip_tracking"
-        const val CHANNEL_REMINDER = "transit_trip_reminder"
+        const val CHANNEL_REMINDER = "transit_trip_reminder_v2"
 
         // Bildirim ID'leri
         const val NOTIF_ID_TRACKING = 9010
@@ -89,7 +93,9 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_TRIP_ID = "tripId"
         const val EXTRA_ALIGHTING_LAT = "alightingLat"
         const val EXTRA_ALIGHTING_LNG = "alightingLng"
+        private const val EXTRA_FROM_NOTIFICATION_ACTION = "fromNotificationAction"
         private const val PROXIMITY_WATCH_REQUEST_CODE = 9012
+        private val REMINDER_VIBRATION_PATTERN = longArrayOf(0L, 350L, 150L, 350L)
 
         // SharedPreferences anahtarları — servis state'ini restart sonrası geri yükler
         private const val PREFS_STATE_NAME = "transit_service_state"
@@ -110,6 +116,30 @@ class TransitTripForegroundService : Service() {
 
         private val _activeSegmentIndex = MutableStateFlow(0)
         val activeSegmentIndex: StateFlow<Int> = _activeSegmentIndex
+
+        fun createTransitActionPendingIntent(
+            context: Context,
+            notificationAction: String,
+            tripId: String
+        ): PendingIntent {
+            val serviceAction = when (notificationAction) {
+                TransitNotificationReceiver.ACTION_NOTIF_BINDIM -> ACTION_UPDATE_BOARDING
+                TransitNotificationReceiver.ACTION_NOTIF_INDIM -> ACTION_HANDLE_INDIM_FROM_NOTIF
+                else -> notificationAction
+            }
+            val intent = Intent(context, TransitTripForegroundService::class.java).apply {
+                action = serviceAction
+                putExtra(EXTRA_TRIP_ID, tripId)
+                putExtra(EXTRA_FROM_NOTIFICATION_ACTION, true)
+            }
+            val requestCode = 31 * notificationAction.hashCode() + tripId.hashCode()
+            return PendingIntent.getForegroundService(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
     }
 
     // Aktif segment bilgileri
@@ -174,6 +204,9 @@ class TransitTripForegroundService : Service() {
                 if (!hasUsableServiceState() || !isNotificationActionForCurrentTrip(intent)) {
                     return rejectNotificationAction(startId)
                 }
+                if (intent.getBooleanExtra(EXTRA_FROM_NOTIFICATION_ACTION, false)) {
+                    enqueueTransitActionWorker(isBoarding = true)
+                }
                 hasBoarded = true
                 usingTimeFallback = false
                 persistServiceState()
@@ -219,6 +252,9 @@ class TransitTripForegroundService : Service() {
             ACTION_HANDLE_INDIM_FROM_NOTIF -> {
                 if (!hasUsableServiceState() || !isNotificationActionForCurrentTrip(intent)) {
                     return rejectNotificationAction(startId)
+                }
+                if (intent.getBooleanExtra(EXTRA_FROM_NOTIFICATION_ACTION, false)) {
+                    enqueueTransitActionWorker(isBoarding = false)
                 }
                 if (!startForegroundForCurrentState(useLocationType = false)) {
                     stopSelf(startId)
@@ -448,9 +484,8 @@ class TransitTripForegroundService : Service() {
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "İnmeniz gereken durak yaklaştığında uyarır"
-            // Telefon sessize alınmış ve titreşim kapalı, ama kanal HIGH olduğu için
-            // heads-up notification gösterilir ve WearOS saate yansır
-            enableVibration(false)
+            enableVibration(true)
+            setVibrationPattern(REMINDER_VIBRATION_PATTERN)
             setSound(null, null)
         }
         nm.createNotificationChannel(reminderChannel)
@@ -653,16 +688,10 @@ class TransitTripForegroundService : Service() {
     ): Notification {
         val emoji = vehicleEmoji(vehicleType)
 
-        // İndim PendingIntent — tripId açıkça set ediliyor
-        val indimIntent = Intent(this, TransitNotificationReceiver::class.java).apply {
-            action = TransitNotificationReceiver.ACTION_NOTIF_INDIM
-            putExtra(EXTRA_TRIP_ID, tripId)
-        }
-        val indimPi = PendingIntent.getBroadcast(
+        val indimPi = createTransitActionPendingIntent(
             this,
-            TransitNotificationReceiver.ACTION_NOTIF_INDIM.hashCode(),
-            indimIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            TransitNotificationReceiver.ACTION_NOTIF_INDIM,
+            tripId
         )
 
         return NotificationCompat.Builder(this, CHANNEL_REMINDER)
@@ -672,6 +701,8 @@ class TransitTripForegroundService : Service() {
             .setAutoCancel(false)   // Mevcut bildirimi koru, otomatik kapanmasın
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVibrate(REMINDER_VIBRATION_PATTERN)
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .addAction(0, "İndim 🏁", indimPi)
             .build()
     }
@@ -679,16 +710,21 @@ class TransitTripForegroundService : Service() {
     // ── PendingIntent Yardımcıları ────────────────────────────────────────────
 
     private fun createActionPendingIntent(action: String): PendingIntent {
-        val intent = Intent(this, TransitNotificationReceiver::class.java).apply {
-            this.action = action
-            putExtra(EXTRA_TRIP_ID, currentTripId)
-        }
-        return PendingIntent.getBroadcast(
-            this,
-            action.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        return createTransitActionPendingIntent(this, action, currentTripId)
+    }
+
+    private fun enqueueTransitActionWorker(isBoarding: Boolean) {
+        if (currentTripId.isBlank()) return
+        val timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        val workData = Data.Builder()
+            .putString(TransitActionWorker.KEY_TRIP_ID, currentTripId)
+            .putBoolean(TransitActionWorker.KEY_IS_BOARDING, isBoarding)
+            .putString(TransitActionWorker.KEY_TIMESTAMP, timestamp)
+            .build()
+        val workRequest = OneTimeWorkRequestBuilder<TransitActionWorker>()
+            .setInputData(workData)
+            .build()
+        WorkManager.getInstance(applicationContext).enqueue(workRequest)
     }
 
     // ── Proximity Watch ───────────────────────────────────────────────────────

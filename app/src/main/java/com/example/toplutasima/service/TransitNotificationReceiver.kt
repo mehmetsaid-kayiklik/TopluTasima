@@ -65,12 +65,7 @@ class TransitNotificationReceiver : BroadcastReceiver() {
             .putString(com.example.toplutasima.worker.TransitActionWorker.KEY_TIMESTAMP, timestamp)
             .build()
 
-        val constraints = androidx.work.Constraints.Builder()
-            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-            .build()
-
         val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.example.toplutasima.worker.TransitActionWorker>()
-            .setConstraints(constraints)
             .setInputData(workData)
             .build()
 
@@ -109,15 +104,10 @@ class TransitNotificationReceiver : BroadcastReceiver() {
             else -> "🚌"
         }
 
-        val indimIntent = Intent(context, TransitNotificationReceiver::class.java).apply {
-            action = ACTION_NOTIF_INDIM
-            putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, tripId)
-        }
-        val indimPi = android.app.PendingIntent.getBroadcast(
+        val indimPi = TransitTripForegroundService.createTransitActionPendingIntent(
             context,
-            ACTION_NOTIF_INDIM.hashCode(),
-            indimIntent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            ACTION_NOTIF_INDIM,
+            tripId
         )
 
         val notification = NotificationCompat.Builder(context, TransitTripForegroundService.CHANNEL_REMINDER)
@@ -127,6 +117,8 @@ class TransitNotificationReceiver : BroadcastReceiver() {
             .setAutoCancel(false)   // İndim'e basılana kadar bildirim kalıcı kalsın
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVibrate(longArrayOf(0L, 350L, 150L, 350L))
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .addAction(0, "İndim 🏁", indimPi)
             .build()
 
