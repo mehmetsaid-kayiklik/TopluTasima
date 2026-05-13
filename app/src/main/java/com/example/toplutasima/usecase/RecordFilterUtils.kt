@@ -59,7 +59,8 @@ object RecordFilterUtils {
             val searchable = listOf(
                 record.line, record.direction,
                 record.boardingStop, record.alightingStop,
-                record.type
+                record.type,
+                record.note
             ).joinToString(" ").lowercase()
             if (!searchable.contains(q)) return false
         }

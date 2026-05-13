@@ -23,6 +23,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
+import com.example.toplutasima.data.TransitAutoActualTimeMode
 import com.example.toplutasima.diagnostics.AppErrorReporter
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
@@ -74,6 +75,13 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(S.settingsTitle(lang), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+            Text(
+                S.settingsSectionBasic(lang),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
 
         // ── Tema Card — Segmented Control ──
         Card(
@@ -462,16 +470,6 @@ fun SettingsScreen(
             }
         }
 
-        // ── Veri Bakımı butonu ──
-        OutlinedButton(
-            onClick = { showMaintenance = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            contentPadding = PaddingValues(vertical = 14.dp)
-        ) {
-            Text(S.maintenanceButton(lang), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-        }
-
         // ── Kişisel Araç Ayarları Card ──
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -591,9 +589,59 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(S.gpsJourneyMatchTitle(lang), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(S.gpsJourneyMatchDesc(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = PrefsManager.gpsJourneyMatchEnabled,
+                        onCheckedChange = { PrefsManager.changeGpsJourneyMatchEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                Text(S.autoActualTimeTitle(lang), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(S.autoActualTimeDesc(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                val autoActualOptions = listOf(
+                    TransitAutoActualTimeMode.OFF to S.autoActualOff(lang),
+                    TransitAutoActualTimeMode.CONFIRM to S.autoActualConfirm(lang),
+                    TransitAutoActualTimeMode.AUTO to S.autoActualAuto(lang)
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    autoActualOptions.forEach { (mode, label) ->
+                        val selected = PrefsManager.transitAutoActualTimeMode == mode
+                        FilterChip(
+                            selected = selected,
+                            onClick = { PrefsManager.changeTransitAutoActualTimeMode(mode) },
+                            label = { Text(label, fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Text(S.autoActualModeDesc(lang), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
+        Text(
+            S.settingsSectionAdvanced(lang),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -601,6 +649,17 @@ fun SettingsScreen(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = { showMaintenance = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(vertical = 14.dp)
+                ) {
+                    Text(S.maintenanceButton(lang), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
                 Text(S.diagnosticsTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                 Text(

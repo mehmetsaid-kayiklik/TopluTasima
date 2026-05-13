@@ -66,7 +66,6 @@ fun SummaryScreen(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Ay seçici (~75%)
             Box(modifier = Modifier.weight(3f)) {
                 FilledTonalButton(
                     onClick = { if (!showPersonal) viewModel.setSheetMenuOpen(true) },
@@ -95,7 +94,6 @@ fun SummaryScreen(
                     }
                 }
             }
-            // Kişisel butonu (~25%)
             FilledTonalButton(
                 onClick = { onTogglePersonal(!showPersonal) },
                 modifier = Modifier.weight(1f),

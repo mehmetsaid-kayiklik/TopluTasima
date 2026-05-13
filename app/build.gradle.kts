@@ -60,6 +60,11 @@ android {
         // credentials never ship inside the binary.
         buildConfigField("String", "RMV_ACCESS_ID", "\"${requiredLocalProperty("RMV_ACCESS_ID").escapeBuildConfigString()}\"")
         buildConfigField("String", "ORS_API_KEY",   "\"${requiredLocalProperty("ORS_API_KEY").escapeBuildConfigString()}\"")
+        buildConfigField(
+            "String",
+            "MAP_STYLE_URL",
+            "\"${(optionalLocalProperty("MAP_STYLE_URL") ?: "https://demotiles.maplibre.org/style.json").escapeBuildConfigString()}\""
+        )
     }
 
     buildTypes {
@@ -135,4 +140,6 @@ dependencies {
     implementation(libs.play.services.location)
     // WorkManager
     implementation(libs.work.runtime.ktx)
+    // MapLibre
+    implementation(libs.maplibre.android)
 }

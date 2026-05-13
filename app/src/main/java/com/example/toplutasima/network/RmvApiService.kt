@@ -3,8 +3,13 @@ package com.example.toplutasima.network
 import android.util.Log
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.Departure
+import com.example.toplutasima.model.JourneyMatchCandidate
+import com.example.toplutasima.model.LocationOption
+import com.example.toplutasima.model.LocationOptionKind
+import com.example.toplutasima.model.ReachabilityResult
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.StopOption
+import com.example.toplutasima.model.TransitAlert
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.network.rmv.RmvStopLocation
@@ -15,9 +20,13 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -34,18 +43,21 @@ object RmvApiService {
         if (BuildConfig.DEBUG) { if (t != null) Log.e(tag, msg, t) else Log.e(tag, msg) }
     }
 
-    private val RMV_ACCESS_ID = BuildConfig.RMV_ACCESS_ID
     private val ORS_API_KEY = BuildConfig.ORS_API_KEY
 
     private suspend fun <T> rmvCall(endpoint: String, block: suspend (String) -> T): T {
         val requestId = ApiErrors.newRequestId()
         logD("RmvRequest", "$endpoint requestId=$requestId")
         return try {
-            block(requestId)
+            val result = block(requestId)
+            RmvEndpointAvailability.markSupported(endpoint)
+            result
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            throw ApiErrors.fromThrowable("RMV", endpoint, requestId, e)
+            val apiError = ApiErrors.fromThrowable("RMV", endpoint, requestId, e)
+            RmvEndpointAvailability.markFromException(endpoint, apiError)
+            throw apiError
         }
     }
 
@@ -66,6 +78,9 @@ object RmvApiService {
         return "${padded.substring(0, 2)}:${padded.substring(2, 4)}"
     }
 
+    fun normalizeLineForDisplay(line: String): String =
+        RmvFeatureParsers.normalizeLineToken(line)
+
     fun convertToApiDate(uiDate: String): String {
         return LocalDate.parse(uiDate.trim(), DateTimeFormatter.ofPattern("dd.MM.yyyy"))
             .format(DateTimeFormatter.ISO_DATE)
@@ -79,7 +94,6 @@ object RmvApiService {
             try {
                 val response = rmvCall("location.name") { requestId ->
                     rmvApi.searchStops(
-                        accessId = RMV_ACCESS_ID,
                         input = input,
                         maxNo = max,
                         requestId = requestId
@@ -136,7 +150,6 @@ object RmvApiService {
             try {
                 val json = rmvCall("location.nearbystops") { requestId ->
                     rmvApi.getNearbyStops(
-                        accessId = RMV_ACCESS_ID,
                         lat = lat,
                         lon = lon,
                         maxNo = max,
@@ -201,6 +214,154 @@ object RmvApiService {
         }
     }
 
+    suspend fun searchLocationOptions(input: String, max: Int = 8): List<LocationOption> {
+        if (input.isBlank()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            val stopFallback = runCatching {
+                searchStopOptions(input, max).map {
+                    LocationOption(it.id, it.name, LocationOptionKind.STOP, it.lat, it.lon, it.resolvedStopId, it.resolvedStopName)
+                }
+            }.getOrDefault(emptyList())
+
+            val endpoint = "location.search"
+            if (RmvEndpointAvailability.isUnavailable(endpoint)) return@withContext stopFallback
+
+            try {
+                val searchJson = rmvCall(endpoint) { requestId ->
+                    rmvApi.searchLocations(input = input, maxNo = max, requestId = requestId)
+                }
+                val addressJson = runCatching {
+                    rmvCall("location.addresslookup") { requestId ->
+                        rmvApi.lookupAddress(input = input, maxNo = max, requestId = requestId)
+                    }
+                }.getOrNull()
+                val parsed = (RmvFeatureParsers.parseLocationOptions(searchJson) +
+                    (addressJson?.let { RmvFeatureParsers.parseLocationOptions(it) } ?: emptyList()))
+                    .distinctBy { "${it.kind}:${it.id}:${it.name}" }
+                    .take(max)
+
+                val resolved = parsed.map { option ->
+                    if (option.kind == LocationOptionKind.STOP || option.resolvedStopId.isNotBlank()) {
+                        option
+                    } else {
+                        val lat = option.lat
+                        val lon = option.lon
+                        val nearest = if (lat != null && lon != null) {
+                            runCatching { searchNearbyStops(lat, lon, radiusMeters = 700, max = 1).firstOrNull() }
+                                .getOrNull()
+                        } else null
+                        if (nearest != null) option.copy(
+                            resolvedStopId = nearest.id,
+                            resolvedStopName = nearest.name
+                        ) else option
+                    }
+                }.filter { it.kind == LocationOptionKind.STOP || it.resolvedStopId.isNotBlank() }
+
+                (resolved + stopFallback)
+                    .distinctBy { it.resolvedStopId.ifBlank { it.id } }
+                    .take(max)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiRequestException) {
+                logE("RmvApi", "searchLocationOptions error: ${e.message}", e)
+                RmvEndpointAvailability.markFromException(endpoint, e)
+                stopFallback
+            } catch (e: Exception) {
+                logE("RmvApi", "searchLocationOptions error: ${e.message}", e)
+                stopFallback
+            }
+        }
+    }
+
+    suspend fun fetchTransitAlerts(line: String, date: String = ""): List<TransitAlert> =
+        withContext(Dispatchers.IO) {
+            val endpoint = "himsearch"
+            if (line.isBlank() || RmvEndpointAvailability.isUnavailable(endpoint)) return@withContext emptyList()
+            try {
+                val json = rmvCall(endpoint) { requestId ->
+                    rmvApi.getTransitAlerts(line = line, date = date.ifBlank { null }, requestId = requestId)
+                }
+                val himAlerts = RmvFeatureParsers.parseTransitAlerts(json, line)
+                if (himAlerts.isNotEmpty() || RmvEndpointAvailability.isUnavailable("trafficmessages/datex2")) {
+                    himAlerts
+                } else {
+                    val trafficJson = runCatching {
+                        rmvCall("trafficmessages/datex2") { requestId ->
+                            rmvApi.getTrafficMessages(line = line, requestId = requestId)
+                        }
+                    }.getOrNull()
+                    himAlerts + (trafficJson?.let { RmvFeatureParsers.parseTransitAlerts(it, line) } ?: emptyList())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiRequestException) {
+                logE("RmvApi", "fetchTransitAlerts error: ${e.message}", e)
+                RmvEndpointAvailability.markFromException(endpoint, e)
+                emptyList()
+            } catch (e: Exception) {
+                logE("RmvApi", "fetchTransitAlerts error: ${e.message}", e)
+                emptyList()
+            }
+        }
+
+    suspend fun matchJourneyTrack(
+        points: List<Pair<Double, Double>>,
+        date: String,
+        time: String
+    ): List<JourneyMatchCandidate> = withContext(Dispatchers.IO) {
+        val endpoint = "journeyTrackMatch"
+        if (points.size < 2 || RmvEndpointAvailability.isUnavailable(endpoint)) return@withContext emptyList()
+        val requestId = ApiErrors.newRequestId()
+        try {
+            val body = buildJsonObject {
+                put("date", date)
+                put("time", time)
+                put("points", buildJsonArray {
+                    points.forEach { (lat, lon) ->
+                        add(buildJsonObject {
+                            put("lat", lat)
+                            put("lon", lon)
+                        })
+                    }
+                })
+            }
+            logD("RmvRequest", "$endpoint requestId=$requestId points=${points.size}")
+            val json = rmvApi.matchJourneyTrack(body = body, requestId = requestId)
+            RmvEndpointAvailability.markSupported(endpoint)
+            RmvFeatureParsers.parseJourneyMatchCandidates(json, requestId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val apiError = ApiErrors.fromThrowable("RMV", endpoint, requestId, e)
+            RmvEndpointAvailability.markFromException(endpoint, apiError)
+            logE("RmvApi", "matchJourneyTrack error: ${apiError.message}", apiError)
+            emptyList()
+        }
+    }
+
+    suspend fun fetchReachability(lat: Double, lon: Double, minutes: Int): ReachabilityResult =
+        withContext(Dispatchers.IO) {
+            val endpoint = "reachability"
+            if (RmvEndpointAvailability.isUnavailable(endpoint)) {
+                return@withContext ReachabilityResult(lat, lon, minutes, emptyList(), supported = false, message = "Reachability endpoint desteklenmiyor")
+            }
+            try {
+                val json = rmvCall(endpoint) { requestId ->
+                    rmvApi.getReachability(lat = lat, lon = lon, durationMinutes = minutes, requestId = requestId)
+                }
+                RmvFeatureParsers.parseReachability(json, lat, lon, minutes)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiRequestException) {
+                logE("RmvApi", "fetchReachability error: ${e.message}", e)
+                RmvEndpointAvailability.markFromException(endpoint, e)
+                ReachabilityResult(lat, lon, minutes, emptyList(), supported = false, message = e.message.orEmpty())
+            } catch (e: Exception) {
+                logE("RmvApi", "fetchReachability error: ${e.message}", e)
+                ReachabilityResult(lat, lon, minutes, emptyList(), supported = false, message = e.message.orEmpty())
+            }
+        }
+
     // ── 2. Departure board — Retrofit ─────────────────────────────────────────
 
     suspend fun fetchDepartureBoard(
@@ -215,7 +376,6 @@ object RmvApiService {
             try {
                 val tripJson = rmvCall("trip.departure-filter") { requestId ->
                     rmvApi.getTrip(
-                        accessId = RMV_ACCESS_ID,
                         originId = stopId,
                         destId = destId,
                         date = date,
@@ -257,7 +417,6 @@ object RmvApiService {
         val response = try {
             rmvCall("departureBoard") { requestId ->
                 rmvApi.getDepartures(
-                    accessId = RMV_ACCESS_ID,
                     stopId = stopId,
                     date = date,
                     time = time,
@@ -363,7 +522,6 @@ object RmvApiService {
     ): JourneySegment = withContext(Dispatchers.IO) {
         val response = rmvCall("journeyDetail") { requestId ->
             rmvApi.getJourneyDetail(
-                accessId = RMV_ACCESS_ID,
                 ref = ref,
                 requestId = requestId
             )
@@ -754,7 +912,6 @@ object RmvApiService {
         val numTrips = if (preferredLine.isNotBlank()) 6 else 1
         val body = rmvCall("trip") { requestId ->
             rmvApi.getTrip(
-                accessId = RMV_ACCESS_ID,
                 originId = originId,
                 destId = destId,
                 date = date,

@@ -130,7 +130,6 @@ fun RMVLogScreen(
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
-                // [Manuel] ve [🚗 Kişisel] — yan yana iki buton
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(
                         onClick = { viewModel.setMode(if (state.mode == LogMode.MANUAL) LogMode.AUTO else LogMode.MANUAL) },
@@ -325,7 +324,7 @@ fun RMVLogScreen(
                             DropdownMenu(expanded = state.fromMenuOpen, onDismissRequest = { viewModel.setFromMenuOpen(false) }) {
                                 state.fromOptions.forEach { opt -> 
                                     DropdownMenuItem(
-                                        text = { Text(opt.name) }, 
+                                        text = { Text(if (opt.resolvedStopName.isNotBlank()) "${opt.name} -> ${opt.resolvedStopName}" else opt.name) },
                                         onClick = { 
                                             viewModel.selectFrom(opt) 
                                             destFocusRequester.requestFocus()
@@ -390,7 +389,7 @@ fun RMVLogScreen(
                             DropdownMenu(expanded = state.toMenuOpen, onDismissRequest = { viewModel.setToMenuOpen(false) }) {
                                 state.toOptions.forEach { opt -> 
                                     DropdownMenuItem(
-                                        text = { Text(opt.name) }, 
+                                        text = { Text(if (opt.resolvedStopName.isNotBlank()) "${opt.name} -> ${opt.resolvedStopName}" else opt.name) },
                                         onClick = { 
                                             viewModel.selectTo(opt) 
                                             keyboardController?.hide()
@@ -460,6 +459,57 @@ fun RMVLogScreen(
             }
 
             // --- KALKIŞLAR CARD ---
+            if (PrefsManager.gpsJourneyMatchEnabled) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("GPS ile Sefer Esleştir", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Text(
+                                    state.journeyMatchMessage.ifBlank { "Kisa GPS iziyle olasi seferi bul" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    if (hasLocationPermission) viewModel.startJourneyMatch()
+                                    else permissionLauncher.launch(arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    ))
+                                },
+                                enabled = !state.journeyMatchLoading,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                if (state.journeyMatchLoading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text("Baslat")
+                                }
+                            }
+                        }
+                        state.journeyMatchCandidates.forEach { candidate ->
+                            AssistChip(
+                                onClick = { viewModel.confirmJourneyMatch(candidate) },
+                                label = {
+                                    Text("${candidate.line} ${candidate.direction}".trim().ifBlank { candidate.line })
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             if (state.departures.isNotEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -592,6 +642,33 @@ fun RMVLogScreen(
                         }
 
                         Spacer(Modifier.height(4.dp))
+
+                        if (state.transitAlertsLoading) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Text("Hat duyurulari kontrol ediliyor", style = MaterialTheme.typography.bodySmall)
+                            }
+                        } else if (state.transitAlerts.isNotEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                state.transitAlerts.forEach { alert ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = WarningAmber.copy(alpha = 0.16f)
+                                    ) {
+                                        Column(modifier = Modifier.fillMaxWidth().padding(10.dp)) {
+                                            Text(alert.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                            if (alert.detail.isNotBlank() && alert.detail != alert.title) {
+                                                Text(
+                                                    alert.detail.take(180),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         if (state.isEditingTimes) {
                             t.segments.forEachIndexed { idx, s ->

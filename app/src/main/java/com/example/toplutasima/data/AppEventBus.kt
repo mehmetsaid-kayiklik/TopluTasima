@@ -1,5 +1,6 @@
 package com.example.toplutasima.data
 
+import com.example.toplutasima.model.JourneyMatchCandidate
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
@@ -26,6 +27,11 @@ object AppEventBus {
             val tripId: String,
             val isBoarding: Boolean,
             val timestamp: String
+        ) : Event()
+
+        data class JourneyMatchCompleted(
+            val candidates: List<JourneyMatchCandidate>,
+            val message: String
         ) : Event()
     }
 

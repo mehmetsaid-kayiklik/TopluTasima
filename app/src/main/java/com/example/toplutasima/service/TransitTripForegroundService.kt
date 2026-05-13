@@ -11,6 +11,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.Location
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -19,6 +20,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
+import com.example.toplutasima.data.TransitAutoActualTimeMode
 import com.example.toplutasima.data.TransitReminderType
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.worker.TransitActionWorker
@@ -95,6 +97,9 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_ALIGHTING_LNG = "alightingLng"
         private const val EXTRA_FROM_NOTIFICATION_ACTION = "fromNotificationAction"
         private const val PROXIMITY_WATCH_REQUEST_CODE = 9012
+        private const val PROXIMITY_CHECK_INTERVAL_MS = 30_000L
+        private const val ALIGHTING_PROXIMITY_METERS = 100.0
+        private const val AUTO_ALIGHTING_MAX_SPEED_MPS = 2.0
         private val REMINDER_VIBRATION_PATTERN = longArrayOf(0L, 350L, 150L, 350L)
 
         // SharedPreferences anahtarları — servis state'ini restart sonrası geri yükler
@@ -442,20 +447,30 @@ class TransitTripForegroundService : Service() {
      *   1. Koordinat NaN   2. Konum izni yok   3. GPS alınamaz (startProximityWatch içinde)
      */
     private fun scheduleReminderByType() {
+        val needsLocationWatch =
+            PrefsManager.transitReminderType == TransitReminderType.LOCATION ||
+                PrefsManager.transitAutoActualTimeMode != TransitAutoActualTimeMode.OFF
+
+        if (needsLocationWatch) {
+            val hasCoords = !alightingLat.isNaN() && !alightingLng.isNaN()
+            val hasPermission = hasLocationPermission()
+            if (hasCoords && hasPermission) {
+                scheduleProximityWatchAlarm()
+                return
+            }
+            if (PrefsManager.transitReminderType == TransitReminderType.LOCATION) {
+                val reason = if (!hasPermission) "izin yok" else "koordinat yok"
+                Log.w(TAG, "LOCATION secili ama fallback TIME: $reason")
+                usingTimeFallback = true
+                scheduleReminder()
+                return
+            }
+            Log.w(TAG, "Otomatik saat icin GPS izleme baslatilamadi")
+        }
+
         when (PrefsManager.transitReminderType) {
             TransitReminderType.LOCATION -> {
-                val hasCoords = !alightingLat.isNaN() && !alightingLng.isNaN()
-                val hasPermission = hasLocationPermission()
-                if (hasCoords && hasPermission) {
-                    scheduleProximityWatchAlarm()
-                    // Koşul 3 (GPS alınamaz) startProximityWatch() içinde ele alınır
-                } else {
-                    val reason = if (!hasPermission) "izin yok" else "koordinat yok"
-                    Log.w(TAG, "LOCATION seçili ama fallback TIME: $reason")
-                    usingTimeFallback = true
-                    scheduleReminder()
-                    // Fallback mesajı updateTrackingNotification() çağrısıyla gösterilecek
-                }
+                scheduleReminder()
             }
             TransitReminderType.TIME -> scheduleReminder()
             TransitReminderType.NONE -> logD("Hatırlatma türü NONE — hatırlatma kurulmadı")
@@ -828,8 +843,9 @@ class TransitTripForegroundService : Service() {
         proximityJob?.cancel()
         proximityJob = serviceScope.launch {
             var consecutiveNullCount = 0
+            var previousLocation: Location? = null
             while (isActive) {
-                delay(30_000L)
+                delay(PROXIMITY_CHECK_INTERVAL_MS)
                 try {
                     val loc = getCurrentLocationSuspend()
                     if (loc == null) {
@@ -847,13 +863,23 @@ class TransitTripForegroundService : Service() {
                         continue
                     }
                     consecutiveNullCount = 0
-                    val dist = haversineMeters(loc.first, loc.second, alightingLat, alightingLng)
-                    logD("Proximity check: ${dist.toInt()}m")
-                    if (dist <= 250.0) {   // Proximity eşiği: 250m
-                        showReminderNotification()
-                        cancelReminder()   // Fallback AlarmManager'ı da iptal et
-                        startForegroundForCurrentState(useLocationType = false)
-                        break
+                    val dist = haversineMeters(loc.latitude, loc.longitude, alightingLat, alightingLng)
+                    val speedMps = movementSpeedMps(loc, previousLocation)
+                    previousLocation = loc
+                    logD("Proximity check: ${dist.toInt()}m speed=${speedMps?.let { "%.1f".format(it) } ?: "unknown"}m/s")
+                    if (dist <= ALIGHTING_PROXIMITY_METERS) {
+                        if (PrefsManager.transitAutoActualTimeMode == TransitAutoActualTimeMode.AUTO) {
+                            if (isSlowEnoughForAutoAlighting(speedMps)) {
+                                handleAutoAlighting()
+                                break
+                            }
+                            logD("Auto Indim bekliyor: hedefe yakin ama hareket hizi hala yuksek")
+                        } else {
+                            showReminderNotification()
+                            cancelReminder()   // Fallback AlarmManager'ı da iptal et
+                            startForegroundForCurrentState(useLocationType = false)
+                            break
+                        }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Proximity check hatası: ${e.message}")
@@ -862,22 +888,55 @@ class TransitTripForegroundService : Service() {
         }
     }
 
+    private fun handleAutoAlighting() {
+        enqueueTransitActionWorker(isBoarding = false)
+        getSystemService(NotificationManager::class.java).cancel(NOTIF_ID_REMINDER)
+        cancelReminder()
+        cancelProximityWatchAlarm()
+        if (currentSegmentIndex >= totalSegments - 1) {
+            stopTracking()
+        } else {
+            updateTrackingNotificationWaiting()
+        }
+        logD("GPS proximity otomatik Indim kaydi olusturdu")
+    }
+
 
     @Suppress("MissingPermission")
-    private suspend fun getCurrentLocationSuspend(): Pair<Double, Double>? {
+    private suspend fun getCurrentLocationSuspend(): Location? {
         if (!hasLocationPermission()) return null
         val tokenSource = CancellationTokenSource()
         return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
             cont.invokeOnCancellation { tokenSource.cancel() }
             fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, tokenSource.token)
                 .addOnSuccessListener { loc ->
-                    if (loc != null) cont.resume(loc.latitude to loc.longitude)
+                    if (loc != null) cont.resume(loc)
                     else fusedClient.lastLocation
-                        .addOnSuccessListener { last -> cont.resume(if (last != null) last.latitude to last.longitude else null) }
+                        .addOnSuccessListener { last -> cont.resume(last) }
                         .addOnFailureListener { cont.resume(null) }
                 }
                 .addOnFailureListener { cont.resume(null) }
         }
+    }
+
+    private fun isSlowEnoughForAutoAlighting(speedMps: Double?): Boolean =
+        speedMps != null && speedMps <= AUTO_ALIGHTING_MAX_SPEED_MPS
+
+    private fun movementSpeedMps(current: Location, previous: Location?): Double? {
+        if (current.hasSpeed()) return current.speed.toDouble()
+        if (previous == null) return null
+        val seconds = locationDeltaSeconds(previous, current) ?: return null
+        if (seconds <= 0.0) return null
+        val meters = haversineMeters(previous.latitude, previous.longitude, current.latitude, current.longitude)
+        return meters / seconds
+    }
+
+    private fun locationDeltaSeconds(previous: Location, current: Location): Double? {
+        val elapsedNanos = current.elapsedRealtimeNanos - previous.elapsedRealtimeNanos
+        if (elapsedNanos > 0L) return elapsedNanos / 1_000_000_000.0
+        val wallMillis = current.time - previous.time
+        if (wallMillis > 0L) return wallMillis / 1_000.0
+        return null
     }
 
     private fun hasLocationPermission(): Boolean =

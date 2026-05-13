@@ -7,6 +7,7 @@ import com.example.toplutasima.repository.TripRepository
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
+import com.example.toplutasima.viewmodel.ReachabilityViewModel
 import com.example.toplutasima.viewmodel.RecordsViewModel
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.SettingsViewModel
@@ -41,5 +42,6 @@ val appModule = module {
     viewModel { RecordsViewModel(get<Application>()) }
     viewModel { BulkUpdateViewModel(get<Application>()) }
     viewModel { SettingsViewModel(get<Application>()) }
+    viewModel { ReachabilityViewModel(get<Application>(), get(), get()) }
     viewModel { PersonalTripViewModel(get<Application>(), get()) }  // Kişisel Araç
 }

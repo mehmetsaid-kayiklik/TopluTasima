@@ -3,12 +3,16 @@ package com.example.toplutasima.repository
 import android.content.Context
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.model.Departure
+import com.example.toplutasima.model.JourneyMatchCandidate
+import com.example.toplutasima.model.LocationOption
+import com.example.toplutasima.model.ReachabilityResult
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TripResult
+import com.example.toplutasima.model.TransitAlert
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.network.RmvApiService
 import kotlinx.coroutines.CancellationException
@@ -21,6 +25,9 @@ class TripRepository(private val appContext: Context? = null) {
     suspend fun searchStops(input: String, max: Int = 3): List<StopOption> =
         RmvApiService.searchStopOptions(input, max)
 
+    suspend fun searchLocations(input: String, max: Int = 8): List<LocationOption> =
+        RmvApiService.searchLocationOptions(input, max)
+
     suspend fun fetchDepartures(stopId: String, destId: String, date: String, time: String): List<Departure> =
         RmvApiService.fetchDepartureBoard(stopId, destId, date, time)
 
@@ -32,6 +39,15 @@ class TripRepository(private val appContext: Context? = null) {
 
     suspend fun searchNearbyStops(lat: Double, lon: Double, radiusMeters: Int = 500): List<RmvApiService.NearbyStop> =
         RmvApiService.searchNearbyStops(lat, lon, radiusMeters)
+
+    suspend fun fetchTransitAlerts(line: String, date: String = ""): List<TransitAlert> =
+        RmvApiService.fetchTransitAlerts(line, date)
+
+    suspend fun matchJourneyTrack(points: List<Pair<Double, Double>>, date: String, time: String): List<JourneyMatchCandidate> =
+        RmvApiService.matchJourneyTrack(points, date, time)
+
+    suspend fun fetchReachability(lat: Double, lon: Double, minutes: Int): ReachabilityResult =
+        RmvApiService.fetchReachability(lat, lon, minutes)
 
     suspend fun fetchSummary(sheetName: String = "Tümü"): Pair<SummaryData, List<String>> =
         withContext(Dispatchers.IO) { FirestoreService.fetchSummary(sheetName) }

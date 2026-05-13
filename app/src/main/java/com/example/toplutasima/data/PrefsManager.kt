@@ -28,6 +28,14 @@ import java.util.UUID
 enum class TransitReminderType { LOCATION, TIME, NONE }
 
 /**
+ * GPS destekli gerçek biniş/iniş saati davranışı.
+ * OFF     : Otomatik saat yazma kapalı.
+ * CONFIRM : GPS algıladığında bildirimle kullanıcı onayı ister.
+ * AUTO    : Güvenli GPS eşiği yakalanınca ilgili saati otomatik yazar.
+ */
+enum class TransitAutoActualTimeMode { OFF, CONFIRM, AUTO }
+
+/**
  * Centralized SharedPreferences manager for favorites, theme, etc.
  * Follows the same singleton-with-observable-state pattern as LocaleManager.
  */
@@ -78,6 +86,14 @@ object PrefsManager {
     var transitReminderType by mutableStateOf(TransitReminderType.TIME)
         private set
 
+    /** GPS ile sefer eşleştirme kartı kayıt ekranında gösterilsin mi? Varsayılan kapalı. */
+    var gpsJourneyMatchEnabled by mutableStateOf(false)
+        private set
+
+    /** Otomatik gerçek biniş/iniş saati modu. Varsayılan kapalı. */
+    var transitAutoActualTimeMode by mutableStateOf(TransitAutoActualTimeMode.OFF)
+        private set
+
     // ── Init ─────────────────────────────────────────────────────────────────
 
     fun init(sharedPrefs: SharedPreferences, scope: CoroutineScope = appScope) {
@@ -90,6 +106,8 @@ object PrefsManager {
         reminderOffsetMinutes = prefs.getInt("reminder_offset_min", 0)
         useMaterialYou = prefs.getBoolean("use_material_you", true)
         transitReminderType = loadTransitReminderType()
+        gpsJourneyMatchEnabled = prefs.getBoolean("gps_journey_match_enabled", false)
+        transitAutoActualTimeMode = loadTransitAutoActualTimeMode()
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────
@@ -128,10 +146,26 @@ object PrefsManager {
         prefs.edit().putString("transit_reminder_type", type.name).apply()
     }
 
+    fun changeGpsJourneyMatchEnabled(enabled: Boolean) {
+        gpsJourneyMatchEnabled = enabled
+        prefs.edit().putBoolean("gps_journey_match_enabled", enabled).apply()
+    }
+
+    fun changeTransitAutoActualTimeMode(mode: TransitAutoActualTimeMode) {
+        transitAutoActualTimeMode = mode
+        prefs.edit().putString("transit_auto_actual_time_mode", mode.name).apply()
+    }
+
     private fun loadTransitReminderType(): TransitReminderType {
         val saved = prefs.getString("transit_reminder_type", TransitReminderType.TIME.name)
             ?: TransitReminderType.TIME.name
         return try { TransitReminderType.valueOf(saved) } catch (_: Exception) { TransitReminderType.TIME }
+    }
+
+    private fun loadTransitAutoActualTimeMode(): TransitAutoActualTimeMode {
+        val saved = prefs.getString("transit_auto_actual_time_mode", TransitAutoActualTimeMode.OFF.name)
+            ?: TransitAutoActualTimeMode.OFF.name
+        return try { TransitAutoActualTimeMode.valueOf(saved) } catch (_: Exception) { TransitAutoActualTimeMode.OFF }
     }
 
     private fun loadThemeMode(): ThemeMode {

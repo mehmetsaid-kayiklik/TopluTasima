@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -41,7 +42,9 @@ import com.example.toplutasima.viewmodel.RecordsViewModel
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.TicketStatus
@@ -107,7 +110,14 @@ fun RecordsScreen(
                 lang = lang,
                 onMonthClick = { viewModel.selectMonth(it) },
                 onTogglePersonal = { onTogglePersonal(true) },
-                onRefresh = { viewModel.loadMonthSummaries() }
+                onRefresh = { viewModel.loadMonthSummaries() },
+                globalSearchLoading = state.globalSearchLoading,
+                globalSearchError = state.globalSearchError,
+                globalSearchResults = state.globalSearchResults,
+                onRunGlobalSearch = { viewModel.runGlobalSearch(it) },
+                onClearGlobalSearch = { viewModel.clearGlobalSearch() },
+                onGlobalResultClick = { viewModel.setEditingRecord(it.originalRecord) },
+                onOpenLatestTransitRecord = { viewModel.openLatestTransitRecord() }
             )
         } else {
             // ── LEVEL 2: Day/Trip List ──
@@ -206,10 +216,18 @@ fun MonthListScreen(
     lang: com.example.toplutasima.ui.AppLanguage,
     onMonthClick: (com.example.toplutasima.network.FirestoreService.MonthSummary) -> Unit,
     onTogglePersonal: () -> Unit = {},
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    globalSearchLoading: Boolean = false,
+    globalSearchError: String = "",
+    globalSearchResults: List<com.example.toplutasima.viewmodel.RecordRowUiModel> = emptyList(),
+    onRunGlobalSearch: (String) -> Unit = {},
+    onClearGlobalSearch: () -> Unit = {},
+    onGlobalResultClick: (com.example.toplutasima.viewmodel.RecordRowUiModel) -> Unit = {},
+    onOpenLatestTransitRecord: () -> Unit = {}
 ) {
+    var searchField by remember { mutableStateOf("") }
+
     Column(modifier = Modifier.fillMaxSize()) {
-        // Title + Kişisel toggle
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -229,6 +247,107 @@ fun MonthListScreen(
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("🚗", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchField,
+                    onValueChange = { searchField = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(S.recordsGlobalSearchHint(lang), style = MaterialTheme.typography.bodySmall) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onRunGlobalSearch(searchField) }),
+                    trailingIcon = {
+                        if (searchField.isNotBlank()) {
+                            IconButton(onClick = {
+                                searchField = ""
+                                onClearGlobalSearch()
+                            }) {
+                                Icon(Icons.Filled.Close, contentDescription = S.clear(lang))
+                            }
+                        }
+                    }
+                )
+                FilledTonalButton(
+                    onClick = { onRunGlobalSearch(searchField) },
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    Icon(Icons.Filled.Search, contentDescription = S.recordsSearchRun(lang))
+                }
+            }
+            TextButton(
+                onClick = onOpenLatestTransitRecord,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text(S.recordsLastRecordQuick(lang), fontWeight = FontWeight.SemiBold)
+            }
+            if (globalSearchLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            if (globalSearchError.isNotBlank()) {
+                Text(
+                    globalSearchError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            if (globalSearchResults.isNotEmpty()) {
+                Text(
+                    S.recordsGlobalSearchResults(lang),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(globalSearchResults.size, key = { globalSearchResults[it].id }) { idx ->
+                            val row = globalSearchResults[idx]
+                            Card(
+                                onClick = { onGlobalResultClick(row) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                    Text(
+                                        "${row.line} • ${row.date}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        "${row.boardingStop} → ${row.alightingStop}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -274,30 +393,31 @@ fun MonthListScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                        items(summaries.size, key = { it -> summaries[it].sortKey }) { index ->
-                            val s = summaries[index]
-                            Card(
-                                onClick = { onMonthClick(s) },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                            items(summaries.size, key = { idx -> summaries[idx].sortKey }) { index ->
+                                val s = summaries[index]
+                                Card(
+                                    onClick = { onMonthClick(s) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text(
-                                        "${S.monthName(s.monthName, lang)} ${s.year}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        "${s.count} ${S.tripsCount(lang)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            "${S.monthName(s.monthName, lang)} ${s.year}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "${s.count} ${S.tripsCount(lang)}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -306,7 +426,6 @@ fun MonthListScreen(
             }
         }
     }
-}
 }
 
 // ── LEVEL 2: Day List ──

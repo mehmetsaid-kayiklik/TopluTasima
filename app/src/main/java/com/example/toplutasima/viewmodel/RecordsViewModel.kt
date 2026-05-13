@@ -71,7 +71,11 @@ data class RecordsUiState(
     // ── Export state ──
     val isExporting: Boolean = false,
     val exportResult: String = "",
-    val showExportDialog: Boolean = false
+    val showExportDialog: Boolean = false,
+    /** Ay listesinden tüm kayıtlarda serbest metin arama sonuçları */
+    val globalSearchLoading: Boolean = false,
+    val globalSearchError: String = "",
+    val globalSearchResults: List<RecordRowUiModel> = emptyList()
 )
 
 class RecordsViewModel(application: Application) : AndroidViewModel(application) {
@@ -110,7 +114,10 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                 errorMsg = "",
                 saveMsg = "",
                 filterState = RecordFilterState(),
-                isFilterPanelOpen = false
+                isFilterPanelOpen = false,
+                globalSearchResults = emptyList(),
+                globalSearchError = "",
+                globalSearchLoading = false
             )
             try {
                 val groups = withContext(Dispatchers.IO) {
@@ -144,35 +151,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                         val dayName = rec["gun"]?.toString() ?: ""
                         dateToDayName[date] = dayName
 
-                        val turValue = rec["tur"]?.toString() ?: ""
-                        val typeDisplay = "${typeEmoji(turValue)} $turValue"
-
-                        val rowModel = RecordRowUiModel(
-                            id = rec["firestoreDocId"]?.toString() ?: java.util.UUID.randomUUID().toString(),
-                            date = date,
-                            day = dayName,
-                            type = turValue,
-                            typeDisplay = typeDisplay,
-                            line = rec["hat"]?.toString() ?: "",
-                            direction = rec["yon"]?.toString() ?: "",
-                            boardingStop = rec["binisDuragi"]?.toString() ?: "",
-                            plannedDep = rec["planlananBinis"]?.toString() ?: "",
-                            actualDep = rec["gercekBinis"]?.toString() ?: "",
-                            delay = rec["gecikme"]?.toString() ?: "",
-                            alightingStop = rec["inisDuragi"]?.toString() ?: "",
-                            plannedArr = rec["planlananInis"]?.toString() ?: "",
-                            actualArr = rec["gercekInis"]?.toString() ?: "",
-                            dayType = rec["gununTipi"]?.toString() ?: "",
-                            weather = rec["havaDurumu"]?.toString() ?: "",
-                            seated = rec["oturabildimMi"]?.toString() ?: "",
-                            plannedDuration = rec["planlananYolSuresi"]?.toString() ?: "",
-                            actualDuration = rec["gercekYolSuresi"]?.toString() ?: "",
-                            note = rec["not"]?.toString() ?: "",
-                            ticketControl = rec["biletKontrolü"]?.toString() ?: "",
-                            distance = rec["mesafe"]?.toString() ?: "",
-                            stopCount = rec["durakSayisi"]?.toString() ?: "",
-                            originalRecord = rec
-                        )
+                        val rowModel = mapFirestoreRecordToRow(rec)
 
                         if (!dayGroupsMap.containsKey(date)) {
                             dayGroupsMap[date] = mutableListOf()
@@ -219,7 +198,100 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             incompleteRecords = emptyList(),
             isIncompleteExpanded = false,
             filterState = RecordFilterState(),
-            isFilterPanelOpen = false
+            isFilterPanelOpen = false,
+            globalSearchResults = emptyList(),
+            globalSearchError = "",
+            globalSearchLoading = false
+        )
+    }
+
+    fun clearGlobalSearch() {
+        _uiState.value = _uiState.value.copy(
+            globalSearchResults = emptyList(),
+            globalSearchError = "",
+            globalSearchLoading = false
+        )
+    }
+
+    fun runGlobalSearch(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) {
+            clearGlobalSearch()
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                globalSearchLoading = true,
+                globalSearchError = "",
+                globalSearchResults = emptyList()
+            )
+            try {
+                val raw = withContext(Dispatchers.IO) { FirestoreService.fetchTrips() }
+                val filter = RecordFilterState(searchQuery = q)
+                val rows = raw
+                    .map { mapFirestoreRecordToRow(it) }
+                    .filter { RecordFilterUtils.matchesFilter(it, filter) }
+                _uiState.value = _uiState.value.copy(
+                    globalSearchLoading = false,
+                    globalSearchResults = rows
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    globalSearchLoading = false,
+                    globalSearchError = e.message ?: "Error"
+                )
+            }
+        }
+    }
+
+    fun openLatestTransitRecord() {
+        viewModelScope.launch {
+            try {
+                val rec = withContext(Dispatchers.IO) { FirestoreService.fetchTrips().firstOrNull() }
+                val lang = com.example.toplutasima.ui.LocaleManager.currentLanguage
+                if (rec == null) {
+                    _uiState.value = _uiState.value.copy(
+                        saveMsg = com.example.toplutasima.ui.S.noRecords(lang)
+                    )
+                } else {
+                    setEditingRecord(rec)
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(saveMsg = "❌ ${e.message}")
+            }
+        }
+    }
+
+    private fun mapFirestoreRecordToRow(rec: Map<String, Any>): RecordRowUiModel {
+        val date = rec["tarih"]?.toString() ?: ""
+        val dayName = rec["gun"]?.toString() ?: ""
+        val turValue = rec["tur"]?.toString() ?: ""
+        val typeDisplay = "${typeEmoji(turValue)} $turValue"
+        return RecordRowUiModel(
+            id = rec["firestoreDocId"]?.toString() ?: java.util.UUID.randomUUID().toString(),
+            date = date,
+            day = dayName,
+            type = turValue,
+            typeDisplay = typeDisplay,
+            line = rec["hat"]?.toString() ?: "",
+            direction = rec["yon"]?.toString() ?: "",
+            boardingStop = rec["binisDuragi"]?.toString() ?: "",
+            plannedDep = rec["planlananBinis"]?.toString() ?: "",
+            actualDep = rec["gercekBinis"]?.toString() ?: "",
+            delay = rec["gecikme"]?.toString() ?: "",
+            alightingStop = rec["inisDuragi"]?.toString() ?: "",
+            plannedArr = rec["planlananInis"]?.toString() ?: "",
+            actualArr = rec["gercekInis"]?.toString() ?: "",
+            dayType = rec["gununTipi"]?.toString() ?: "",
+            weather = rec["havaDurumu"]?.toString() ?: "",
+            seated = rec["oturabildimMi"]?.toString() ?: "",
+            plannedDuration = rec["planlananYolSuresi"]?.toString() ?: "",
+            actualDuration = rec["gercekYolSuresi"]?.toString() ?: "",
+            note = rec["not"]?.toString() ?: "",
+            ticketControl = rec["biletKontrolü"]?.toString() ?: "",
+            distance = rec["mesafe"]?.toString() ?: "",
+            stopCount = rec["durakSayisi"]?.toString() ?: "",
+            originalRecord = rec
         )
     }
 

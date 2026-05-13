@@ -13,6 +13,7 @@ object S {
     fun navRecord(l: AppLanguage) = m(l, "Kayıt", "Aufnahme", "Record")
     fun navSummary(l: AppLanguage) = m(l, "Özet", "Übersicht", "Summary")
     fun navSettings(l: AppLanguage) = m(l, "Ayarlar", "Einstellungen", "Settings")
+    fun navReachability(l: AppLanguage) = m(l, "Harita", "Karte", "Map")
 
 
     // ── RmvLogScreen — Header ──
@@ -209,6 +210,8 @@ object S {
 
     // ── Settings Screen ──
     fun settingsTitle(l: AppLanguage) = m(l, "⚙️  Ayarlar", "⚙️  Einstellungen", "⚙️  Settings")
+    fun settingsSectionBasic(l: AppLanguage) = m(l, "Temel", "Allgemein", "General")
+    fun settingsSectionAdvanced(l: AppLanguage) = m(l, "Gelişmiş", "Erweitert", "Advanced")
     fun themeTitle(l: AppLanguage) = m(l, "🎨  Tema", "🎨  Design", "🎨  Theme")
     fun darkThemeActive(l: AppLanguage) = m(l, "Koyu tema aktif", "Dunkles Design aktiv", "Dark theme active")
     fun lightThemeActive(l: AppLanguage) = m(l, "Açık tema aktif", "Helles Design aktiv", "Light theme active")
@@ -274,6 +277,10 @@ object S {
     // ── Records Screen ──
     fun navRecords(l: AppLanguage) = m(l, "Kayıtlar", "Einträge", "Records")
     fun recordsTitle(l: AppLanguage) = m(l, "📋  Kayıtlar", "📋  Einträge", "📋  Records")
+    fun recordsGlobalSearchHint(l: AppLanguage) = m(l, "Tüm kayıtlarda ara (hat, durak, not...)", "Alle Einträge durchsuchen (Linie, Haltestelle, Notiz...)", "Search all records (line, stop, note...)")
+    fun recordsSearchRun(l: AppLanguage) = m(l, "Ara", "Suchen", "Search")
+    fun recordsLastRecordQuick(l: AppLanguage) = m(l, "Son kayıt", "Letzter Eintrag", "Latest record")
+    fun recordsGlobalSearchResults(l: AppLanguage) = m(l, "Eşleşen kayıtlar", "Treffer", "Matches")
     fun filterMonth(l: AppLanguage) = m(l, "Ay", "Monat", "Month")
     fun filterType(l: AppLanguage) = m(l, "Tür", "Typ", "Type")
     fun filterAll(l: AppLanguage) = m(l, "Tümü", "Alle", "All")
@@ -399,7 +406,7 @@ object S {
 
     // ── Record Filters ──
     fun filterTitle(l: AppLanguage) = m(l, "🔍 Filtreler", "🔍 Filter", "🔍 Filters")
-    fun filterSearchHint(l: AppLanguage) = m(l, "Hat, durak, yön ara...", "Linie, Haltestelle, Richtung...", "Search line, stop, direction...")
+    fun filterSearchHint(l: AppLanguage) = m(l, "Hat, durak, yön, not ara...", "Linie, Haltestelle, Richtung, Notiz...", "Search line, stop, direction, note...")
     fun filterVehicleType(l: AppLanguage) = m(l, "Araç Türü", "Fahrzeugtyp", "Vehicle Type")
     fun filterWeather(l: AppLanguage) = m(l, "Hava Durumu", "Wetter", "Weather")
     fun filterSeated(l: AppLanguage) = m(l, "Oturma", "Sitzplatz", "Seated")
@@ -547,8 +554,16 @@ object S {
     fun transitReminderTypeLocation(l: AppLanguage) = m(l, "📍 Konuma Dayalı", "📍 Standortbasiert", "📍 Location-Based")
     fun transitReminderTypeTime(l: AppLanguage) = m(l, "⏰ Saate Dayalı", "⏰ Zeitbasiert", "⏰ Time-Based")
     fun transitReminderTypeNone(l: AppLanguage) = m(l, "🔕 Kapalı", "🔕 Aus", "🔕 Off")
-    fun transitReminderTypeLocationDesc(l: AppLanguage) = m(l, "Durağa ≤250m yaklaştığında bildirim gelir (GPS gerekir)", "Benachrichtigung bei ≤250m Entfernung (GPS erforderlich)", "Alert when ≤250m from stop (GPS required)")
+    fun transitReminderTypeLocationDesc(l: AppLanguage) = m(l, "Durağa ≤100m yaklaştığında bildirim gelir (GPS gerekir)", "Benachrichtigung bei ≤100m Entfernung (GPS erforderlich)", "Alert when ≤100m from stop (GPS required)")
     fun transitReminderTypeTimeDesc(l: AppLanguage) = m(l, "Planlanan iniş saatinde hatırlatma gönderilir", "Erinnerung zur geplanten Ausstiegszeit", "Reminder at planned alighting time")
+    fun gpsJourneyMatchTitle(l: AppLanguage) = m(l, "GPS ile sefer eşleştirme", "GPS-Fahrtabgleich", "GPS journey matching")
+    fun gpsJourneyMatchDesc(l: AppLanguage) = m(l, "Kayıt ekranında kısa GPS iziyle sefer bulma kartını göster", "Karte zum Abgleich per kurzer GPS-Spur anzeigen", "Show the short GPS trace matching card on the record screen")
+    fun autoActualTimeTitle(l: AppLanguage) = m(l, "Otomatik gerçek saatler", "Automatische Ist-Zeiten", "Automatic actual times")
+    fun autoActualTimeDesc(l: AppLanguage) = m(l, "GPS ile algılanan biniş/iniş saatlerinin nasıl işleneceğini seç", "Wähle, wie erkannte Ein-/Ausstiegszeiten verarbeitet werden", "Choose how detected boarding/alighting times are handled")
+    fun autoActualOff(l: AppLanguage) = m(l, "Kapalı", "Aus", "Off")
+    fun autoActualConfirm(l: AppLanguage) = m(l, "Onay iste", "Bestätigen", "Ask")
+    fun autoActualAuto(l: AppLanguage) = m(l, "Otomatik", "Automatisch", "Auto")
+    fun autoActualModeDesc(l: AppLanguage) = m(l, "Otomatik modda iniş durağına yaklaştığında İndim saati yazılır; biniş tarafı GPS eşleştirme onayıyla ilerler.", "Im Automatikmodus wird beim Annähern an die Ausstiegshaltestelle die Ausstiegszeit gespeichert; Einstieg läuft über GPS-Abgleich.", "Auto mode records alighting near the destination stop; boarding still goes through GPS match confirmation.")
 
     // ── Sonraki segment bekleniyor ──
     fun transitWaitingNextSegment(l: AppLanguage) = m(l, "Sonraki aktarma bekleniyor...", "Warte auf nächsten Anschluss...", "Waiting for next connection...")

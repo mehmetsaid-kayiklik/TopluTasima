@@ -11,13 +11,15 @@ class ApiRequestException(
     val endpoint: String,
     val requestId: String,
     val statusCode: Int? = null,
+    val retryAfterSeconds: Long? = null,
     val bodyPreview: String = "",
     override val cause: Throwable? = null
 ) : Exception(
-    buildMessage(provider, endpoint, requestId, statusCode, bodyPreview, cause),
+    buildMessage(provider, endpoint, requestId, statusCode, retryAfterSeconds, bodyPreview, cause),
     cause
 ) {
     val isRateLimited: Boolean get() = statusCode == 429
+    val isEndpointUnsupported: Boolean get() = statusCode in setOf(404, 405, 501)
 
     companion object {
         private fun buildMessage(
@@ -25,13 +27,15 @@ class ApiRequestException(
             endpoint: String,
             requestId: String,
             statusCode: Int?,
+            retryAfterSeconds: Long?,
             bodyPreview: String,
             cause: Throwable?
         ): String {
             val requestSuffix = "requestId=$requestId"
+            val retrySuffix = retryAfterSeconds?.let { " $it saniye sonra tekrar deneyin." }.orEmpty()
             return when {
                 statusCode == 429 ->
-                    "$provider kotasi asildi. Biraz bekleyip tekrar deneyin. ($requestSuffix)"
+                    "$provider kotasi asildi.$retrySuffix ($requestSuffix)"
                 statusCode != null ->
                     "$provider istegi basarisiz oldu: HTTP $statusCode ($endpoint, $requestSuffix)"
                 cause is UnknownHostException ->
@@ -60,7 +64,8 @@ object ApiErrors {
         if (throwable is HttpException) {
             val body = runCatching { throwable.response()?.errorBody()?.string().orEmpty() }
                 .getOrDefault("")
-            return fromHttpStatus(provider, endpoint, requestId, throwable.code(), body, throwable)
+            val retryAfter = throwable.response()?.headers()?.get("Retry-After")
+            return fromHttpStatus(provider, endpoint, requestId, throwable.code(), body, throwable, retryAfter)
         }
         return ApiRequestException(
             provider = provider,
@@ -76,17 +81,22 @@ object ApiErrors {
         requestId: String,
         statusCode: Int,
         body: String,
-        cause: Throwable? = null
+        cause: Throwable? = null,
+        retryAfterHeader: String? = null
     ): ApiRequestException {
         return ApiRequestException(
             provider = provider,
             endpoint = endpoint,
             requestId = requestId,
             statusCode = statusCode,
+            retryAfterSeconds = parseRetryAfterSeconds(retryAfterHeader),
             bodyPreview = preview(body),
             cause = cause
         )
     }
+
+    private fun parseRetryAfterSeconds(value: String?): Long? =
+        value?.trim()?.toLongOrNull()?.takeIf { it >= 0 }
 
     private fun preview(body: String): String =
         body.replace(Regex("\\s+"), " ").trim().take(240)

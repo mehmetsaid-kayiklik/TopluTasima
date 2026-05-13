@@ -61,6 +61,11 @@
         </service>
 
         <!-- Toplu Taşıma — Bildirim Aksiyon Receiver -->
+        <service
+            android:name=".service.JourneyMatchForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false"/>
+
         <receiver
             android:name=".service.TransitNotificationReceiver"
             android:exported="false">

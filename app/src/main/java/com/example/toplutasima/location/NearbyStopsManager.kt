@@ -43,7 +43,7 @@ class NearbyStopsManager(
             return emptyList()
         }
 
-        val location = withTimeoutOrNull(LOCATION_TIMEOUT_MS) { getCurrentLocation() }
+        val location = currentLocation()
         if (location == null) {
             Log.d(TAG, "Location timeout or unavailable")
             return emptyList()
@@ -60,6 +60,11 @@ class NearbyStopsManager(
             Log.e(TAG, "Nearby stops API error: ${e.message}")
             emptyList()
         }
+    }
+
+    suspend fun currentLocation(): Pair<Double, Double>? {
+        if (!hasLocationPermission()) return null
+        return withTimeoutOrNull(LOCATION_TIMEOUT_MS) { getCurrentLocation() }
     }
 
     @Suppress("MissingPermission") // We check permission before calling

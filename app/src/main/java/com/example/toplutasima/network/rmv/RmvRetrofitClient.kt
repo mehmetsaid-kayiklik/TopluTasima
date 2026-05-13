@@ -1,11 +1,15 @@
 package com.example.toplutasima.network.rmv
 
+import com.example.toplutasima.BuildConfig
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Query
 
 private val json = Json {
@@ -14,16 +18,25 @@ private val json = Json {
     coerceInputValues = true   // Use defaults instead of failing on null mismatches
 }
 
+private val rmvHttpClient = OkHttpClient.Builder()
+    .addInterceptor { chain ->
+        val request = chain.request().newBuilder()
+            .header("Authorization", "Bearer ${BuildConfig.RMV_ACCESS_ID}")
+            .header("Accept", "application/json")
+            .build()
+        chain.proceed(request)
+    }
+    .build()
+
 internal val rmvRetrofit: Retrofit = Retrofit.Builder()
     .baseUrl("https://www.rmv.de/hapi/")
-    .client(OkHttpClient())    // Reuse the same underlying OkHttp (no extra config needed here)
+    .client(rmvHttpClient)
     .addConverterFactory(json.asConverterFactory("application/json; charset=utf-8".toMediaType()))
     .build()
 
 interface RmvApi {
     @GET("location.name")
     suspend fun searchStops(
-        @Query("accessId") accessId: String,
         @Query("input") input: String,
         @Query("type") type: String = "S",
         @Query("maxNo") maxNo: Int = 3,
@@ -33,7 +46,6 @@ interface RmvApi {
 
     @GET("departureBoard")
     suspend fun getDepartures(
-        @Query("accessId") accessId: String,
         @Query("id") stopId: String,
         @Query("date") date: String,
         @Query("time") time: String,
@@ -43,7 +55,6 @@ interface RmvApi {
 
     @GET("trip")
     suspend fun getTrip(
-        @Query("accessId") accessId: String,
         @Query("originId") originId: String,
         @Query("destId") destId: String,
         @Query("date") date: String,
@@ -55,7 +66,6 @@ interface RmvApi {
 
     @GET("journeyDetail")
     suspend fun getJourneyDetail(
-        @Query("accessId") accessId: String,
         @Query("id") ref: String,
         @Query("format") format: String = "json",
         @Query("requestId") requestId: String? = null
@@ -63,7 +73,6 @@ interface RmvApi {
 
     @GET("location.nearbystops")
     suspend fun getNearbyStops(
-        @Query("accessId") accessId: String,
         @Query("originCoordLat") lat: Double,     // decimal degrees (WGS84)
         @Query("originCoordLong") lon: Double,    // decimal degrees (WGS84)
         @Query("maxNo") maxNo: Int = 8,
@@ -72,6 +81,54 @@ interface RmvApi {
         @Query("format") format: String = "json",
         @Query("requestId") requestId: String? = null
     ): kotlinx.serialization.json.JsonObject      // polymorphic → parse manually
+
+    @GET("himsearch")
+    suspend fun getTransitAlerts(
+        @Query("line") line: String? = null,
+        @Query("dateB") date: String? = null,
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
+    ): JsonObject
+
+    @GET("trafficmessages/datex2")
+    suspend fun getTrafficMessages(
+        @Query("line") line: String? = null,
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
+    ): JsonObject
+
+    @GET("location.search")
+    suspend fun searchLocations(
+        @Query("input") input: String,
+        @Query("maxNo") maxNo: Int = 8,
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
+    ): JsonObject
+
+    @GET("location.addresslookup")
+    suspend fun lookupAddress(
+        @Query("input") input: String,
+        @Query("maxNo") maxNo: Int = 5,
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
+    ): JsonObject
+
+    @POST("journeyTrackMatch")
+    suspend fun matchJourneyTrack(
+        @Body body: JsonObject,
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
+    ): JsonObject
+
+    @GET("reachability")
+    suspend fun getReachability(
+        @Query("originCoordLat") lat: Double,
+        @Query("originCoordLong") lon: Double,
+        @Query("duration") durationMinutes: Int,
+        @Query("maxNo") maxNo: Int = 80,
+        @Query("format") format: String = "json",
+        @Query("requestId") requestId: String? = null
+    ): JsonObject
 }
 
 val rmvApi: RmvApi = rmvRetrofit.create(RmvApi::class.java)

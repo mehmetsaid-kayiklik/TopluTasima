@@ -4,7 +4,75 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class StopOption(val id: String, val name: String)
+enum class LocationOptionKind { STOP, ADDRESS, POI }
+
+@Serializable
+data class StopOption(
+    val id: String,
+    val name: String,
+    val kind: LocationOptionKind = LocationOptionKind.STOP,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val resolvedStopId: String = "",
+    val resolvedStopName: String = ""
+) {
+    val routingId: String get() = resolvedStopId.ifBlank { id }
+    val routingName: String get() = resolvedStopName.ifBlank { name }
+}
+
+data class LocationOption(
+    val id: String,
+    val name: String,
+    val kind: LocationOptionKind,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val resolvedStopId: String = "",
+    val resolvedStopName: String = ""
+) {
+    fun toStopOption(): StopOption = StopOption(
+        id = id,
+        name = name,
+        kind = kind,
+        lat = lat,
+        lon = lon,
+        resolvedStopId = resolvedStopId,
+        resolvedStopName = resolvedStopName
+    )
+}
+
+data class TransitAlert(
+    val id: String,
+    val title: String,
+    val detail: String = "",
+    val line: String = "",
+    val severity: String = "info"
+)
+
+data class JourneyMatchCandidate(
+    val id: String,
+    val line: String,
+    val direction: String,
+    val fromStop: String,
+    val toStop: String,
+    val confidence: Int,
+    val requestId: String = ""
+)
+
+data class ReachabilityPoint(
+    val name: String,
+    val lat: Double,
+    val lon: Double,
+    val minutes: Int
+)
+
+data class ReachabilityResult(
+    val originLat: Double,
+    val originLon: Double,
+    val minutes: Int,
+    val points: List<ReachabilityPoint>,
+    val supported: Boolean,
+    val message: String = ""
+)
 
 data class Departure(
     val line: String,

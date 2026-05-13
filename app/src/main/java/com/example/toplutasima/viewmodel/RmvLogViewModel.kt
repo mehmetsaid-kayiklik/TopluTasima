@@ -8,15 +8,18 @@ import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.data.AppEventBus
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.Departure
+import com.example.toplutasima.model.JourneyMatchCandidate
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TripResult
+import com.example.toplutasima.model.TransitAlert
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.network.RmvApiService
 import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.service.JourneyMatchForegroundService
 import com.example.toplutasima.service.TransitNotificationReceiver
 import com.example.toplutasima.service.TransitTripForegroundService
 import com.example.toplutasima.ui.LocaleManager
@@ -84,6 +87,11 @@ data class RmvLogUiState(
     val departures: List<Departure> = emptyList(),
     val selectedDeparture: Departure? = null,
     val trip: TripResult? = null,
+    val transitAlerts: List<TransitAlert> = emptyList(),
+    val transitAlertsLoading: Boolean = false,
+    val journeyMatchCandidates: List<JourneyMatchCandidate> = emptyList(),
+    val journeyMatchLoading: Boolean = false,
+    val journeyMatchMessage: String = "",
     // ── Segment ek bilgileri ──
     val segmentHavaDurumu: Map<Int, String> = emptyMap(),
     val havaMenuOpen: Boolean = false,
@@ -189,6 +197,14 @@ class RmvLogViewModel(
             AppEventBus.events.collect { event ->
                 when (event) {
                     is AppEventBus.Event.TripSynced -> handleTripSyncedFromNotif(event)
+                    is AppEventBus.Event.JourneyMatchCompleted -> {
+                        _uiState.value = _uiState.value.copy(
+                            journeyMatchLoading = false,
+                            journeyMatchCandidates = event.candidates,
+                            journeyMatchMessage = event.message,
+                            status = event.message
+                        )
+                    }
                 }
             }
         }
@@ -301,11 +317,19 @@ class RmvLogViewModel(
     }
 
     fun selectFrom(option: StopOption) {
-        _uiState.value = _uiState.value.copy(from = option.name, fromId = option.id, fromMenuOpen = false)
+        _uiState.value = _uiState.value.copy(
+            from = option.routingName,
+            fromId = option.routingId,
+            fromMenuOpen = false
+        )
     }
 
     fun selectTo(option: StopOption) {
-        _uiState.value = _uiState.value.copy(to = option.name, toId = option.id, toMenuOpen = false)
+        _uiState.value = _uiState.value.copy(
+            to = option.routingName,
+            toId = option.routingId,
+            toMenuOpen = false
+        )
     }
 
     fun setFromMenuOpen(open: Boolean) {
@@ -496,7 +520,7 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 val query = _uiState.value.from.trim()
-                val cached = PrefsManager.getCachedStops(query, 3)
+                val cached = PrefsManager.getCachedStops(query, 5)
                 if (cached.isNotEmpty()) {
                     _uiState.value = _uiState.value.copy(
                         fromOptions = cached,
@@ -506,7 +530,7 @@ class RmvLogViewModel(
                     return@launch
                 }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingFrom(lang()), fromOptions = emptyList())
-                val opts = repository.searchStops(query, 3)
+                val opts = repository.searchLocations(query, 5).map { it.toStopOption() }
                 PrefsManager.saveStopSearch(query, opts)
                 _uiState.value = _uiState.value.copy(
                     fromOptions = opts,
@@ -514,7 +538,10 @@ class RmvLogViewModel(
                     status = if (opts.isEmpty()) S.statusFromNoResult(lang()) else S.statusFromReady(lang())
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
+                _uiState.value = _uiState.value.copy(
+                    transitAlertsLoading = false,
+                    status = "${S.errorPrefix(lang())}: ${e.message}"
+                )
             }
         }
     }
@@ -523,7 +550,7 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 val query = _uiState.value.to.trim()
-                val cached = PrefsManager.getCachedStops(query, 3)
+                val cached = PrefsManager.getCachedStops(query, 5)
                 if (cached.isNotEmpty()) {
                     _uiState.value = _uiState.value.copy(
                         toOptions = cached,
@@ -533,7 +560,7 @@ class RmvLogViewModel(
                     return@launch
                 }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingTo(lang()), toOptions = emptyList())
-                val opts = repository.searchStops(query, 3)
+                val opts = repository.searchLocations(query, 5).map { it.toStopOption() }
                 PrefsManager.saveStopSearch(query, opts)
                 _uiState.value = _uiState.value.copy(
                     toOptions = opts,
@@ -541,7 +568,10 @@ class RmvLogViewModel(
                     status = if (opts.isEmpty()) S.statusToNoResult(lang()) else S.statusToReady(lang())
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
+                _uiState.value = _uiState.value.copy(
+                    transitAlertsLoading = false,
+                    status = "${S.errorPrefix(lang())}: ${e.message}"
+                )
             }
         }
     }
@@ -555,6 +585,9 @@ class RmvLogViewModel(
                     departures = emptyList(),
                     selectedDeparture = null,
                     trip = null,
+                    transitAlerts = emptyList(),
+                    journeyMatchCandidates = emptyList(),
+                    journeyMatchMessage = "",
                     firstSavedId = "",
                     lastSavedId = "",
                     segmentIds = emptyList(),
@@ -571,7 +604,10 @@ class RmvLogViewModel(
                     status = if (deps.isEmpty()) S.statusNoDepartures(lang()) else S.statusDeparturesReady(deps.size, lang())
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
+                _uiState.value = _uiState.value.copy(
+                    transitAlertsLoading = false,
+                    status = "${S.errorPrefix(lang())}: ${e.message}"
+                )
             }
         }
     }
@@ -585,6 +621,9 @@ class RmvLogViewModel(
         _uiState.value = _uiState.value.copy(
             selectedDeparture = dep,
             trip = null,
+            transitAlerts = emptyList(),
+            transitAlertsLoading = true,
+            journeyMatchCandidates = emptyList(),
             firstSavedId = "",
             lastSavedId = "",
             segmentIds = emptyList(),
@@ -612,6 +651,7 @@ class RmvLogViewModel(
                     trip = finalTrip,
                     status = S.statusPlanReady(finalTrip.segments.size, lang())
                 )
+                loadTransitAlerts(dep.line)
 
                 // Segment detaylarını arka planda tamamla (iptal edilebilir)
                 val expectedSegmentCount = finalTrip.segments.size
@@ -650,7 +690,10 @@ class RmvLogViewModel(
                     } catch (_: Exception) { }
                 }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
+                _uiState.value = _uiState.value.copy(
+                    transitAlertsLoading = false,
+                    status = "${S.errorPrefix(lang())}: ${e.message}"
+                )
             }
         }
     }
@@ -694,6 +737,58 @@ class RmvLogViewModel(
     }
 
     // ── Kayıt ve zaman damgası ────────────────────────────────────────────────
+
+    private fun loadTransitAlerts(line: String) {
+        viewModelScope.launch {
+            try {
+                val apiDate = runCatching { RmvApiService.convertToApiDate(_uiState.value.date) }.getOrDefault("")
+                val alerts = repository.fetchTransitAlerts(line, apiDate)
+                _uiState.value = _uiState.value.copy(
+                    transitAlerts = alerts,
+                    transitAlertsLoading = false
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    transitAlerts = emptyList(),
+                    transitAlertsLoading = false
+                )
+            }
+        }
+    }
+
+    fun startJourneyMatch() {
+        val s = _uiState.value
+        if (!hasLocationPermission()) {
+            _uiState.value = s.copy(journeyMatchMessage = "Konum izni gerekli", status = "Konum izni gerekli")
+            return
+        }
+        val apiDate = runCatching { RmvApiService.convertToApiDate(s.date) }.getOrDefault("")
+        val searchTime = if (s.time.isNotBlank()) RmvApiService.formatTimeDigits(s.time)
+            else LocalTime.now().withSecond(0).withNano(0).format(DateTimeFormatter.ofPattern("HH:mm"))
+        _uiState.value = s.copy(
+            journeyMatchLoading = true,
+            journeyMatchCandidates = emptyList(),
+            journeyMatchMessage = "GPS izi aliniyor...",
+            status = "GPS izi aliniyor..."
+        )
+        JourneyMatchForegroundService.start(ctx(), apiDate, searchTime)
+    }
+
+    fun confirmJourneyMatch(candidate: JourneyMatchCandidate) {
+        val matchingDeparture = _uiState.value.departures.firstOrNull {
+            RmvApiService.normalizeLineForDisplay(it.line) == RmvApiService.normalizeLineForDisplay(candidate.line)
+        }
+        _uiState.value = _uiState.value.copy(
+            journeyMatchCandidates = emptyList(),
+            journeyMatchMessage = "GPS eslesmesi onaylandi: ${candidate.line}",
+            status = "GPS eslesmesi onaylandi: ${candidate.line}"
+        )
+        if (matchingDeparture != null) {
+            selectDeparture(matchingDeparture)
+        }
+    }
 
     fun saveToSheets() {
         viewModelScope.launch {

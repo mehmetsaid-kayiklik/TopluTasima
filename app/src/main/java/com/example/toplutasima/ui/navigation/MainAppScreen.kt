@@ -2,7 +2,6 @@ package com.example.toplutasima.ui.navigation
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
@@ -19,13 +18,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import org.koin.androidx.compose.koinViewModel
 import com.example.toplutasima.model.NavItem
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 
 import com.example.toplutasima.ui.screens.RMVLogScreen
+import com.example.toplutasima.ui.screens.ReachabilityScreen
 import com.example.toplutasima.ui.screens.RecordsScreen
 import com.example.toplutasima.ui.screens.SettingsScreen
 import com.example.toplutasima.ui.screens.SummaryScreen
@@ -45,6 +44,7 @@ fun MainAppScreen(isDarkTheme: Boolean) {
         NavItem(S.navRecord(lang), Icons.Filled.Create, Icons.Outlined.Create),
         NavItem(S.navSummary(lang), Icons.Filled.List, Icons.Outlined.List),
         NavItem(S.navRecords(lang), Icons.Filled.DateRange, Icons.Outlined.DateRange),
+        NavItem(S.navReachability(lang), Icons.Filled.DateRange, Icons.Outlined.DateRange),
         NavItem(S.navSettings(lang), Icons.Filled.Settings, Icons.Outlined.Settings)
     )
 
@@ -104,7 +104,10 @@ fun MainAppScreen(isDarkTheme: Boolean) {
                         selectedTab = 0
                     }
                 )
-                3 -> {
+                3 -> ReachabilityScreen(
+                    modifier = Modifier.padding(innerPadding)
+                )
+                4 -> {
                     SettingsScreen(
                         modifier = Modifier.padding(innerPadding),
                         isDarkTheme = isDarkTheme,
