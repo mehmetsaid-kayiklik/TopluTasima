@@ -136,9 +136,21 @@ class SummaryViewModel(
     }
 
     fun refreshData() {
-        loadedSheet = null
-        loadedComparisonSheet = null
-        loadData()
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMsg = "")
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.syncFromFirestore(fullSync = false)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // sync başarısız, lokal veriyle devam et
+            }
+            loadedSheet = null
+            loadedComparisonSheet = null
+            loadData()
+        }
     }
 
     fun setSelectedInnerTab(tab: Int) {

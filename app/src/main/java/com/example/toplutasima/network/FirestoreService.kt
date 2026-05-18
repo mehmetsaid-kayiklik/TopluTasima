@@ -947,6 +947,7 @@ object FirestoreService {
             }
 
             if (updates.isNotEmpty()) {
+                updates["updatedAt"] = System.currentTimeMillis()
                 doc.reference.update(updates).await()
                 updatedCount++
             }
@@ -1000,6 +1001,7 @@ object FirestoreService {
             }
 
             if (updates.isNotEmpty()) {
+                updates["updatedAt"] = System.currentTimeMillis()
                 doc.reference.update(updates).await()
                 updatedCount++
             }
@@ -1094,17 +1096,19 @@ object FirestoreService {
                 val ym = computeYearMonth(tarih)
                 if (ym.isBlank()) continue
 
-                batch.update(doc.reference, "yearMonth", ym)
+                batch.update(
+                    doc.reference,
+                    mapOf(
+                        "yearMonth" to ym,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                )
                 batchCount++
-                updated++
             }
 
             if (batchCount > 0) {
-                try {
-                    batch.commit().await()
-                } catch (e: Exception) {
-                    Log.e("FirestoreService", "migrateYearMonth batch commit failed", e)
-                }
+                batch.commit().await()
+                updated += batchCount
             }
 
             lastVisible = snapshot.documents[snapshot.size() - 1]
@@ -1131,7 +1135,12 @@ object FirestoreService {
             if (sd.isBlank()) continue
 
             try {
-                doc.reference.update("sortDate", sd).await()
+                doc.reference.update(
+                    mapOf(
+                        "sortDate" to sd,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                ).await()
                 updated++
             } catch (e: Exception) {
                 Log.e("FirestoreService", "migrateSortDate failed for doc: ${doc.id}", e)
@@ -1183,6 +1192,7 @@ object FirestoreService {
             if (!data.containsKey(FIELD_TO_STOP_ID)) updates[FIELD_TO_STOP_ID] = ""
 
             if (updates.isNotEmpty()) {
+                updates["updatedAt"] = System.currentTimeMillis()
                 try {
                     doc.reference.update(updates).await()
                     updated++

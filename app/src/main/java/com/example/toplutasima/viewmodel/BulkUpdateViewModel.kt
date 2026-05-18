@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
+import com.example.toplutasima.TopluTasimaApp
+import com.example.toplutasima.data.repository.TripRepository
 import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.TripResult
@@ -49,6 +51,10 @@ data class BulkUpdateUiState(
 
 class BulkUpdateViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val tripRepository = TripRepository(
+        application,
+        (application as TopluTasimaApp).database.tripDao()
+    )
     private val _uiState = MutableStateFlow(BulkUpdateUiState())
     val uiState: StateFlow<BulkUpdateUiState> = _uiState.asStateFlow()
 
@@ -74,6 +80,12 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun logD(message: String) {
         if (BuildConfig.DEBUG) Log.d(TAG, message)
+    }
+
+    private suspend fun syncLocalTrips() {
+        withContext(Dispatchers.IO) {
+            tripRepository.syncFromFirestore(fullSync = false)
+        }
     }
 
     fun loadPendingRows() {
@@ -193,6 +205,16 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
                 }
             }
 
+            if (!isCancelled) {
+                try {
+                    syncLocalTrips()
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Yerel senkronizasyon hatası: ${e.message}"
+                    )
+                }
+            }
+
             _uiState.value = _uiState.value.copy(
                 phase = BulkUpdatePhase.DONE,
                 currentRowInfo = ""
@@ -299,6 +321,10 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
                         elapsedMs = elapsed,
                         avgMsPerRow = avg
                     )
+                }
+
+                if (!isCancelled) {
+                    syncLocalTrips()
                 }
 
                 _uiState.value = _uiState.value.copy(

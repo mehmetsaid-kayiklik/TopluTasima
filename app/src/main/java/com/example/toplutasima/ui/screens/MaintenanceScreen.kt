@@ -10,11 +10,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.toplutasima.TopluTasimaApp
+import com.example.toplutasima.data.repository.TripRepository
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.RmvFooter
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,8 +34,11 @@ fun MaintenanceScreen(
     val bulkUpdateViewModel: BulkUpdateViewModel = koinViewModel()
 
     val context = LocalContext.current
+    val app = context.applicationContext as TopluTasimaApp
+    val tripRepository = remember(context) {
+        TripRepository(context.applicationContext, app.database.tripDao())
+    }
     val prefs = remember { context.getSharedPreferences("maintenance_prefs", Context.MODE_PRIVATE) }
-    var isYearMonthMigrated by remember { mutableStateOf(prefs.getBoolean("yearMonthMigrated", false)) }
 
     // Dialog state for strip-seconds migration
     var showStripSecondsDialog by remember { mutableStateOf(false) }
@@ -60,10 +66,7 @@ fun MaintenanceScreen(
     var distanceFieldsResult by remember { mutableStateOf("") }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            RmvFooter(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-        }
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
     Column(
         modifier = Modifier
@@ -141,9 +144,13 @@ fun MaintenanceScreen(
                         scope.launch {
                             try {
                                 val count = withContext(Dispatchers.IO) {
-                                    FirestoreService.migrateStripSeconds()
+                                    val updated = FirestoreService.migrateStripSeconds()
+                                    tripRepository.syncFromFirestore(fullSync = true)
+                                    updated
                                 }
                                 stripSecondsResult = S.stripSecondsDone(count, lang)
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 stripSecondsResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                             } finally {
@@ -214,9 +221,13 @@ fun MaintenanceScreen(
                         scope.launch {
                             try {
                                 val (count, total) = withContext(Dispatchers.IO) {
-                                    FirestoreService.migrateYolSuresi()
+                                    val result = FirestoreService.migrateYolSuresi()
+                                    tripRepository.syncFromFirestore(fullSync = true)
+                                    result
                                 }
                                 yolSuresiResult = S.migrateYolSuresiDone(count, total, lang)
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 yolSuresiResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                             } finally {
@@ -236,8 +247,7 @@ fun MaintenanceScreen(
         }
 
         // ── YearMonth Migration Card ──
-        if (!isYearMonthMigrated) {
-            Card(
+        Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -293,11 +303,14 @@ fun MaintenanceScreen(
                         scope.launch {
                             try {
                                 val (count, total) = withContext(Dispatchers.IO) {
-                                    FirestoreService.migrateYearMonth()
+                                    val result = FirestoreService.migrateYearMonth()
+                                    tripRepository.syncFromFirestore(fullSync = true)
+                                    result
                                 }
                                 yearMonthResult = S.migrateYearMonthDone(count, total, lang)
                                 prefs.edit().putBoolean("yearMonthMigrated", true).apply()
-                                isYearMonthMigrated = true
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 yearMonthResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                             } finally {
@@ -314,7 +327,6 @@ fun MaintenanceScreen(
                     }
                 }
             )
-        }
         }
 
         // ── SortDate Migration Card ──
@@ -374,9 +386,13 @@ fun MaintenanceScreen(
                         scope.launch {
                             try {
                                 val (count, total) = withContext(Dispatchers.IO) {
-                                    FirestoreService.migrateSortDate()
+                                    val result = FirestoreService.migrateSortDate()
+                                    tripRepository.syncFromFirestore(fullSync = true)
+                                    result
                                 }
                                 sortDateResult = S.migrateSortDateDone(count, total, lang)
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 sortDateResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                             } finally {
@@ -452,9 +468,13 @@ fun MaintenanceScreen(
                         scope.launch {
                             try {
                                 val (count, total) = withContext(Dispatchers.IO) {
-                                    FirestoreService.migrateDistanceFields()
+                                    val result = FirestoreService.migrateDistanceFields()
+                                    tripRepository.syncFromFirestore(fullSync = true)
+                                    result
                                 }
                                 distanceFieldsResult = S.migrateDistanceFieldsDone(count, total, lang)
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 distanceFieldsResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                             } finally {
@@ -472,12 +492,11 @@ fun MaintenanceScreen(
                 }
             )
         }
-        }
-
         var healthRunning by remember { mutableStateOf(false) }
         var autoFixRunning by remember { mutableStateOf(false) }
         var healthIssues by remember { mutableStateOf<List<com.example.toplutasima.usecase.DataHealthChecker.HealthIssue>?>(null) }
         var healthExpanded by remember { mutableStateOf(false) }
+        var healthError by remember { mutableStateOf("") }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -494,9 +513,18 @@ fun MaintenanceScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        Text(if (healthRunning) S.dataHealthRunning(lang) else "Otomatik düzeltme yapılıyor...", style = MaterialTheme.typography.bodyMedium)
+                        Text(if (healthRunning) S.dataHealthRunning(lang) else "Düzeltmeler uygulanıyor...", style = MaterialTheme.typography.bodyMedium)
                     }
                 } else {
+                    if (healthError.isNotBlank()) {
+                        Text(
+                            healthError,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
                     // Show results if available
                     if (healthIssues != null) {
                         val issues = healthIssues!!
@@ -558,29 +586,36 @@ fun MaintenanceScreen(
                             }
                             
                             Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Bu işlem yalnızca zaman, süre, ay/sıra ve mesafe alanlarını yeniler; yinelenen veya eksik temel alanları raporda bırakır.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Button(
                                 onClick = {
                                     autoFixRunning = true
+                                    healthError = ""
                                     scope.launch {
                                         try {
                                             withContext(Dispatchers.IO) {
                                                 FirestoreService.migrateStripSeconds()
                                                 FirestoreService.migrateYolSuresi()
-                                                if (!isYearMonthMigrated) {
-                                                    FirestoreService.migrateYearMonth()
-                                                    prefs.edit().putBoolean("yearMonthMigrated", true).apply()
-                                                    isYearMonthMigrated = true
-                                                }
+                                                FirestoreService.migrateYearMonth()
                                                 FirestoreService.migrateSortDate()
                                                 FirestoreService.migrateDistanceFields()
+                                                tripRepository.syncFromFirestore(fullSync = true)
                                             }
+                                            prefs.edit().putBoolean("yearMonthMigrated", true).apply()
                                             // Re-run health check
                                             val trips = withContext(Dispatchers.IO) {
                                                 FirestoreService.fetchTrips()
                                             }
                                             healthIssues = com.example.toplutasima.usecase.DataHealthChecker.analyzeTrips(trips)
+                                        } catch (e: CancellationException) {
+                                            throw e
                                         } catch (e: Exception) {
-                                            // Ignore
+                                            healthIssues = null
+                                            healthError = "Düzeltmeler başarısız: ${e.message}"
                                         } finally {
                                             autoFixRunning = false
                                         }
@@ -590,7 +625,7 @@ fun MaintenanceScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                             ) {
-                                Text("✨ Tümünü Otomatik Düzelt", fontWeight = FontWeight.SemiBold)
+                                Text("Düzeltmeleri Çalıştır", fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -599,14 +634,18 @@ fun MaintenanceScreen(
                         onClick = {
                             healthRunning = true
                             healthIssues = null
+                            healthError = ""
                             scope.launch {
                                 try {
                                     val trips = withContext(Dispatchers.IO) {
                                         FirestoreService.fetchTrips()
                                     }
                                     healthIssues = com.example.toplutasima.usecase.DataHealthChecker.analyzeTrips(trips)
+                                } catch (e: CancellationException) {
+                                    throw e
                                 } catch (e: Exception) {
-                                    healthIssues = emptyList()
+                                    healthIssues = null
+                                    healthError = "Veri sağlığı kontrolü başarısız: ${e.message}"
                                 } finally {
                                     healthRunning = false
                                 }
@@ -624,8 +663,9 @@ fun MaintenanceScreen(
 
         BulkUpdateSection(viewModel = bulkUpdateViewModel)
 
+        RmvFooter(modifier = Modifier.padding(vertical = 8.dp))
+
         Spacer(modifier = Modifier.height(32.dp))
     }
     }
-
-
+}

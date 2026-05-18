@@ -110,7 +110,7 @@ fun RecordsScreen(
                 lang = lang,
                 onMonthClick = { viewModel.selectMonth(it) },
                 onTogglePersonal = { onTogglePersonal(true) },
-                onRefresh = { viewModel.loadMonthSummaries() },
+                onRefresh = { viewModel.syncAndReload() },
                 globalSearchLoading = state.globalSearchLoading,
                 globalSearchError = state.globalSearchError,
                 globalSearchResults = state.globalSearchResults,
@@ -147,7 +147,7 @@ fun RecordsScreen(
                 isExporting = state.isExporting,
                 onToggleExportDialog = { viewModel.toggleExportDialog() },
                 onExport = { format -> viewModel.exportMonth(format, context) },
-                onRefresh = { state.selectedMonth?.let { viewModel.selectMonth(it) } }
+                onRefresh = { viewModel.syncAndReload() }
             )
         }
 
@@ -351,73 +351,77 @@ fun MonthListScreen(
             }
         }
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = onRefresh,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        ) {
             when {
                 isLoading && summaries.isEmpty() -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 3.dp
-                    )
-                }
-                errorMsg.isNotBlank() -> {
-                    Card(
-                        modifier = Modifier.align(Alignment.Center).padding(32.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text(
-                            "⚠️ ${errorMsg}",
-                            modifier = Modifier.padding(20.dp),
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            textAlign = TextAlign.Center
+                    Box(Modifier.fillMaxSize()) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 3.dp
                         )
                     }
                 }
+                errorMsg.isNotBlank() -> {
+                    Box(Modifier.fillMaxSize()) {
+                        Card(
+                            modifier = Modifier.align(Alignment.Center).padding(32.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                            "⚠️ ${errorMsg}",
+                                modifier = Modifier.padding(20.dp),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
                 summaries.isEmpty() -> {
-                    Text(
-                        S.noRecords(lang),
-                        modifier = Modifier.align(Alignment.Center),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Box(Modifier.fillMaxSize()) {
+                        Text(
+                            S.noRecords(lang),
+                            modifier = Modifier.align(Alignment.Center),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 else -> {
-                    PullToRefreshBox(
-                        isRefreshing = isLoading,
-                        onRefresh = onRefresh,
-                        modifier = Modifier.fillMaxSize()
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(summaries.size, key = { idx -> summaries[idx].sortKey }) { index ->
-                                val s = summaries[index]
-                                Card(
-                                    onClick = { onMonthClick(s) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                    shape = RoundedCornerShape(12.dp)
+                        items(summaries.size, key = { idx -> summaries[idx].sortKey }) { index ->
+                            val s = summaries[index]
+                            Card(
+                                onClick = { onMonthClick(s) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(
-                                            "${S.monthName(s.monthName, lang)} ${s.year}",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            "${s.count} ${S.tripsCount(lang)}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Text(
+                                        "${S.monthName(s.monthName, lang)} ${s.year}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        "${s.count} ${S.tripsCount(lang)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }

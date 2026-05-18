@@ -3,9 +3,8 @@ package com.example.toplutasima.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -167,8 +166,9 @@ fun SummaryScreen(
                     onRefresh = { viewModel.refreshData() },
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         val typeEntries = listOf(
@@ -182,6 +182,7 @@ fun SummaryScreen(
 
                         if (state.selectedInnerTab == 0) {
                             // HERO CARD
+                            item {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(20.dp),
@@ -217,6 +218,8 @@ fun SummaryScreen(
                             }
 
                             // Araç Türleri
+                            }
+                            item {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
@@ -246,6 +249,8 @@ fun SummaryScreen(
                             }
 
                             // Günlere Göre Sefer
+                            }
+                            item {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
@@ -276,7 +281,9 @@ fun SummaryScreen(
                             }
 
                             // Saat Dilimi Analizi
+                            }
                             if (s.timeSlotStats.isNotEmpty()) {
+                                item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -311,7 +318,9 @@ fun SummaryScreen(
                             }
 
                             // Hatlara Göre Sefer (Top 7)
+                                }
                             if (s.topLines.isNotEmpty()) {
+                                item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -341,7 +350,9 @@ fun SummaryScreen(
                             }
 
                             // Durak Çifti Analizi
+                                }
                             if (s.routePairs.isNotEmpty()) {
+                                item {
                                 var expandedRoutePairKeys by remember(s.routePairs) { mutableStateOf(setOf<String>()) }
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -409,7 +420,9 @@ fun SummaryScreen(
                             }
 
                             // Hava Durumu İstatistikleri
+                                }
                             if (s.weatherCounts.isNotEmpty()) {
+                                item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -451,42 +464,57 @@ fun SummaryScreen(
                                 }
                             }
 
+                                }
+
                             // Toplam Mesafe
                             if (s.totalDistanceKm > 0) {
-                                SummaryCard(S.totalDistance(lang), String.format(java.util.Locale.US, "%.2f km", s.totalDistanceKm))
+                                item {
+                                    SummaryCard(S.totalDistance(lang), String.format(java.util.Locale.US, "%.2f km", s.totalDistanceKm))
+                                }
                             }
 
                             // Kişisel Rekorlar
-                            Text(S.personalRecords(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
-                            SummaryCard(S.recordLongestDay(lang), "${s.recordLongestDay} (${formatMin(s.recordLongestDayMin, lang)})")
-                            SummaryCard(S.recordMostTripsDay(lang), "${s.recordMostTripsDay} (${s.recordMostTripsCount} ${S.tripsCount(lang)})")
-                            SummaryCard(S.recordMostDelayed(lang), "${s.recordMostDelayedLine} (${s.recordMostDelayedLineMin} ${S.minutesShort(lang)})")
-                            SummaryCard(S.recordTotalDelayed(lang), "${s.recordTotalDelayLine} (${s.recordTotalDelayLineMin} ${S.minutesShort(lang)})")
-                            SummaryCard(S.recordFreqLine(lang), s.freqLine)
-                            SummaryCard(S.recordFreqFrom(lang), s.freqFrom)
-                            SummaryCard(S.recordFreqTo(lang), s.freqTo)
+                            item {
+                                Text(S.personalRecords(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+                            }
+                            item { SummaryCard(S.recordLongestDay(lang), "${s.recordLongestDay} (${formatMin(s.recordLongestDayMin, lang)})") }
+                            item { SummaryCard(S.recordMostTripsDay(lang), "${s.recordMostTripsDay} (${s.recordMostTripsCount} ${S.tripsCount(lang)})") }
+                            item { SummaryCard(S.recordMostDelayed(lang), "${s.recordMostDelayedLine} (${s.recordMostDelayedLineMin} ${S.minutesShort(lang)})") }
+                            item { SummaryCard(S.recordTotalDelayed(lang), "${s.recordTotalDelayLine} (${s.recordTotalDelayLineMin} ${S.minutesShort(lang)})") }
+                            item { SummaryCard(S.recordFreqLine(lang), s.freqLine) }
+                            item { SummaryCard(S.recordFreqFrom(lang), s.freqFrom) }
+                            item { SummaryCard(S.recordFreqTo(lang), s.freqTo) }
                             if (s.recordShortestTripMin > 0) {
-                                SummaryCard(S.recordShortestTrip(lang), "${s.recordShortestTrip} (${formatMin(s.recordShortestTripMin, lang)})")
+                                item {
+                                    SummaryCard(S.recordShortestTrip(lang), "${s.recordShortestTrip} (${formatMin(s.recordShortestTripMin, lang)})")
+                                }
                             }
                             if (s.recordLongestTripMin > 0) {
-                                SummaryCard(S.recordLongestTrip(lang), "${s.recordLongestTrip} (${formatMin(s.recordLongestTripMin, lang)})")
+                                item {
+                                    SummaryCard(S.recordLongestTrip(lang), "${s.recordLongestTrip} (${formatMin(s.recordLongestTripMin, lang)})")
+                                }
                             }
                             if (s.recordLongestDistanceKm > 0) {
-                                SummaryCard(S.recordLongestDistance(lang), "${s.recordLongestDistanceTrip} (${String.format(java.util.Locale.US, "%.2f km", s.recordLongestDistanceKm)})")
+                                item {
+                                    SummaryCard(S.recordLongestDistance(lang), "${s.recordLongestDistanceTrip} (${String.format(java.util.Locale.US, "%.2f km", s.recordLongestDistanceKm)})")
+                                }
                             }
 
                             state.reportCards?.let { reportCards ->
                                 if (state.reportSheetName.isNotBlank()) {
-                                    ReportCardsSection(
-                                        reportCards = reportCards,
-                                        reportLabel = displaySheet(state.reportSheetName),
-                                        lang = lang
-                                    )
+                                    item {
+                                        ReportCardsSection(
+                                            reportCards = reportCards,
+                                            reportLabel = displaySheet(state.reportSheetName),
+                                            lang = lang
+                                        )
+                                    }
                                 }
                             }
 
                             // ── Heatmap Calendar ──
                             if (state.heatmapData != null) {
+                                item {
                                 val hm = state.heatmapData!!
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -552,10 +580,12 @@ fun SummaryScreen(
                                 }
                             }
 
+                                }
                             val worstLine = s.lineReliability.minByOrNull { it.punctualityRate }
                             val slowestRoute = s.routePairs.maxByOrNull { it.avgDelay }
                             val busiestSlot = s.timeSlotStats.maxByOrNull { it.trips }
                             if (worstLine != null || slowestRoute != null || busiestSlot != null) {
+                                item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -585,11 +615,13 @@ fun SummaryScreen(
                                         }
                                     }
                                 }
+                                }
                             }
 
                         } else if (state.selectedInnerTab == 1) {
                             // Gecikme Dağılımı
                             if (s.delayDistribution.isNotEmpty()) {
+                                item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -624,7 +656,11 @@ fun SummaryScreen(
                             }
 
                             // Dakiklik oranları
-                            Text(S.punctualityRates(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                }
+                            item {
+                                Text(S.punctualityRates(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            item {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
@@ -656,7 +692,9 @@ fun SummaryScreen(
                             }
 
                             // Hat Güvenilirliği
+                            }
                             if (s.lineReliability.isNotEmpty()) {
+                                item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -689,16 +727,20 @@ fun SummaryScreen(
                                 }
                             }
 
-                            SummaryCard(S.totalPlanned(lang), formatMin(s.totalPlannedMin, lang))
-                            SummaryCard(S.totalActual(lang), formatMin(s.totalActualMin, lang))
-                            SummaryCard(S.totalDelay(lang), "${s.totalDelay} ${S.minutes(lang)}")
-                            SummaryCard(S.avgDelay(lang), String.format(java.util.Locale.US, "%.1f ${S.minutes(lang)}", s.avgDelay))
+                                }
+                            item { SummaryCard(S.totalPlanned(lang), formatMin(s.totalPlannedMin, lang)) }
+                            item { SummaryCard(S.totalActual(lang), formatMin(s.totalActualMin, lang)) }
+                            item { SummaryCard(S.totalDelay(lang), "${s.totalDelay} ${S.minutes(lang)}") }
+                            item { SummaryCard(S.avgDelay(lang), String.format(java.util.Locale.US, "%.1f ${S.minutes(lang)}", s.avgDelay)) }
 
                         } else if (state.selectedInnerTab == 2) {
                             // ── Tab 2: Monthly Comparison ──
-                            Text(S.comparisonTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            item {
+                                Text(S.comparisonTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
 
                             if (state.isComparisonLoading) {
+                                item {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                                     horizontalArrangement = Arrangement.Center,
@@ -708,7 +750,9 @@ fun SummaryScreen(
                                     Spacer(Modifier.width(12.dp))
                                     Text(S.comparisonLoading(lang), style = MaterialTheme.typography.bodyMedium)
                                 }
+                                }
                             } else if (state.comparisonDeltas.isEmpty()) {
+                                item {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(16.dp),
@@ -721,17 +765,21 @@ fun SummaryScreen(
                                         textAlign = TextAlign.Center
                                     )
                                 }
+                                }
                             } else {
                                 // Previous month label
-                                Text(
-                                    "${S.comparisonPrevMonth(lang)}: ${state.previousMonthName}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(8.dp))
+                                item {
+                                    Text(
+                                        "${S.comparisonPrevMonth(lang)}: ${state.previousMonthName}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                item { Spacer(Modifier.height(8.dp)) }
 
                                 // Delta rows
                                 for (delta in state.comparisonDeltas) {
+                                    item {
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(12.dp),
@@ -777,28 +825,31 @@ fun SummaryScreen(
                                             }
                                         }
                                     }
+                                    }
                                 }
                             }
                         }
 
                         // Refresh button
-                        Button(
-                            onClick = { viewModel.refreshData() },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.isLoading,
-                            shape = RoundedCornerShape(14.dp),
-                            contentPadding = PaddingValues(vertical = 14.dp)
-                        ) {
-                            Text(
-                                if (state.isLoading) S.refreshing(lang) else S.refreshData(lang),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
-                            )
+                        item {
+                            Button(
+                                onClick = { viewModel.refreshData() },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !state.isLoading,
+                                shape = RoundedCornerShape(14.dp),
+                                contentPadding = PaddingValues(vertical = 14.dp)
+                            ) {
+                                Text(
+                                    if (state.isLoading) S.refreshing(lang) else S.refreshData(lang),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp
+                                )
+                            }
                         }
 
-                        Spacer(Modifier.height(4.dp))
-                        RmvFooter()
-                        Spacer(Modifier.height(16.dp))
+                        item { Spacer(Modifier.height(4.dp)) }
+                        item { RmvFooter() }
+                        item { Spacer(Modifier.height(16.dp)) }
                     }
                 }
             }

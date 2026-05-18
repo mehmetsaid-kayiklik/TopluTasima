@@ -24,6 +24,7 @@ import com.example.toplutasima.TopluTasimaApp
 import com.example.toplutasima.data.repository.TripRepository
 import com.example.toplutasima.data.repository.toEntity
 import com.example.toplutasima.data.repository.toMap
+import kotlinx.coroutines.CancellationException
 
 data class RecordRowUiModel(
     val id: String,
@@ -115,6 +116,39 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMsg = "Hata: ${e.message}"
+                )
+            }
+        }
+    }
+
+    public fun syncAndReload() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMsg = "")
+            try {
+                withContext(Dispatchers.IO) {
+                    tripRepository.syncFromFirestore(fullSync = false)
+                }
+                val updatedSummaries = tripRepository.getMonthSummaries()
+                val currentMonth = _uiState.value.selectedMonth
+                if (currentMonth != null) {
+                    val monthStillExists = updatedSummaries.any { it.sortKey == currentMonth.sortKey }
+                    if (monthStillExists) {
+                        selectMonth(currentMonth)
+                    } else {
+                        clearSelectedMonth()
+                    }
+                }
+                _uiState.value = _uiState.value.copy(
+                    monthSummaries = updatedSummaries,
+                    isLoading = false,
+                    saveMsg = "✅ Senkronize edildi"
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    saveMsg = "⚠️ Firebase sync başarısız"
                 )
             }
         }
