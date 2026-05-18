@@ -26,6 +26,8 @@ import com.example.toplutasima.data.TransitAutoActualTimeMode
 import com.example.toplutasima.data.TransitReminderType
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.worker.TransitActionWorker
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.DetectedActivity
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -99,8 +101,14 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_ALIGHTING_LNG = "alightingLng"
         private const val EXTRA_FROM_NOTIFICATION_ACTION = "fromNotificationAction"
         private const val PROXIMITY_WATCH_REQUEST_CODE = 9012
+        private const val ACTIVITY_RECOGNITION_REQUEST_CODE = 9013
+        private const val ACTION_ACTIVITY_RECOGNITION_UPDATE =
+            "com.example.toplutasima.transit.ACTIVITY_RECOGNITION_UPDATE"
         private const val PROXIMITY_CHECK_INTERVAL_MS = 30_000L
         private const val ALIGHTING_PROXIMITY_METERS = 100.0
+        private const val CLOSE_ALIGHTING_PROXIMITY_METERS = 50.0
+        private const val VALID_WALKING_CONFIDENCE = 70
+        private const val CLOSE_AUTO_ALIGHTING_MAX_SPEED_MPS = 1.0
         private const val AUTO_ALIGHTING_MAX_SPEED_MPS = 2.0
         private val REMINDER_VIBRATION_PATTERN = longArrayOf(0L, 350L, 150L, 350L)
 
@@ -123,6 +131,10 @@ class TransitTripForegroundService : Service() {
 
         private val _activeSegmentIndex = MutableStateFlow(0)
         val activeSegmentIndex: StateFlow<Int> = _activeSegmentIndex
+
+        internal val _currentActivityConfidence =
+            MutableStateFlow(DetectedActivity.UNKNOWN to 0)
+        val currentActivityConfidence: StateFlow<Pair<Int, Int>> = _currentActivityConfidence
 
         fun createTransitActionPendingIntent(
             context: Context,
@@ -165,6 +177,8 @@ class TransitTripForegroundService : Service() {
     private var alightingLat: Double = Double.NaN
     private var alightingLng: Double = Double.NaN
     private var proximityJob: Job? = null
+    private var isCurrentlyWalking = false
+    private var consecutiveWalkingLoops = 0
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /** LOCATION seçiliyken GPS/izin sorunu nedeniyle TIME'a düşüldü mü? */
@@ -172,6 +186,7 @@ class TransitTripForegroundService : Service() {
 
     private lateinit var statePrefs: android.content.SharedPreferences
     private val fusedClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
+    private val activityRecognitionClient by lazy { ActivityRecognition.getClient(this) }
 
     private fun logD(message: String) {
         if (BuildConfig.DEBUG) Log.d(TAG, message)
@@ -819,6 +834,9 @@ class TransitTripForegroundService : Service() {
     private fun cancelProximityWatchAlarm() {
         proximityJob?.cancel()
         proximityJob = null
+        isCurrentlyWalking = false
+        consecutiveWalkingLoops = 0
+        removeActivityUpdates()
         try {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val pi = PendingIntent.getForegroundService(
@@ -851,6 +869,46 @@ class TransitTripForegroundService : Service() {
         startProximityWatch()
     }
 
+    private fun activityRecognitionPendingIntent(): PendingIntent =
+        PendingIntent.getBroadcast(
+            this,
+            ACTIVITY_RECOGNITION_REQUEST_CODE,
+            Intent(this, ActivityRecognitionReceiver::class.java).apply {
+                action = ACTION_ACTIVITY_RECOGNITION_UPDATE
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
+
+    @SuppressLint("MissingPermission")
+    private fun requestActivityUpdates() {
+        _currentActivityConfidence.value = DetectedActivity.UNKNOWN to 0
+        if (!hasActivityRecognitionPermission()) {
+            logD("Activity Recognition izni yok, GPS fallback aktif kalacak")
+            return
+        }
+
+        activityRecognitionClient
+            .requestActivityUpdates(PROXIMITY_CHECK_INTERVAL_MS, activityRecognitionPendingIntent())
+            .addOnSuccessListener { logD("Activity Recognition updates baslatildi") }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Activity Recognition updates baslatilamadi: ${e.message}")
+            }
+    }
+
+    private fun removeActivityUpdates() {
+        _currentActivityConfidence.value = DetectedActivity.UNKNOWN to 0
+        try {
+            activityRecognitionClient
+                .removeActivityUpdates(activityRecognitionPendingIntent())
+                .addOnSuccessListener { logD("Activity Recognition updates durduruldu") }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "Activity Recognition updates durdurulamadi: ${e.message}")
+                }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Activity Recognition updates durdurulamadi: ${e.message}")
+        }
+    }
+
     private fun fallbackToTimeReminder(reason: String) {
         Log.w(TAG, "LOCATION hatirlatma TIME fallback'e dustu: $reason")
         usingTimeFallback = true
@@ -866,6 +924,9 @@ class TransitTripForegroundService : Service() {
         if (!hasLocationPermission()) return
         logD("Proximity watch başlıyor → hedef: ($alightingLat, $alightingLng)")
         proximityJob?.cancel()
+        isCurrentlyWalking = false
+        consecutiveWalkingLoops = 0
+        requestActivityUpdates()
         proximityJob = serviceScope.launch {
             var consecutiveNullCount = 0
             var previousLocation: Location? = null
@@ -874,6 +935,8 @@ class TransitTripForegroundService : Service() {
                 try {
                     val loc = getCurrentLocationSuspend()
                     if (loc == null) {
+                        isCurrentlyWalking = false
+                        consecutiveWalkingLoops = 0
                         consecutiveNullCount++
                         Log.w(TAG, "GPS alınamadı ($consecutiveNullCount/3)")
                         if (consecutiveNullCount >= 3) {
@@ -883,6 +946,7 @@ class TransitTripForegroundService : Service() {
                             startForegroundForCurrentState(useLocationType = false)
                             scheduleReminder()
                             updateTrackingNotification()
+                            removeActivityUpdates()
                             break
                         }
                         continue
@@ -894,19 +958,45 @@ class TransitTripForegroundService : Service() {
                     logD("Proximity check: ${dist.toInt()}m speed=${speedMps?.let { "%.1f".format(it) } ?: "unknown"}m/s")
                     if (dist <= ALIGHTING_PROXIMITY_METERS) {
                         if (PrefsManager.transitAutoActualTimeMode == TransitAutoActualTimeMode.AUTO) {
-                            if (isSlowEnoughForAutoAlighting(speedMps)) {
-                                handleAutoAlighting()
-                                break
+                            if (dist <= CLOSE_ALIGHTING_PROXIMITY_METERS) {
+                                consecutiveWalkingLoops = 0
+                                if (speedMps != null && speedMps <= CLOSE_AUTO_ALIGHTING_MAX_SPEED_MPS) {
+                                    handleAutoAlighting()
+                                    break
+                                }
+                                logD("Auto Indim bekliyor: 50m icinde ama hareket hizi hala yuksek")
+                            } else {
+                                isCurrentlyWalking = isValidWalkingActivity(_currentActivityConfidence.value)
+                                if (isCurrentlyWalking) {
+                                    consecutiveWalkingLoops++
+                                    if (consecutiveWalkingLoops >= 2) {
+                                        handleAutoAlighting()
+                                        break
+                                    }
+                                    logD("Auto Indim yurume teyidi bekliyor: $consecutiveWalkingLoops/2")
+                                } else {
+                                    consecutiveWalkingLoops = 0
+                                    if (isSlowEnoughForAutoAlighting(speedMps)) {
+                                        handleAutoAlighting()
+                                        break
+                                    }
+                                    logD("Auto Indim bekliyor: hedefe yakin ama hareket hizi hala yuksek")
+                                }
                             }
-                            logD("Auto Indim bekliyor: hedefe yakin ama hareket hizi hala yuksek")
                         } else {
                             showReminderNotification()
                             cancelReminder()   // Fallback AlarmManager'ı da iptal et
                             startForegroundForCurrentState(useLocationType = false)
+                            removeActivityUpdates()
                             break
                         }
+                    } else {
+                        isCurrentlyWalking = false
+                        consecutiveWalkingLoops = 0
                     }
                 } catch (e: Exception) {
+                    isCurrentlyWalking = false
+                    consecutiveWalkingLoops = 0
                     Log.w(TAG, "Proximity check hatası: ${e.message}")
                 }
             }
@@ -969,6 +1059,20 @@ class TransitTripForegroundService : Service() {
                 PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
+
+    private fun hasActivityRecognitionPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) ==
+                PackageManager.PERMISSION_GRANTED
+
+    private fun isValidWalkingActivity(activityConfidence: Pair<Int, Int>): Boolean {
+        val (activityType, confidence) = activityConfidence
+        return activityType in setOf(
+            DetectedActivity.WALKING,
+            DetectedActivity.ON_FOOT,
+            DetectedActivity.RUNNING
+        ) && confidence >= VALID_WALKING_CONFIDENCE
+    }
 
     /** Haversine formülü ile iki koordinat arasındaki mesafeyi metre cinsinden hesaplar. */
     private fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {

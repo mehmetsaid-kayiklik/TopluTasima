@@ -1448,6 +1448,22 @@ class RmvLogViewModel(
             !hasNotificationPermission()
     }
 
+    private fun hasActivityRecognitionPermission(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            ctx().checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    fun needsActivityRecognitionPermission(): Boolean {
+        return android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q &&
+            PrefsManager.transitNotificationsEnabled &&
+            PrefsManager.transitAutoActualTimeMode == com.example.toplutasima.data.TransitAutoActualTimeMode.AUTO &&
+            !hasActivityRecognitionPermission()
+    }
+
     /**
      * Kayıt başarılı olduktan sonra bildirim servisini başlatır.
      */

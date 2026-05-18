@@ -933,6 +933,12 @@ fun RMVLogScreen(
                 viewModel.saveToSheets()
             }
 
+            val activityRecognitionPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) {
+                viewModel.recordBindim()
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1041,7 +1047,13 @@ fun RMVLogScreen(
                         )
                         Button(
                             enabled = state.segmentIds.isNotEmpty(),
-                            onClick = { viewModel.recordBindim() },
+                            onClick = {
+                                if (viewModel.needsActivityRecognitionPermission()) {
+                                    activityRecognitionPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                                } else {
+                                    viewModel.recordBindim()
+                                }
+                            },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
                         ) { Text(S.boarded(lang)) }
