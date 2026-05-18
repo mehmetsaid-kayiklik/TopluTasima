@@ -16,6 +16,8 @@ import org.koin.core.context.startKoin
 class TopluTasimaApp : Application() {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    val database by lazy { com.example.toplutasima.data.local.AppDatabase.getDatabase(this) }
+
     override fun onCreate() {
         super.onCreate()
         AppErrorReporter.install(this)
@@ -29,6 +31,15 @@ class TopluTasimaApp : Application() {
         if (OfflineQueueStore.pendingCount(this) > 0) {
             OfflineQueueStore.scheduleSync(this)
         }
+
+        val syncRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.toplutasima.worker.PeriodicSyncWorker>(6, java.util.concurrent.TimeUnit.HOURS)
+            .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+            .build()
+        androidx.work.WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "PeriodicFirestoreSync",
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            syncRequest
+        )
 
         startKoin {
             androidContext(this@TopluTasimaApp)

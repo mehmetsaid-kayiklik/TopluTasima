@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.ksp)
 }
 
 // Priority 1: Always close the FileInputStream to avoid "too many open files" in CI.
@@ -60,11 +61,6 @@ android {
         // credentials never ship inside the binary.
         buildConfigField("String", "RMV_ACCESS_ID", "\"${requiredLocalProperty("RMV_ACCESS_ID").escapeBuildConfigString()}\"")
         buildConfigField("String", "ORS_API_KEY",   "\"${requiredLocalProperty("ORS_API_KEY").escapeBuildConfigString()}\"")
-        buildConfigField(
-            "String",
-            "MAP_STYLE_URL",
-            "\"${(optionalLocalProperty("MAP_STYLE_URL") ?: "https://demotiles.maplibre.org/style.json").escapeBuildConfigString()}\""
-        )
     }
 
     buildTypes {
@@ -140,6 +136,10 @@ dependencies {
     implementation(libs.play.services.location)
     // WorkManager
     implementation(libs.work.runtime.ktx)
-    // MapLibre
-    implementation(libs.maplibre.android)
+    // Security
+    implementation(libs.security.crypto)
+    // Room
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 }

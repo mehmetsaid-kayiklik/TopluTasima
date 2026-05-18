@@ -37,4 +37,20 @@ class ApiErrorsTest {
         assertTrue(error.bodyPreview.length <= 240)
         assertTrue(error.message!!.contains("HTTP 500"))
     }
+
+    @Test
+    fun `403 explains access rejection`() {
+        val error = ApiErrors.fromHttpStatus(
+            provider = "RMV",
+            endpoint = "trip",
+            requestId = "req-3",
+            statusCode = 403,
+            body = "forbidden"
+        )
+
+        assertEquals(403, error.statusCode)
+        assertTrue(error.isAccessDenied)
+        assertTrue(error.message!!.contains("HTTP 403"))
+        assertTrue(error.message!!.contains("erisimi reddetti"))
+    }
 }

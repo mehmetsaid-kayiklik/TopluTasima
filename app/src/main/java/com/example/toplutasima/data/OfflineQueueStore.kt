@@ -1,6 +1,8 @@
 package com.example.toplutasima.data
 
 import android.content.Context
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
@@ -132,8 +134,27 @@ object OfflineQueueStore {
         prefs(context).edit().putString(KEY_ACTIONS, json.encodeToString(actions)).apply()
     }
 
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs(context: Context): android.content.SharedPreferences {
+        val appContext = context.applicationContext
+        return try {
+            val masterKey = MasterKey.Builder(appContext)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                appContext,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: java.security.GeneralSecurityException) {
+            android.util.Log.e("OfflineQueueStore", "EncryptedSharedPreferences fail, fallback to plain", e)
+            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        } catch (e: java.io.IOException) {
+            android.util.Log.e("OfflineQueueStore", "EncryptedSharedPreferences io fail, fallback to plain", e)
+            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
+    }
 
     private fun String.toAnyMap(): Map<String, Any?> {
         val obj = JSONObject(this)

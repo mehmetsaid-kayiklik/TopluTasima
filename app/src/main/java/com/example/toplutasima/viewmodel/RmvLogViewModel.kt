@@ -629,6 +629,8 @@ class RmvLogViewModel(
             segmentIds = emptyList(),
             selectedSegmentIndex = 0,
             isEditingTimes = false,
+            customBindimTime = "",
+            customIndimTime = "",
             status = S.statusFetchingPlan(lang())
         )
         viewModelScope.launch {
@@ -806,6 +808,13 @@ class RmvLogViewModel(
                         val not = s.segmentNote[idx] ?: ""
                         val ok = repository.saveSegment(id, s.date, seg, hava, otur, bilet, not)
                         if (!ok) throw Exception(S.errorSaveFailed(lang()))
+                        if (idx == s.selectedSegmentIndex && (s.customBindimTime.isNotBlank() || s.customIndimTime.isNotBlank())) {
+                            repository.updateActual(
+                                id,
+                                s.customBindimTime.takeIf { it.isNotBlank() }?.let { RmvApiService.formatTimeDigits(it) },
+                                s.customIndimTime.takeIf { it.isNotBlank() }?.let { RmvApiService.formatTimeDigits(it) }
+                            )
+                        }
                         id
                     }
                     val firstId = ids.firstOrNull().orEmpty()
@@ -952,14 +961,18 @@ class RmvLogViewModel(
         val mesafe = record["mesafe"]?.toString() ?: ""
         val durakSayisi = record["durakSayisi"]?.toString() ?: ""
 
-        val distanceKm = mesafe.replace(" km", "").replace(",", ".").toDoubleOrNull() ?: 0.0
+        val distanceKm = FirestoreService.orsDistanceKm(record) ?: FirestoreService.parseDistanceKm(mesafe) ?: 0.0
         val stopCount = durakSayisi.toIntOrNull() ?: 0
 
         val segment = com.example.toplutasima.model.Segment(
             typeTr = tur, line = hat, direction = yon,
             fromStop = binisDuragi, toStop = inisDuragi,
             dep = planlananBinis, arr = planlananInis,
-            distanceKm = distanceKm, stopCount = stopCount
+            distanceKm = distanceKm,
+            stopCount = stopCount,
+            journeyRef = record[FirestoreService.FIELD_JOURNEY_REF]?.toString().orEmpty(),
+            fromStopId = record[FirestoreService.FIELD_FROM_STOP_ID]?.toString().orEmpty(),
+            toStopId = record[FirestoreService.FIELD_TO_STOP_ID]?.toString().orEmpty()
         )
 
         val trip = com.example.toplutasima.model.TripResult(
@@ -1240,12 +1253,14 @@ class RmvLogViewModel(
                         seg.copy(
                             fromStop = newStopName, dep = newTime.ifBlank { seg.dep },
                             distanceKm = newDistanceKm, stopCount = newStopCount,
+                            fromStopId = "",
                             stopFromIdx = currentFromIdx
                         )
                     else
                         seg.copy(
                             toStop = newStopName, arr = newTime.ifBlank { seg.arr },
                             distanceKm = newDistanceKm, stopCount = newStopCount,
+                            toStopId = "",
                             stopToIdx = currentToIdx
                         )
                     val newSegs = trip.segments.toMutableList()
@@ -1381,7 +1396,8 @@ class RmvLogViewModel(
                         actDep.ifBlank { null }, actArr.ifBlank { null }
                     )
 
-                    val updateMap = mapOf(
+                    val mesafeText = if (distanceKm > 0) String.format(Locale.US, "%.2f km", distanceKm) else "Bilinmiyor"
+                    val updateMap = linkedMapOf<String, Any>(
                         "tur" to m.typeTr,
                         "hat" to m.line,
                         "yon" to m.direction,
@@ -1394,13 +1410,14 @@ class RmvLogViewModel(
                         "gecikme" to gecikme,
                         "planlananYolSuresi" to planlananSure,
                         "gercekYolSuresi" to gercekSure,
-                        "mesafe" to if (distanceKm > 0) String.format(Locale.US, "%.2f km", distanceKm) else "Bilinmiyor",
+                        "mesafe" to mesafeText,
                         "durakSayisi" to if (stCount > 0) stCount.toString() else "Bilinmiyor",
                         "havaDurumu" to m.weather,
                         "oturabildimMi" to SeatingStatus.fromBoolean(m.oturabildim).key,
                         "biletKontrolü" to TicketStatus.fromBoolean(m.biletKontrolu).key,
                         "not" to m.note
                     )
+                    updateMap.putAll(FirestoreService.calculatedDistanceFields(distanceKm, resetRmvDistance = true))
                     val ok = repository.updateExistingRecord(docId, updateMap)
                     if (!ok) throw Exception(S.errorSaveFailed(lang()))
                     _uiState.value = _uiState.value.copy(status = S.statusSaved(lang()))

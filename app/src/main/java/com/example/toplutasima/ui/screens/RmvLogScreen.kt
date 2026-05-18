@@ -28,6 +28,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -574,11 +575,26 @@ fun RMVLogScreen(
                                         }
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            dep.time,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        if (dep.cancelled) {
+                                            Text(
+                                                "İptal",
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        } else {
+                                            Text(
+                                                dep.displayTime,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (dep.hasRealtime) SuccessGreen else MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        if (!dep.cancelled && dep.hasRealtime) {
+                                            Text(
+                                                if (dep.isDelayed) "Plan ${dep.time}" else "Canlı",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                         if (dep.track.isNotBlank()) {
                                             Text(
                                                 "Gl. ${dep.track}",
@@ -656,12 +672,20 @@ fun RMVLogScreen(
                                         color = WarningAmber.copy(alpha = 0.16f)
                                     ) {
                                         Column(modifier = Modifier.fillMaxWidth().padding(10.dp)) {
-                                            Text(alert.title, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                            Text(
+                                                alert.title,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                             if (alert.detail.isNotBlank() && alert.detail != alert.title) {
                                                 Text(
-                                                    alert.detail.take(180),
+                                                    alert.detail.take(220),
                                                     style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 3,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                             }
                                         }

@@ -19,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun MaintenanceScreen(
@@ -27,6 +29,10 @@ fun MaintenanceScreen(
     val lang = LocaleManager.currentLanguage
     val scope = rememberCoroutineScope()
     val bulkUpdateViewModel: BulkUpdateViewModel = koinViewModel()
+
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("maintenance_prefs", Context.MODE_PRIVATE) }
+    var isYearMonthMigrated by remember { mutableStateOf(prefs.getBoolean("yearMonthMigrated", false)) }
 
     // Dialog state for strip-seconds migration
     var showStripSecondsDialog by remember { mutableStateOf(false) }
@@ -48,8 +54,23 @@ fun MaintenanceScreen(
     var sortDateRunning by remember { mutableStateOf(false) }
     var sortDateResult by remember { mutableStateOf("") }
 
+    // Dialog state for distance fields migration
+    var showDistanceFieldsDialog by remember { mutableStateOf(false) }
+    var distanceFieldsRunning by remember { mutableStateOf(false) }
+    var distanceFieldsResult by remember { mutableStateOf("") }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            RmvFooter(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        }
+    ) { innerPadding ->
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ── Header with back button ──
@@ -215,7 +236,8 @@ fun MaintenanceScreen(
         }
 
         // ── YearMonth Migration Card ──
-        Card(
+        if (!isYearMonthMigrated) {
+            Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -274,6 +296,8 @@ fun MaintenanceScreen(
                                     FirestoreService.migrateYearMonth()
                                 }
                                 yearMonthResult = S.migrateYearMonthDone(count, total, lang)
+                                prefs.edit().putBoolean("yearMonthMigrated", true).apply()
+                                isYearMonthMigrated = true
                             } catch (e: Exception) {
                                 yearMonthResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                             } finally {
@@ -290,6 +314,7 @@ fun MaintenanceScreen(
                     }
                 }
             )
+        }
         }
 
         // ── SortDate Migration Card ──
@@ -371,6 +396,84 @@ fun MaintenanceScreen(
         }
 
         // ── Data Health Card ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("📏  Mesafe Alanları Güncelleme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Eski kayıtlardaki mevcut mesafeyi ORS alanlarına kopyalar ve RMV mesafe alanlarını bekliyor olarak hazırlar. API çağrısı yapmaz.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (distanceFieldsRunning) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Text(S.migrateDistanceFieldsRunning(lang), style = MaterialTheme.typography.bodyMedium)
+                    }
+                } else {
+                    if (distanceFieldsResult.isNotBlank()) {
+                        Text(
+                            distanceFieldsResult,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (distanceFieldsResult.contains("✅")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Button(
+                        onClick = { showDistanceFieldsDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(vertical = 14.dp)
+                    ) {
+                        Text(S.migrateDistanceFieldsButton(lang), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+
+        if (showDistanceFieldsDialog) {
+            AlertDialog(
+                onDismissRequest = { showDistanceFieldsDialog = false },
+                title = { Text(S.migrateDistanceFieldsConfirmTitle(lang)) },
+                text = { Text(S.migrateDistanceFieldsConfirmText(lang)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDistanceFieldsDialog = false
+                        distanceFieldsRunning = true
+                        distanceFieldsResult = ""
+                        scope.launch {
+                            try {
+                                val (count, total) = withContext(Dispatchers.IO) {
+                                    FirestoreService.migrateDistanceFields()
+                                }
+                                distanceFieldsResult = S.migrateDistanceFieldsDone(count, total, lang)
+                            } catch (e: Exception) {
+                                distanceFieldsResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
+                            } finally {
+                                distanceFieldsRunning = false
+                            }
+                        }
+                    }) {
+                        Text(S.yes(lang))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDistanceFieldsDialog = false }) {
+                        Text(S.cancel(lang))
+                    }
+                }
+            )
+        }
+        }
+
         var healthRunning by remember { mutableStateOf(false) }
         var autoFixRunning by remember { mutableStateOf(false) }
         var healthIssues by remember { mutableStateOf<List<com.example.toplutasima.usecase.DataHealthChecker.HealthIssue>?>(null) }
@@ -463,8 +566,13 @@ fun MaintenanceScreen(
                                             withContext(Dispatchers.IO) {
                                                 FirestoreService.migrateStripSeconds()
                                                 FirestoreService.migrateYolSuresi()
-                                                FirestoreService.migrateYearMonth()
+                                                if (!isYearMonthMigrated) {
+                                                    FirestoreService.migrateYearMonth()
+                                                    prefs.edit().putBoolean("yearMonthMigrated", true).apply()
+                                                    isYearMonthMigrated = true
+                                                }
                                                 FirestoreService.migrateSortDate()
+                                                FirestoreService.migrateDistanceFields()
                                             }
                                             // Re-run health check
                                             val trips = withContext(Dispatchers.IO) {
@@ -516,9 +624,8 @@ fun MaintenanceScreen(
 
         BulkUpdateSection(viewModel = bulkUpdateViewModel)
 
-        RmvFooter(modifier = Modifier.padding(vertical = 8.dp))
         Spacer(modifier = Modifier.height(32.dp))
     }
-}
+    }
 
 

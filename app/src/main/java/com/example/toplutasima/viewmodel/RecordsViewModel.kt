@@ -9,6 +9,7 @@ import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.usecase.RecordFilterUtils
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,11 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import kotlinx.coroutines.flow.firstOrNull
+import com.example.toplutasima.TopluTasimaApp
+import com.example.toplutasima.data.repository.TripRepository
+import com.example.toplutasima.data.repository.toEntity
+import com.example.toplutasima.data.repository.toMap
 
 data class RecordRowUiModel(
     val id: String,
@@ -42,6 +48,9 @@ data class RecordRowUiModel(
     val note: String,
     val ticketControl: String,
     val distance: String,
+    val orsDistance: String,
+    val rmvDistance: String,
+    val rmvDistanceStatus: String,
     val stopCount: String,
     val originalRecord: Map<String, Any>
 )
@@ -82,7 +91,12 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
     private val _uiState = MutableStateFlow(RecordsUiState())
     val uiState: StateFlow<RecordsUiState> = _uiState.asStateFlow()
 
+    private val tripRepository: TripRepository
+
     init {
+        val app = application as TopluTasimaApp
+        tripRepository = TripRepository(application, app.database.tripDao())
+
         loadMonthSummaries()
     }
 
@@ -91,7 +105,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(isLoading = true, errorMsg = "", saveMsg = "")
             try {
                 val summaries = withContext(Dispatchers.IO) {
-                    FirestoreService.fetchMonthSummaries()
+                    tripRepository.getMonthSummaries()
                 }
                 _uiState.value = _uiState.value.copy(
                     monthSummaries = summaries,
@@ -121,7 +135,9 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             )
             try {
                 val groups = withContext(Dispatchers.IO) {
-                    val rawTrips = FirestoreService.fetchTripsForMonth(month.monthName, month.year)
+                    val yearMonth = "${month.sortKey.substring(0, 4)}-${month.sortKey.substring(4, 6)}"
+                    val rawEntities = tripRepository.getTripsForMonth(yearMonth).firstOrNull() ?: emptyList()
+                    val rawTrips = rawEntities.map { it.toMap() }
 
                     val withDateTime = rawTrips.mapNotNull { rec ->
                         val tarih = rec["tarih"]?.toString() ?: return@mapNotNull null
@@ -151,7 +167,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                         val dayName = rec["gun"]?.toString() ?: ""
                         dateToDayName[date] = dayName
 
-                        val rowModel = mapFirestoreRecordToRow(rec)
+                        val rowModel = mapFirestoreRecordToRow(rec as Map<String, Any>)
 
                         if (!dayGroupsMap.containsKey(date)) {
                             dayGroupsMap[date] = mutableListOf()
@@ -226,11 +242,10 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                 globalSearchResults = emptyList()
             )
             try {
-                val raw = withContext(Dispatchers.IO) { FirestoreService.fetchTrips() }
-                val filter = RecordFilterState(searchQuery = q)
+                val rawEntities = withContext(Dispatchers.IO) { tripRepository.searchTrips(q) }
+                val raw = rawEntities.map { it.toMap() }
                 val rows = raw
-                    .map { mapFirestoreRecordToRow(it) }
-                    .filter { RecordFilterUtils.matchesFilter(it, filter) }
+                    .map { mapFirestoreRecordToRow(it as Map<String, Any>) }
                 _uiState.value = _uiState.value.copy(
                     globalSearchLoading = false,
                     globalSearchResults = rows
@@ -247,14 +262,15 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
     fun openLatestTransitRecord() {
         viewModelScope.launch {
             try {
-                val rec = withContext(Dispatchers.IO) { FirestoreService.fetchTrips().firstOrNull() }
+                val recEntity = withContext(Dispatchers.IO) { tripRepository.getAllTrips().firstOrNull()?.firstOrNull() }
+                val rec = recEntity?.toMap()
                 val lang = com.example.toplutasima.ui.LocaleManager.currentLanguage
                 if (rec == null) {
                     _uiState.value = _uiState.value.copy(
                         saveMsg = com.example.toplutasima.ui.S.noRecords(lang)
                     )
                 } else {
-                    setEditingRecord(rec)
+                    setEditingRecord(rec as Map<String, Any>)
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(saveMsg = "❌ ${e.message}")
@@ -268,7 +284,9 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
         val turValue = rec["tur"]?.toString() ?: ""
         val typeDisplay = "${typeEmoji(turValue)} $turValue"
         return RecordRowUiModel(
-            id = rec["firestoreDocId"]?.toString() ?: java.util.UUID.randomUUID().toString(),
+            id = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: rec["id"]?.toString()
+                ?: java.util.UUID.randomUUID().toString(),
             date = date,
             day = dayName,
             type = turValue,
@@ -290,6 +308,10 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             note = rec["not"]?.toString() ?: "",
             ticketControl = rec["biletKontrolü"]?.toString() ?: "",
             distance = rec["mesafe"]?.toString() ?: "",
+            orsDistance = rec[FirestoreService.FIELD_ORS_DISTANCE_TEXT]?.toString()?.takeIf { it.isNotBlank() }
+                ?: rec["mesafe"]?.toString().orEmpty(),
+            rmvDistance = rec[FirestoreService.FIELD_RMV_DISTANCE_TEXT]?.toString().orEmpty(),
+            rmvDistanceStatus = rec[FirestoreService.FIELD_RMV_DISTANCE_STATUS]?.toString().orEmpty(),
             stopCount = rec["durakSayisi"]?.toString() ?: "",
             originalRecord = rec
         )
@@ -319,7 +341,17 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(isSaving = true, saveMsg = "")
             try {
                 val ok = withContext(Dispatchers.IO) {
-                    FirestoreService.updateTrip(docId, fields)
+                    val existingEntity = tripRepository.getTripByFirestoreDocId(docId)
+                        ?: tripRepository.getTripById(docId)
+                    if (existingEntity != null) {
+                        val mergedMap = existingEntity.toMap().toMutableMap()
+                        mergedMap.putAll(fields)
+                        mergedMap["firestoreDocId"] = existingEntity.firestoreDocId?.takeIf { it.isNotBlank() } ?: docId
+                        tripRepository.saveTrip(mergedMap.toEntity())
+                        true
+                    } else {
+                        false
+                    }
                 }
                 val currentMonth = _uiState.value.selectedMonth
                 _uiState.value = _uiState.value.copy(
@@ -345,7 +377,8 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(isSaving = true, saveMsg = "")
             try {
                 val ok = withContext(Dispatchers.IO) {
-                    FirestoreService.deleteTrip(docId)
+                    tripRepository.deleteTrip(docId)
+                    true
                 }
                 val currentMonth = _uiState.value.selectedMonth
                 _uiState.value = _uiState.value.copy(
@@ -369,7 +402,6 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
     fun toggleFilterPanel() {
         _uiState.value = _uiState.value.copy(isFilterPanelOpen = !_uiState.value.isFilterPanelOpen)
     }
-
     fun updateFilter(newFilter: RecordFilterState) {
         val filtered = RecordFilterUtils.filterDayGroups(_uiState.value.selectedMonthTrips, newFilter)
         _uiState.value = _uiState.value.copy(

@@ -17,12 +17,12 @@ class RmvEndpointAvailabilityTest {
 
     @Test
     fun `starts unknown and can be marked supported`() {
-        assertEquals(EndpointSupportState.UNKNOWN, RmvEndpointAvailability.state("reachability"))
+        assertEquals(EndpointSupportState.UNKNOWN, RmvEndpointAvailability.state("himsearch"))
 
-        RmvEndpointAvailability.markSupported("reachability")
+        RmvEndpointAvailability.markSupported("himsearch")
 
-        assertEquals(EndpointSupportState.SUPPORTED, RmvEndpointAvailability.state("reachability"))
-        assertFalse(RmvEndpointAvailability.isUnavailable("reachability"))
+        assertEquals(EndpointSupportState.SUPPORTED, RmvEndpointAvailability.state("himsearch"))
+        assertFalse(RmvEndpointAvailability.isUnavailable("himsearch"))
     }
 
     @Test

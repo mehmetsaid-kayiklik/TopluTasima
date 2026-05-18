@@ -18,6 +18,8 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.TransitAutoActualTimeMode
@@ -177,7 +179,7 @@ class TransitTripForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        statePrefs = getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
+        statePrefs = getEncryptedStatePrefs()
         createNotificationChannels()
     }
 
@@ -334,6 +336,27 @@ class TransitTripForegroundService : Service() {
 
     // ── State Persist / Restore ────────────────────────────────────────
 
+    private fun getEncryptedStatePrefs(): android.content.SharedPreferences {
+        return try {
+            val masterKey = MasterKey.Builder(this)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                this,
+                PREFS_STATE_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: java.security.GeneralSecurityException) {
+            Log.e(TAG, "EncryptedSharedPreferences fail, fallback to plain", e)
+            getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "EncryptedSharedPreferences io fail, fallback to plain", e)
+            getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
+        }
+    }
+
     /**
      * Tüm segment state'ini SharedPreferences'a yazar.
      * Restart (intent == null) veya alarm ile tetiklenmeden önce state kayıplarına karşı.
@@ -357,7 +380,7 @@ class TransitTripForegroundService : Service() {
     /** Restart sonrası state'i geri yükler. */
     private fun restoreServiceState(): Boolean {
         if (!::statePrefs.isInitialized)
-            statePrefs = getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
+            statePrefs = getEncryptedStatePrefs()
         if (!statePrefs.contains(PKEY_TRIP_ID)) {
             Log.w(TAG, "Kayitli transit servis state'i bulunamadi")
             return false
@@ -616,14 +639,15 @@ class TransitTripForegroundService : Service() {
             val arrTime = LocalTime.parse(paddedTime, DateTimeFormatter.ofPattern("HH:mm"))
             val offsetMinutes = PrefsManager.reminderOffsetMinutes.toLong()
             val reminderTime = arrTime.plusMinutes(offsetMinutes)
-            val now = LocalTime.now()
+            val zoneId = java.time.ZoneId.systemDefault()
+            val now = java.time.ZonedDateTime.now(zoneId)
+            var targetZdt = now.with(reminderTime)
 
-            var delayMs = now.until(reminderTime, ChronoUnit.MILLIS)
-            // Eğer geçmişte kaldıysa (gece yarısı geçişi veya zaten geçmiş)
-            if (delayMs < 0) {
+            // Eğer hedef zaman geçmişte kaldıysa (gece yarısı geçişi veya zaten geçmiş)
+            if (targetZdt.isBefore(now)) {
                 // Eğer hedef saat 12 saatten daha fazla geride görünüyorsa, yarına aittir (gece yarısı geçişi)
-                if (delayMs < -12 * 60 * 60 * 1000L) {
-                    delayMs += 24 * 60 * 60 * 1000L
+                if (java.time.temporal.ChronoUnit.HOURS.between(targetZdt, now) > 12) {
+                    targetZdt = targetZdt.plusDays(1)
                 } else {
                     // Sadece birkaç saat/dakika geçmişteyse, gerçekten geçmiş demektir
                     showReminderNotification()
@@ -631,13 +655,14 @@ class TransitTripForegroundService : Service() {
                 }
             }
 
+            val triggerAt = targetZdt.toInstant().toEpochMilli()
+            val delayMs = triggerAt - now.toInstant().toEpochMilli()
+
             // Eğer çok kısa (5 saniye altı) ise hemen göster
             if (delayMs < 5_000L) {
                 showReminderNotification()
                 return
             }
-
-            val triggerAt = System.currentTimeMillis() + delayMs
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val intent = Intent(this, TransitNotificationReceiver::class.java).apply {
                 action = TransitNotificationReceiver.ACTION_REMINDER_TRIGGER

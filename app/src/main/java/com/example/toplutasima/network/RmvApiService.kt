@@ -6,7 +6,6 @@ import com.example.toplutasima.model.Departure
 import com.example.toplutasima.model.JourneyMatchCandidate
 import com.example.toplutasima.model.LocationOption
 import com.example.toplutasima.model.LocationOptionKind
-import com.example.toplutasima.model.ReachabilityResult
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.TransitAlert
@@ -281,17 +280,7 @@ object RmvApiService {
                 val json = rmvCall(endpoint) { requestId ->
                     rmvApi.getTransitAlerts(line = line, date = date.ifBlank { null }, requestId = requestId)
                 }
-                val himAlerts = RmvFeatureParsers.parseTransitAlerts(json, line)
-                if (himAlerts.isNotEmpty() || RmvEndpointAvailability.isUnavailable("trafficmessages/datex2")) {
-                    himAlerts
-                } else {
-                    val trafficJson = runCatching {
-                        rmvCall("trafficmessages/datex2") { requestId ->
-                            rmvApi.getTrafficMessages(line = line, requestId = requestId)
-                        }
-                    }.getOrNull()
-                    himAlerts + (trafficJson?.let { RmvFeatureParsers.parseTransitAlerts(it, line) } ?: emptyList())
-                }
+                RmvFeatureParsers.parseTransitAlerts(json, line)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiRequestException) {
@@ -338,29 +327,6 @@ object RmvApiService {
             emptyList()
         }
     }
-
-    suspend fun fetchReachability(lat: Double, lon: Double, minutes: Int): ReachabilityResult =
-        withContext(Dispatchers.IO) {
-            val endpoint = "reachability"
-            if (RmvEndpointAvailability.isUnavailable(endpoint)) {
-                return@withContext ReachabilityResult(lat, lon, minutes, emptyList(), supported = false, message = "Reachability endpoint desteklenmiyor")
-            }
-            try {
-                val json = rmvCall(endpoint) { requestId ->
-                    rmvApi.getReachability(lat = lat, lon = lon, durationMinutes = minutes, requestId = requestId)
-                }
-                RmvFeatureParsers.parseReachability(json, lat, lon, minutes)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: ApiRequestException) {
-                logE("RmvApi", "fetchReachability error: ${e.message}", e)
-                RmvEndpointAvailability.markFromException(endpoint, e)
-                ReachabilityResult(lat, lon, minutes, emptyList(), supported = false, message = e.message.orEmpty())
-            } catch (e: Exception) {
-                logE("RmvApi", "fetchReachability error: ${e.message}", e)
-                ReachabilityResult(lat, lon, minutes, emptyList(), supported = false, message = e.message.orEmpty())
-            }
-        }
 
     // ── 2. Departure board — Retrofit ─────────────────────────────────────────
 
@@ -448,14 +414,23 @@ object RmvApiService {
 
         for (depEl in depArray) {
             val dep = depEl.jsonObject
-            val depTime = dep["time"]?.jsonPrimitive?.content?.take(5).orEmpty()
+            val depTime = normalizeRmvClock(dep["time"]?.jsonPrimitive?.content.orEmpty())
+            val realtime = normalizeRmvClock(
+                dep["rtTime"]?.jsonPrimitive?.content
+                    ?: dep["realTime"]?.jsonPrimitive?.content
+                    ?: dep["estimatedTime"]?.jsonPrimitive?.content
+                    ?: ""
+            )
+            val realtimeDate = dep["rtDate"]?.jsonPrimitive?.content?.trim().orEmpty()
+            val cancelled = dep["cancelled"]?.jsonPrimitive?.content?.equals("true", ignoreCase = true) == true
             val direction = dep["direction"]?.jsonPrimitive?.content?.trim().orEmpty()
             val track = dep["track"]?.jsonPrimitive?.content?.trim().orEmpty()
+            val displayTime = realtime.ifBlank { depTime }
 
             // Skip departures before user's entered time
-            if (minTime != null && depTime.length >= 5) {
+            if (minTime != null && displayTime.length >= 5) {
                 try {
-                    if (LocalTime.parse(depTime.take(5)).isBefore(minTime)) continue
+                    if (LocalTime.parse(displayTime.take(5)).isBefore(minTime)) continue
                 } catch (_: Exception) {}
             }
 
@@ -503,11 +478,34 @@ object RmvApiService {
             val journeyDetailRef = dep["JourneyDetailRef"]?.jsonObject?.get("ref")
                 ?.jsonPrimitive?.content.orEmpty()
 
-            departures += Departure(cleanLine, direction, depTime, track, typeTr, journeyDetailRef)
+            departures += Departure(
+                cleanLine,
+                direction,
+                depTime,
+                track,
+                typeTr,
+                journeyDetailRef,
+                realtime,
+                realtimeDate,
+                cancelled
+            )
         }
 
-        departures.forEach { logD("DEBUG_BOARD", "time: ${it.time}, ref: ${it.journeyDetailRef}") }
+        departures.forEach { logD("DEBUG_BOARD", "time: ${it.time}, rt=${it.realtime}, ref: ${it.journeyDetailRef}") }
         departures
+    }
+
+    private fun normalizeRmvClock(raw: String): String {
+        val value = raw.trim()
+        if (value.isBlank()) return ""
+        val colonTime = Regex("\\d{1,2}:\\d{2}").find(value)?.value
+        if (colonTime != null) {
+            val parts = colonTime.split(":")
+            return "${parts[0].padStart(2, '0')}:${parts[1]}"
+        }
+        val digits = value.filter { it.isDigit() }
+        if (digits.length >= 4) return "${digits.take(2)}:${digits.drop(2).take(2)}"
+        return value.take(5)
     }
 
     // ── 3. Journey stops — OkHttp (suspend) ──────────────────────────────────
@@ -1006,6 +1004,8 @@ object RmvApiService {
             val arr = dest?.optString("time", "")?.take(5).orEmpty()
             val fromStop = origin?.optString("name", "").orEmpty()
             val toStop = dest?.optString("name", "").orEmpty()
+            val fromStopId = origin?.optString("id", "").orEmpty()
+            val toStopId = dest?.optString("id", "").orEmpty()
             val rawLine = extractPublicLineCode(leg)
             if (rawLine.isBlank()) continue
             val direction = extractDirection(leg)
@@ -1014,7 +1014,12 @@ object RmvApiService {
             if (overallDep.isBlank() && dep.isNotBlank()) overallDep = dep
             if (arr.isNotBlank()) overallArr = arr
             val journeyRef = leg.optJSONObject("JourneyDetailRef")?.optString("ref", "").orEmpty()
-            segments += Segment(typeTr, line, direction, fromStop, toStop, dep, arr, journeyRef = journeyRef)
+            segments += Segment(
+                typeTr, line, direction, fromStop, toStop, dep, arr,
+                journeyRef = journeyRef,
+                fromStopId = fromStopId,
+                toStopId = toStopId
+            )
         }
         if (segments.isEmpty()) return null
         return TripResult(segments, overallDep, overallArr, diffMinutesFlexible(overallDep, overallArr))

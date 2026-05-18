@@ -13,7 +13,6 @@ object S {
     fun navRecord(l: AppLanguage) = m(l, "Kayıt", "Aufnahme", "Record")
     fun navSummary(l: AppLanguage) = m(l, "Özet", "Übersicht", "Summary")
     fun navSettings(l: AppLanguage) = m(l, "Ayarlar", "Einstellungen", "Settings")
-    fun navReachability(l: AppLanguage) = m(l, "Harita", "Karte", "Map")
 
 
     // ── RmvLogScreen — Header ──
@@ -138,6 +137,15 @@ object S {
     fun tabTripsRecords(l: AppLanguage) = m(l, "🚌  Yolculuk & Rekorlar", "🚌  Fahrten & Rekorde", "🚌  Trips & Records")
     fun tabDurationDelay(l: AppLanguage) = m(l, "⏱️  Süre & Gecikme", "⏱️  Dauer & Verspätung", "⏱️  Duration & Delay")
     fun smartInsights(l: AppLanguage) = m(l, "Akıllı Özet", "Kurzübersicht", "Smart Insights")
+    fun reportCards(l: AppLanguage) = m(l, "Rapor Kartları", "Berichtskarten", "Report Cards")
+    fun monthlyReport(l: AppLanguage) = m(l, "Aylık Rapor", "Monatsbericht", "Monthly Report")
+    fun weeklyReport(l: AppLanguage) = m(l, "Haftalık Rapor", "Wochenbericht", "Weekly Report")
+    fun reportTopLine(l: AppLanguage) = m(l, "En Çok Hat", "Top-Linie", "Top Line")
+    fun reportBusiestDay(l: AppLanguage) = m(l, "En Yoğun Gün", "Stärkster Tag", "Busiest Day")
+    fun reportWeekTrips(l: AppLanguage) = m(l, "Haftalık Sefer", "Wochenfahrten", "Weekly Trips")
+    fun reportActiveDays(l: AppLanguage) = m(l, "Aktif Gün", "Aktive Tage", "Active Days")
+    fun reportDayNumber(day: Int, l: AppLanguage) = m(l, "$day. gün", "$day. Tag", "Day $day")
+    fun reportWeekRange(startDay: Int, endDay: Int, l: AppLanguage) = m(l, "$startDay-$endDay. gün", "$startDay.-$endDay. Tag", "Days $startDay-$endDay")
     fun insightWeakLine(l: AppLanguage) = m(l, "En riskli hat", "Riskanteste Linie", "Riskiest line")
     fun insightBusySlot(l: AppLanguage) = m(l, "En yoğun saat", "Häufigster Zeitraum", "Busiest slot")
     fun insightSlowRoute(l: AppLanguage) = m(l, "En geciken rota", "Verspätungsreichste Route", "Most delayed route")
@@ -351,6 +359,13 @@ object S {
     fun migrateSortDateConfirmText(l: AppLanguage) = m(l, "Eski kayıtlara 'YYYY-MM-DD' formatında sortDate alanı eklenecek. Bu alan sayesinde kayıtlar kronolojik sırada listelenir. Bu işlem bir kez yapılması yeterlidir. Devam?", "Alte Einträge erhalten ein 'YYYY-MM-DD' sortDate-Feld für korrekte chronologische Sortierung. Nur einmal erforderlich. Fortfahren?", "Old records will receive a 'YYYY-MM-DD' sortDate field for correct chronological ordering. Only needs to be done once. Continue?")
     fun migrateSortDateRunning(l: AppLanguage) = m(l, "Sıralama alanı ekleniyor...", "Sortierfeld wird hinzugefügt...", "Adding sort date field...")
     fun migrateSortDateDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
+
+    // ── Distance Fields Migration ──
+    fun migrateDistanceFieldsButton(l: AppLanguage) = m(l, "📏 Eski Kayıtları ORS/RMV Alanlarıyla Güncelle", "📏 Alte Einträge mit ORS/RMV-Feldern aktualisieren", "📏 Backfill ORS/RMV Fields on Old Records")
+    fun migrateDistanceFieldsConfirmTitle(l: AppLanguage) = m(l, "Mesafe Alanlarını Ekle", "Distanzfelder hinzufügen", "Add Distance Fields")
+    fun migrateDistanceFieldsConfirmText(l: AppLanguage) = m(l, "Eski kayıtlardaki mevcut mesafe değeri ORS alanlarına kopyalanacak, RMV mesafe alanları da 'bekliyor' olarak hazırlanacak. Devam etmek istiyor musunuz?", "Die vorhandene Distanz alter Einträge wird in ORS-Felder kopiert, RMV-Distanzfelder werden als wartend vorbereitet. Fortfahren?", "Existing distance values on old records will be copied into ORS fields, and RMV distance fields will be prepared as pending. Continue?")
+    fun migrateDistanceFieldsRunning(l: AppLanguage) = m(l, "Mesafe alanları hazırlanıyor...", "Distanzfelder werden vorbereitet...", "Preparing distance fields...")
+    fun migrateDistanceFieldsDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
 
     // ── Favorites ──
     fun favoritesTitle(l: AppLanguage) = m(l, "⭐ Favori Duraklar", "⭐ Lieblingshaltestellen", "⭐ Favorite Stops")

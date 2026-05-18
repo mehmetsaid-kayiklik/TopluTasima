@@ -1,17 +1,16 @@
 package com.example.toplutasima.di
 
-import android.app.Application
 import com.example.toplutasima.location.NearbyStopsManager
 import com.example.toplutasima.repository.PersonalTripRepository
 import com.example.toplutasima.repository.TripRepository
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
-import com.example.toplutasima.viewmodel.ReachabilityViewModel
 import com.example.toplutasima.viewmodel.RecordsViewModel
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.SettingsViewModel
 import com.example.toplutasima.viewmodel.SummaryViewModel
+import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
@@ -37,11 +36,10 @@ val appModule = module {
     single { NearbyStopsManager(androidContext(), get()) }
 
     // ── ViewModels ──────────────────────────────────────────────────────────
-    viewModel { RmvLogViewModel(get<Application>(), get(), get(), get()) }
-    viewModel { SummaryViewModel(get<Application>(), get()) }
-    viewModel { RecordsViewModel(get<Application>()) }
-    viewModel { BulkUpdateViewModel(get<Application>()) }
-    viewModel { SettingsViewModel(get<Application>()) }
-    viewModel { ReachabilityViewModel(get<Application>(), get(), get()) }
-    viewModel { PersonalTripViewModel(get<Application>(), get()) }  // Kişisel Araç
+    viewModel { RmvLogViewModel(androidApplication(), get(), get(), get()) }
+    viewModel { SummaryViewModel(androidApplication()) }
+    viewModel { RecordsViewModel(androidApplication()) }
+    viewModel { BulkUpdateViewModel(androidApplication()) }
+    viewModel { SettingsViewModel(androidApplication()) }
+    viewModel { PersonalTripViewModel(androidApplication(), get()) }  // Kişisel Araç
 }

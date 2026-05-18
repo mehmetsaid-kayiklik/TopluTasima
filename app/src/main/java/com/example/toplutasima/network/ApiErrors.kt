@@ -19,6 +19,7 @@ class ApiRequestException(
     cause
 ) {
     val isRateLimited: Boolean get() = statusCode == 429
+    val isAccessDenied: Boolean get() = statusCode == 403
     val isEndpointUnsupported: Boolean get() = statusCode in setOf(404, 405, 501)
 
     companion object {
@@ -36,6 +37,8 @@ class ApiRequestException(
             return when {
                 statusCode == 429 ->
                     "$provider kotasi asildi.$retrySuffix ($requestSuffix)"
+                statusCode == 403 ->
+                    "$provider erisimi reddetti: HTTP 403. API anahtari eksik/gecersiz veya bu endpoint icin yetki yok. ($endpoint, $requestSuffix)"
                 statusCode != null ->
                     "$provider istegi basarisiz oldu: HTTP $statusCode ($endpoint, $requestSuffix)"
                 cause is UnknownHostException ->

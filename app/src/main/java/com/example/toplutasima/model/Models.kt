@@ -58,30 +58,21 @@ data class JourneyMatchCandidate(
     val requestId: String = ""
 )
 
-data class ReachabilityPoint(
-    val name: String,
-    val lat: Double,
-    val lon: Double,
-    val minutes: Int
-)
-
-data class ReachabilityResult(
-    val originLat: Double,
-    val originLon: Double,
-    val minutes: Int,
-    val points: List<ReachabilityPoint>,
-    val supported: Boolean,
-    val message: String = ""
-)
-
 data class Departure(
     val line: String,
     val direction: String,
     val time: String,
     val track: String,
     val typeTr: String,
-    val journeyDetailRef: String = ""
-)
+    val journeyDetailRef: String = "",
+    val realtime: String = "",
+    val realtimeDate: String = "",
+    val cancelled: Boolean = false
+) {
+    val displayTime: String get() = realtime.ifBlank { time }
+    val hasRealtime: Boolean get() = realtime.isNotBlank()
+    val isDelayed: Boolean get() = realtime.isNotBlank() && realtime != time
+}
 
 data class Segment(
     val typeTr: String,
@@ -96,6 +87,8 @@ data class Segment(
     val stopNames: List<String> = emptyList(),
     val stopTimes: List<String> = emptyList(),
     val journeyRef: String = "",
+    val fromStopId: String = "",
+    val toStopId: String = "",
     // stopNames içinde biniş/iniş pozisyonları (tüm hat listesinde)
     val stopFromIdx: Int = 0,
     val stopToIdx: Int = -1,
@@ -166,6 +159,8 @@ data class SummaryData(
     val recordTotalDelayLineMin: Int = 0,
     val weatherCounts: Map<String, Int> = emptyMap(),
     val totalDistanceKm: Double = 0.0,
+    val totalOrsDistanceKm: Double = 0.0,
+    val totalRmvDistanceKm: Double = 0.0,
     val topLines: Map<String, Int> = emptyMap(),
     val timeSlotStats: List<TimeSlotStats> = emptyList(),
     val lineReliability: List<LineReliabilityStats> = emptyList(),

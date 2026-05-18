@@ -6,4 +6,5 @@ plugins {
     // without re-specifying the version (follows the "declare once, apply per module" pattern).
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.google.services)      apply false
+    alias(libs.plugins.ksp)                  apply false
 }

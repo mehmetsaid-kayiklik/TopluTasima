@@ -20,13 +20,26 @@ private val json = Json {
 
 private val rmvHttpClient = OkHttpClient.Builder()
     .addInterceptor { chain ->
-        val request = chain.request().newBuilder()
-            .header("Authorization", "Bearer ${BuildConfig.RMV_ACCESS_ID}")
-            .header("Accept", "application/json")
-            .build()
-        chain.proceed(request)
+        chain.proceed(chain.request().withRmvAccessId(BuildConfig.RMV_ACCESS_ID))
     }
     .build()
+
+internal fun okhttp3.Request.withRmvAccessId(accessId: String): okhttp3.Request {
+    val cleanAccessId = accessId.trim()
+    val hasAccessId = url.queryParameter("accessId").isNullOrBlank().not()
+    val authenticatedUrl = when {
+        cleanAccessId.isBlank() || hasAccessId -> url
+        else -> url.newBuilder()
+            .setQueryParameter("accessId", cleanAccessId)
+            .build()
+    }
+
+    return newBuilder()
+        .url(authenticatedUrl)
+        .removeHeader("Authorization")
+        .header("Accept", "application/json")
+        .build()
+}
 
 internal val rmvRetrofit: Retrofit = Retrofit.Builder()
     .baseUrl("https://www.rmv.de/hapi/")
@@ -120,15 +133,6 @@ interface RmvApi {
         @Query("requestId") requestId: String? = null
     ): JsonObject
 
-    @GET("reachability")
-    suspend fun getReachability(
-        @Query("originCoordLat") lat: Double,
-        @Query("originCoordLong") lon: Double,
-        @Query("duration") durationMinutes: Int,
-        @Query("maxNo") maxNo: Int = 80,
-        @Query("format") format: String = "json",
-        @Query("requestId") requestId: String? = null
-    ): JsonObject
 }
 
 val rmvApi: RmvApi = rmvRetrofit.create(RmvApi::class.java)

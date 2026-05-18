@@ -4,19 +4,24 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.model.SummaryData
-import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.TopluTasimaApp
+import com.example.toplutasima.data.repository.TripRepository
+import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.HeatmapData
 import com.example.toplutasima.usecase.HeatmapUtils
 import com.example.toplutasima.usecase.MonthComparisonUtils
 import com.example.toplutasima.usecase.MonthDelta
+import com.example.toplutasima.usecase.ReportCardUtils
+import com.example.toplutasima.usecase.TravelReportCards
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.firstOrNull
 
 private const val ALL_SHEET = "Tümü"
 
@@ -34,13 +39,18 @@ data class SummaryUiState(
     val isComparisonLoading: Boolean = false,
     val previousMonthName: String = "",
     // ── Heatmap state ──
-    val heatmapData: HeatmapData? = null
+    val heatmapData: HeatmapData? = null,
+    val reportCards: TravelReportCards? = null,
+    val reportSheetName: String = ""
 )
 
 class SummaryViewModel(
-    application: Application,
-    private val repository: TripRepository
+    application: Application
 ) : AndroidViewModel(application) {
+    private val repository: TripRepository = TripRepository(
+        application,
+        (application as TopluTasimaApp).database.tripDao()
+    )
     private val _uiState = MutableStateFlow(SummaryUiState())
     val uiState: StateFlow<SummaryUiState> = _uiState.asStateFlow()
 
@@ -76,27 +86,36 @@ class SummaryViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMsg = "")
             try {
                 val (data, names) = withContext(Dispatchers.IO) {
-                    repository.fetchSummary(targetSheet)
+                    repository.getSummaryStats(targetSheet)
                 }
                 loadedSheet = targetSheet
 
-                // Build heatmap — specific month or latest month for "Tümü"
-                val heatmapSheet = if (targetSheet != ALL_SHEET) {
+                // Build report cards from the selected month, or the latest month for "Tümü".
+                val reportSheet = if (targetSheet != ALL_SHEET) {
                     targetSheet
                 } else {
-                    // Use the latest month in the list
                     names.lastOrNull()
                 }
-                val heatmap = if (heatmapSheet != null) {
-                    buildHeatmapForSheet(heatmapSheet)
+                val heatmap = if (reportSheet != null) {
+                    buildHeatmapForSheet(reportSheet)
                 } else null
+                val reportSummary = when {
+                    reportSheet == null -> null
+                    reportSheet == targetSheet -> data
+                    else -> withContext(Dispatchers.IO) {
+                        repository.getSummaryStats(reportSheet).first
+                    }
+                }
+                val reportCards = reportSummary?.let { ReportCardUtils.build(it, heatmap) }
 
                 _uiState.value = _uiState.value.copy(
                     summary = data,
                     sheetNames = listOf(ALL_SHEET) + names,
                     selectedSheet = targetSheet,
                     isLoading = false,
-                    heatmapData = heatmap
+                    heatmapData = heatmap,
+                    reportCards = reportCards,
+                    reportSheetName = reportSheet.orEmpty()
                 )
 
                 // Auto-reload comparison if user is on tab 2
@@ -143,7 +162,7 @@ class SummaryViewModel(
             _uiState.value = _uiState.value.copy(isComparisonLoading = true)
             try {
                 val (prevData, _) = withContext(Dispatchers.IO) {
-                    repository.fetchSummary(prevKey)
+                    repository.getSummaryStats(prevKey)
                 }
                 loadedComparisonSheet = currentSheet
                 // Use fresh state to get the current summary (not stale capture)
@@ -175,7 +194,9 @@ class SummaryViewModel(
             val month = monthNames[parts[0]] ?: return null
             val year = parts[1].toIntOrNull() ?: return null
             val trips = withContext(Dispatchers.IO) {
-                com.example.toplutasima.network.FirestoreService.fetchTripsForMonth(parts[0], year.toString())
+                val monthStr = String.format(java.util.Locale.US, "%02d", month)
+                val yearMonth = "$year-$monthStr"
+                repository.getTripsForMonth(yearMonth).firstOrNull()?.map { it.toMap() as Map<String, Any> } ?: emptyList()
             }
             HeatmapUtils.buildHeatmapData(trips, year, month)
         } catch (_: Exception) {

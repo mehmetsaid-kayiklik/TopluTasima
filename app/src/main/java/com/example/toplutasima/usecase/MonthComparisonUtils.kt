@@ -1,3 +1,4 @@
+
 package com.example.toplutasima.usecase
 
 import com.example.toplutasima.model.SummaryData

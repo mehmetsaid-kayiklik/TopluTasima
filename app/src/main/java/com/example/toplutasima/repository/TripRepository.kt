@@ -2,10 +2,12 @@ package com.example.toplutasima.repository
 
 import android.content.Context
 import com.example.toplutasima.data.OfflineQueueStore
+import com.example.toplutasima.data.local.AppDatabase
+import com.example.toplutasima.data.repository.toEntity
+import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.model.Departure
 import com.example.toplutasima.model.JourneyMatchCandidate
 import com.example.toplutasima.model.LocationOption
-import com.example.toplutasima.model.ReachabilityResult
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.StopOption
@@ -18,9 +20,11 @@ import com.example.toplutasima.network.RmvApiService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Locale
+import java.time.LocalDate
 
 class TripRepository(private val appContext: Context? = null) {
+
+    private fun getTripDao() = appContext?.let { AppDatabase.getDatabase(it).tripDao() }
 
     suspend fun searchStops(input: String, max: Int = 3): List<StopOption> =
         RmvApiService.searchStopOptions(input, max)
@@ -46,11 +50,7 @@ class TripRepository(private val appContext: Context? = null) {
     suspend fun matchJourneyTrack(points: List<Pair<Double, Double>>, date: String, time: String): List<JourneyMatchCandidate> =
         RmvApiService.matchJourneyTrack(points, date, time)
 
-    suspend fun fetchReachability(lat: Double, lon: Double, minutes: Int): ReachabilityResult =
-        RmvApiService.fetchReachability(lat, lon, minutes)
 
-    suspend fun fetchSummary(sheetName: String = "Tümü"): Pair<SummaryData, List<String>> =
-        withContext(Dispatchers.IO) { FirestoreService.fetchSummary(sheetName) }
 
     suspend fun saveSegment(
         id: String,
@@ -62,8 +62,14 @@ class TripRepository(private val appContext: Context? = null) {
         note: String
     ): Boolean = withContext(Dispatchers.IO) {
         val data = buildSegmentData(id, date, seg, havaDurumu, oturabildim, biletKontrolu, note)
+        val tripDao = getTripDao()
+        tripDao?.upsertAll(listOf(data.toEntity()))
         try {
-            FirestoreService.saveTrip(data)
+            val firestoreDocId = FirestoreService.saveTrip(data)
+            if (firestoreDocId.isNotBlank()) {
+                data["firestoreDocId"] = firestoreDocId
+                tripDao?.upsertAll(listOf(data.toEntity()))
+            }
             true
         } catch (e: CancellationException) {
             throw e
@@ -78,6 +84,24 @@ class TripRepository(private val appContext: Context? = null) {
 
     suspend fun updateActual(id: String, actualDep: String?, actualArr: String?): Boolean =
         withContext(Dispatchers.IO) {
+            val tripDao = getTripDao()
+            if (tripDao != null) {
+                val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+                if (existing != null) {
+                    if (!actualDep.isNullOrBlank()) existing["gercekBinis"] = actualDep
+                    if (!actualArr.isNullOrBlank()) existing["gercekInis"] = actualArr
+                    if (!actualDep.isNullOrBlank()) {
+                        val planlananBinis = existing["planlananBinis"]?.toString()
+                        existing["gecikme"] = FirestoreService.computeGecikme(planlananBinis, actualDep)
+                    }
+                    val finalGercekBinis = actualDep ?: existing["gercekBinis"]?.toString()
+                    val finalGercekInis = actualArr ?: existing["gercekInis"]?.toString()
+                    if (!finalGercekBinis.isNullOrBlank() && !finalGercekInis.isNullOrBlank()) {
+                        existing["gercekYolSuresi"] = FirestoreService.computeYolSuresi(finalGercekBinis, finalGercekInis)
+                    }
+                    tripDao.upsertAll(listOf(existing.toEntity()))
+                }
+            }
             try {
                 FirestoreService.updateActual(id, actualDep, actualArr)
             } catch (e: CancellationException) {
@@ -93,6 +117,25 @@ class TripRepository(private val appContext: Context? = null) {
 
     suspend fun clearActual(id: String, clearDep: Boolean, clearArr: Boolean): Boolean =
         withContext(Dispatchers.IO) {
+            val tripDao = getTripDao()
+            if (tripDao != null) {
+                val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+                if (existing != null) {
+                    if (clearDep) {
+                        existing["gercekBinis"] = ""
+                        existing["gecikme"] = 0
+                    }
+                    if (clearArr) existing["gercekInis"] = ""
+                    val finalGercekBinis = if (clearDep) "" else existing["gercekBinis"]?.toString()
+                    val finalGercekInis = if (clearArr) "" else existing["gercekInis"]?.toString()
+                    existing["gercekYolSuresi"] = if (!finalGercekBinis.isNullOrBlank() && !finalGercekInis.isNullOrBlank()) {
+                        FirestoreService.computeYolSuresi(finalGercekBinis, finalGercekInis)
+                    } else {
+                        ""
+                    }
+                    tripDao.upsertAll(listOf(existing.toEntity()))
+                }
+            }
             try {
                 FirestoreService.clearActual(id, clearDep, clearArr)
             } catch (e: CancellationException) {
@@ -125,11 +168,48 @@ class TripRepository(private val appContext: Context? = null) {
         mesafe: String? = null,
         durakSayisi: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
+        val tripDao = getTripDao()
+        if (tripDao != null) {
+            val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+            if (existing != null) {
+                if (!binisDuragi.isNullOrBlank()) {
+                    existing["binisDuragi"] = binisDuragi
+                    existing[FirestoreService.FIELD_FROM_STOP_ID] = ""
+                }
+                if (!binisTime.isNullOrBlank()) existing["planlananBinis"] = binisTime
+                if (!inisDuragi.isNullOrBlank()) {
+                    existing["inisDuragi"] = inisDuragi
+                    existing[FirestoreService.FIELD_TO_STOP_ID] = ""
+                }
+                if (!inisTime.isNullOrBlank()) existing["planlananInis"] = inisTime
+                if (mesafe != null) {
+                    existing["mesafe"] = mesafe
+                    val distanceKm = FirestoreService.parseDistanceKm(mesafe) ?: 0.0
+                    existing.putAll(FirestoreService.calculatedDistanceFields(distanceKm, resetRmvDistance = true))
+                }
+                if (durakSayisi != null) existing["durakSayisi"] = durakSayisi
+
+                if (binisTime != null || inisTime != null) {
+                    val finalBinis = binisTime ?: existing["planlananBinis"]?.toString()
+                    val finalInis = inisTime ?: existing["planlananInis"]?.toString()
+                    existing["planlananYolSuresi"] = FirestoreService.computeYolSuresi(finalBinis, finalInis)
+                }
+                tripDao.upsertAll(listOf(existing.toEntity()))
+            }
+        }
         FirestoreService.updateStops(id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi)
     }
 
     suspend fun updateExistingRecord(id: String, fields: Map<String, Any>): Boolean =
         withContext(Dispatchers.IO) {
+            val tripDao = getTripDao()
+            if (tripDao != null) {
+                val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+                if (existing != null) {
+                    existing.putAll(fields)
+                    tripDao.upsertAll(listOf(existing.toEntity()))
+                }
+            }
             try {
                 FirestoreService.updateExistingRecord(id, fields)
             } catch (e: CancellationException) {
@@ -172,10 +252,16 @@ class TripRepository(private val appContext: Context? = null) {
         data["gercekYolSuresi"] = ""
         data["not"] = note
         data["biletKontrolü"] = TicketStatus.fromBoolean(biletKontrolu).key
-        data["mesafe"] = if (seg.distanceKm > 0) String.format(Locale.US, "%.2f km", seg.distanceKm) else ""
+        val mesafeText = FirestoreService.formatDistanceKm(seg.distanceKm)
+        data["mesafe"] = mesafeText
+        data.putAll(FirestoreService.calculatedDistanceFields(seg.distanceKm, resetRmvDistance = true))
+        data[FirestoreService.FIELD_JOURNEY_REF] = seg.journeyRef
+        data[FirestoreService.FIELD_FROM_STOP_ID] = seg.fromStopId
+        data[FirestoreService.FIELD_TO_STOP_ID] = seg.toStopId
         data["durakSayisi"] = if (seg.stopCount > 0) seg.stopCount.toString() else ""
         data["id"] = id
         data["yearMonth"] = FirestoreService.computeYearMonth(date)
+        data["sortDate"] = FirestoreService.computeSortDate(date).ifBlank { LocalDate.now().toString() }
         return data
     }
 }

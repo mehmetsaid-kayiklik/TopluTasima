@@ -272,7 +272,17 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
 
                     try {
                         val ok = withContext(Dispatchers.IO) {
-                            com.example.toplutasima.network.FirestoreService.updateTrip(docId, mapOf("mesafe" to "", "durakSayisi" to ""))
+                            val fields = linkedMapOf<String, Any?>(
+                                "mesafe" to "",
+                                "durakSayisi" to ""
+                            )
+                            fields.putAll(
+                                com.example.toplutasima.network.FirestoreService.calculatedDistanceFields(
+                                    0.0,
+                                    resetRmvDistance = true
+                                )
+                            )
+                            com.example.toplutasima.network.FirestoreService.updateTrip(docId, fields)
                         }
                         if (ok) success++ else fail++
                     } catch (e: Exception) {
@@ -431,7 +441,17 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
         // 6) Write back to Firebase
         val mesafeStr = if (distanceKm > 0) String.format(Locale.US, "%.2f km", distanceKm) else ""
         val stopCountStr = if (stopCount > 0) stopCount.toString() else ""
-        val ok = com.example.toplutasima.network.FirestoreService.updateTrip(row.firestoreDocId, mapOf("mesafe" to mesafeStr, "durakSayisi" to stopCountStr))
+        val updateFields = linkedMapOf<String, Any?>(
+            "mesafe" to mesafeStr,
+            "durakSayisi" to stopCountStr
+        )
+        updateFields.putAll(
+            com.example.toplutasima.network.FirestoreService.calculatedDistanceFields(
+                distanceKm,
+                resetRmvDistance = true
+            )
+        )
+        val ok = com.example.toplutasima.network.FirestoreService.updateTrip(row.firestoreDocId, updateFields)
         logD("Row ${row.rowIndex} / doc ${row.firestoreDocId}: distance=$mesafeStr, stops=$stopCount, ok=$ok")
         return ok
     }

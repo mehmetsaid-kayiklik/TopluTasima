@@ -34,6 +34,22 @@ object FirestoreService {
     private const val COLLECTION = "trips"
     private const val FAV_COLLECTION = "favorite_stops"
 
+    const val FIELD_ORS_DISTANCE_KM = "orsMesafeKm"
+    const val FIELD_ORS_DISTANCE_TEXT = "orsMesafeText"
+    const val FIELD_RMV_DISTANCE_KM = "rmvMesafeKm"
+    const val FIELD_RMV_DISTANCE_METERS = "rmvMesafeMetre"
+    const val FIELD_RMV_DISTANCE_TEXT = "rmvMesafeText"
+    const val FIELD_RMV_DISTANCE_STATUS = "rmvMesafeDurumu"
+    const val FIELD_RMV_DISTANCE_UPDATED_AT = "rmvMesafeGuncellemeTarihi"
+    const val FIELD_RMV_API_VERSION = "rmvApiVersion"
+    const val FIELD_JOURNEY_REF = "journeyRef"
+    const val FIELD_FROM_STOP_ID = "fromStopId"
+    const val FIELD_TO_STOP_ID = "toStopId"
+
+    const val RMV_DISTANCE_PENDING = "bekliyor"
+    const val RMV_DISTANCE_READY = "hazir"
+    const val RMV_DISTANCE_FAILED = "hata"
+
     // ── Turkish month-number → name mapping ──
     private val MONTH_NAMES = mapOf(
         "01" to "Ocak", "02" to "Şubat", "03" to "Mart", "04" to "Nisan",
@@ -61,8 +77,14 @@ object FirestoreService {
         "planlananBinis", "gercekBinis", "gecikme", "inisDuragi",
         "planlananInis", "gercekInis", "gununTipi", "havaDurumu",
         "oturabildimMi", "planlananYolSuresi", "gercekYolSuresi",
-        "not", "biletKontrolü", "mesafe", "durakSayisi", "id",
-        "yearMonth", "sortDate"
+        "not", "biletKontrolü", "mesafe",
+        FIELD_ORS_DISTANCE_KM, FIELD_ORS_DISTANCE_TEXT,
+        FIELD_RMV_DISTANCE_KM, FIELD_RMV_DISTANCE_METERS,
+        FIELD_RMV_DISTANCE_TEXT, FIELD_RMV_DISTANCE_STATUS,
+        FIELD_RMV_DISTANCE_UPDATED_AT, FIELD_RMV_API_VERSION,
+        FIELD_JOURNEY_REF, FIELD_FROM_STOP_ID, FIELD_TO_STOP_ID,
+        "durakSayisi", "id",
+        "yearMonth", "sortDate", "updatedAt"
     )
 
     // ── Helper: compute yearMonth ("YYYY-MM") from "DD.MM.YYYY" ──
@@ -96,7 +118,8 @@ object FirestoreService {
             val dow = date.dayOfWeek
             if (dow == java.time.DayOfWeek.SATURDAY || dow == java.time.DayOfWeek.SUNDAY)
                 "Hafta Sonu" else "Hafta İçi"
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "computeGununTipi ayrıştırma hatası: $tarih", e)
             "Hafta İçi"
         }
     }
@@ -108,7 +131,8 @@ object FirestoreService {
             if (parts.size < 3) return ""
             val date = LocalDate.of(parts[2].toInt(), parts[1].toInt(), parts[0].toInt())
             DAY_NAMES[date.dayOfWeek] ?: ""
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "computeGun ayrıştırma hatası: $tarih", e)
             ""
         }
     }
@@ -127,7 +151,8 @@ object FirestoreService {
             if (diff < 0) diff += 24 * 60
             // Cap at 120 min to avoid false positives from data errors
             if (diff > 120) 0 else diff
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "computeGecikme ayrıştırma hatası planlanan: $planlananBinis, gercek: $gercekBinis", e)
             0
         }
     }
@@ -144,7 +169,8 @@ object FirestoreService {
             var diff = toMinutes(inis) - toMinutes(binis)
             if (diff < 0) diff += 24 * 60
             diff.toString()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e("FirestoreService", "computeYolSuresi ayrıştırma hatası binis: $binis, inis: $inis", e)
             ""
         }
     }
@@ -166,17 +192,84 @@ object FirestoreService {
         return ordered
     }
 
+    fun parseDistanceKm(value: Any?): Double? {
+        val raw = value?.toString()?.trim().orEmpty()
+        if (raw.isBlank()) return null
+        val normalized = raw
+            .replace(Regex("[^0-9,.-]"), "")
+            .replace(',', '.')
+        return normalized.toDoubleOrNull()?.takeIf { it > 0.0 }
+    }
+
+    fun formatDistanceKm(distanceKm: Double): String =
+        if (distanceKm > 0.0) String.format(Locale.US, "%.2f km", distanceKm) else ""
+
+    fun orsDistanceKm(row: Map<String, *>): Double? =
+        parseDistanceKm(row[FIELD_ORS_DISTANCE_KM]) ?: parseDistanceKm(row["mesafe"])
+
+    fun rmvDistanceKm(row: Map<String, *>): Double? =
+        parseDistanceKm(row[FIELD_RMV_DISTANCE_KM])
+
+    fun rmvPendingDistanceFields(): LinkedHashMap<String, Any> = linkedMapOf(
+        FIELD_RMV_DISTANCE_KM to 0.0,
+        FIELD_RMV_DISTANCE_METERS to 0,
+        FIELD_RMV_DISTANCE_TEXT to "",
+        FIELD_RMV_DISTANCE_STATUS to RMV_DISTANCE_PENDING,
+        FIELD_RMV_DISTANCE_UPDATED_AT to "",
+        FIELD_RMV_API_VERSION to ""
+    )
+
+    fun calculatedDistanceFields(
+        distanceKm: Double,
+        resetRmvDistance: Boolean = false
+    ): LinkedHashMap<String, Any> {
+        val fields = linkedMapOf<String, Any>(
+            FIELD_ORS_DISTANCE_KM to if (distanceKm > 0.0) distanceKm else 0.0,
+            FIELD_ORS_DISTANCE_TEXT to formatDistanceKm(distanceKm)
+        )
+        if (resetRmvDistance) fields.putAll(rmvPendingDistanceFields())
+        return fields
+    }
+
+    private fun enrichNewDistanceFields(data: MutableMap<String, Any?>) {
+        val legacyDistanceKm = parseDistanceKm(data["mesafe"])
+        if (!data.containsKey(FIELD_ORS_DISTANCE_KM)) {
+            data[FIELD_ORS_DISTANCE_KM] = legacyDistanceKm ?: 0.0
+        }
+        if (!data.containsKey(FIELD_ORS_DISTANCE_TEXT)) {
+            data[FIELD_ORS_DISTANCE_TEXT] = legacyDistanceKm?.let { formatDistanceKm(it) }.orEmpty()
+        }
+        for ((key, value) in rmvPendingDistanceFields()) {
+            if (!data.containsKey(key)) data[key] = value
+        }
+    }
+
+    private fun enrichUpdatedDistanceFields(updates: MutableMap<String, Any>) {
+        if (!updates.containsKey("mesafe")) return
+        if (updates.containsKey(FIELD_ORS_DISTANCE_KM) && updates.containsKey(FIELD_ORS_DISTANCE_TEXT)) return
+        val legacyDistanceKm = parseDistanceKm(updates["mesafe"]) ?: 0.0
+        updates.putAll(calculatedDistanceFields(legacyDistanceKm, resetRmvDistance = true))
+    }
+
     // ── Save a new trip document ──
     suspend fun saveTrip(data: Map<String, Any?>): String {
         val enriched = data.toMutableMap()
+        val firestoreDocId = enriched["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
         val tarih = enriched["tarih"]?.toString()
         if (!tarih.isNullOrBlank()) {
             if (!enriched.containsKey("yearMonth")) enriched["yearMonth"] = computeYearMonth(tarih)
             if (!enriched.containsKey("sortDate"))  enriched["sortDate"]  = computeSortDate(tarih)
         }
+        enriched["updatedAt"] = System.currentTimeMillis()
+        enrichNewDistanceFields(enriched)
         val ordered = buildOrderedMap(enriched)
-        val doc = db.collection(COLLECTION).add(ordered).await()
-        return doc.id
+        return if (firestoreDocId != null) {
+            db.collection(COLLECTION).document(firestoreDocId).set(ordered).await()
+            firestoreDocId
+        } else {
+            val doc = db.collection(COLLECTION).add(ordered).await()
+            doc.id
+        }
     }
 
     // ── Update actual departure/arrival by trip ID field ──
@@ -204,7 +297,10 @@ object FirestoreService {
             updates["gercekYolSuresi"] = computeYolSuresi(finalGercekBinis, finalGercekInis)
         }
 
-        if (updates.isNotEmpty()) docRef.update(updates).await()
+        if (updates.isNotEmpty()) {
+            updates["updatedAt"] = System.currentTimeMillis()
+            docRef.update(updates).await()
+        }
         return true
     }
 
@@ -239,7 +335,10 @@ object FirestoreService {
             ""
         }
 
-        if (updates.isNotEmpty()) docRef.update(updates).await()
+        if (updates.isNotEmpty()) {
+            updates["updatedAt"] = System.currentTimeMillis()
+            docRef.update(updates).await()
+        }
         return true
     }
 
@@ -255,8 +354,8 @@ object FirestoreService {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logW("FirestoreService", "fetchRecord failed: ${e.message}")
-            null
+            Log.e("FirestoreService", "fetchRecord failed for tripId: $tripId", e)
+            throw e
         }
     }
 
@@ -275,99 +374,30 @@ object FirestoreService {
         }
     }
 
-    // ── Fetch summary for all months (Level 1 Navigation) ──
-    // Optimizasyon: yearMonth alanı varsa gruplamak için sadece o alana bakılır.
-    // Eski kayıtlar için tarih alanından ayrıştırma yapılır.
-    suspend fun fetchMonthSummaries(): List<MonthSummary> {
-        val snapshot = db.collection(COLLECTION).get().await()
-
-        // (Year, MonthNum) -> Count
-        val monthCounts = mutableMapOf<Pair<Int, Int>, Int>()
-        for (doc in snapshot.documents) {
-            // Önce yeni yearMonth alanını dene ("YYYY-MM")
-            val yearMonth = doc.getString("yearMonth")
-            if (!yearMonth.isNullOrBlank()) {
-                val ymParts = yearMonth.split("-")
-                if (ymParts.size >= 2) {
-                    val year = ymParts[0].toIntOrNull() ?: continue
-                    val monthNum = ymParts[1].toIntOrNull() ?: continue
-                    monthCounts[year to monthNum] = (monthCounts[year to monthNum] ?: 0) + 1
-                    continue
-                }
-            }
-            // Eski kayıtlar için DD.MM.YYYY'den ayrıştır
-            val tarih = doc.getString("tarih") ?: continue
-            val parts = tarih.split(".")
-            if (parts.size >= 3) {
-                val monthNum = parts[1].toIntOrNull() ?: continue
-                val year = parts[2].toIntOrNull() ?: continue
-                monthCounts[year to monthNum] = (monthCounts[year to monthNum] ?: 0) + 1
-            }
-        }
-
-        return monthCounts.entries
-            .map { (key, count) ->
-                val (year, monthNum) = key
-                val monthStr = String.format(Locale.US, "%02d", monthNum)
-                val monthName = MONTH_NAMES[monthStr] ?: monthStr
-                MonthSummary(
-                    monthName = monthName,
-                    year = year.toString(),
-                    count = count,
-                    sortKey = "${year}${monthStr}"
-                )
-            }
-            .sortedBy { it.sortKey }
-    }
-
-    // ── Fetch trips for a specific month (Level 2 Navigation) ──
-    // Optimizasyon: yearMonth alanı ("YYYY-MM") bulunan kayıtlar için sunucu taraflı
-    // WHERE sorgusu kullanılır — tüm koleksiyonu çekmek yerine sadece ilgili ay indirilir.
-    // Eski kayıtlar (yearMonth alanı olmayan) için fallback olarak client-side filtreleme yapılır.
-    suspend fun fetchTripsForMonth(monthName: String, year: String): List<Map<String, Any>> {
-        val monthNum = MONTH_NUMBERS[monthName] ?: return emptyList()
-        val monthStr = monthNum.padStart(2, '0')
-        val yearMonth = "$year-$monthStr"
-
-        // 1. Sunucu taraflı sorgu (yeni kayıtlar)
-        val serverSnapshot = db.collection(COLLECTION)
-            .whereEqualTo("yearMonth", yearMonth)
-            .get().await()
-        val serverDocs = serverSnapshot.documents.mapNotNull { doc ->
+    suspend fun fetchTripsAfter(sortDate: String): List<Map<String, Any>> {
+        val snapshot = db.collection(COLLECTION)
+            .whereGreaterThanOrEqualTo("sortDate", sortDate)
+            .get()
+            .await()
+        return snapshot.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             data + ("firestoreDocId" to doc.id)
         }
+    }
 
-        // 2. Eski kayıtlar için fallback
-        // Firestore'da "alan mevcut değil" sorgusu desteklenmiyor.
-        // Bu yüzden migrateYearMonth() çalıştırılana kadar tam koleksiyon okunur;
-        // sadece yearMonth alanı olmayan (eski) dökümanlar client-side filtrelenir.
-        val filterMonth = monthNum.toIntOrNull() ?: return serverDocs
-        val filterYear = year.toIntOrNull() ?: return serverDocs
-
-        val legacySnapshot = db.collection(COLLECTION).get().await()
-        val fallbackDocs = legacySnapshot.documents.mapNotNull { doc ->
-            // yearMonth alanı zaten varsa sunucu sorgusunda yakalandı, atla
-            if (!doc.getString("yearMonth").isNullOrBlank()) return@mapNotNull null
-            val tarih = doc.getString("tarih") ?: return@mapNotNull null
-            val parts = tarih.split(".")
-            if (parts.size >= 3) {
-                val docMonth = parts[1].toIntOrNull()
-                val docYear = parts[2].toIntOrNull()
-                if (docMonth == filterMonth && docYear == filterYear) {
-                    val data = doc.data ?: return@mapNotNull null
-                    data + ("firestoreDocId" to doc.id)
-                } else null
-            } else null
+    suspend fun fetchTripsUpdatedAfter(updatedAt: Long): List<Map<String, Any>> {
+        val snapshot = db.collection(COLLECTION)
+            .whereGreaterThan("updatedAt", updatedAt)
+            .get()
+            .await()
+        return snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            data + ("firestoreDocId" to doc.id)
         }
-
-        return serverDocs + fallbackDocs
     }
 
     // ── Compute summary from trips, optionally filtered by "MonthName Year" ──
-    suspend fun fetchSummary(sheetName: String = "Tümü"): Pair<SummaryData, List<String>> {
-        val snapshot = db.collection(COLLECTION).get().await()
-        val allDocs = snapshot.documents.mapNotNull { it.data }
+    fun computeSummary(allDocs: List<Map<String, Any>>, sheetName: String = "Tümü"): Pair<SummaryData, List<String>> {
 
         // Extract month+year pairs for the dropdown
         val monthYearSet = mutableSetOf<Pair<Int, Int>>()
@@ -428,6 +458,8 @@ object FirestoreService {
         var delayCount = 0
         val weatherCounts = mutableMapOf<String, Int>()
         var totalDistanceKm = 0.0
+        var totalOrsDistanceKm = 0.0
+        var totalRmvDistanceKm = 0.0
         val typeOnTime = mutableMapOf<String, Pair<Int, Int>>() // total, onTime
         val dailyTrips = mutableMapOf<String, Int>()
         val dailyDuration = mutableMapOf<String, Double>()
@@ -500,11 +532,13 @@ object FirestoreService {
             val weather = row["havaDurumu"]?.toString() ?: ""
             if (weather.isNotBlank()) weatherCounts[weather] = (weatherCounts[weather] ?: 0) + 1
 
-            val mesafe = row["mesafe"]?.toString() ?: ""
-            val distanceKm = mesafe.replace(Regex("[^0-9.,]"), "").replace(',', '.').toDoubleOrNull()
-            if (mesafe.isNotBlank()) {
-                if (distanceKm != null) totalDistanceKm += distanceKm
+            val distanceKm = orsDistanceKm(row)
+            val rmvKm = rmvDistanceKm(row)
+            if (distanceKm != null) {
+                totalDistanceKm += distanceKm
+                totalOrsDistanceKm += distanceKm
             }
+            if (rmvKm != null) totalRmvDistanceKm += rmvKm
 
             val plannedMin = row["planlananYolSuresi"]?.toString()?.toDoubleOrNull()
             val actualMin = row["gercekYolSuresi"]?.toString()?.toDoubleOrNull()
@@ -680,6 +714,8 @@ object FirestoreService {
             recordTotalDelayLineMin = Math.round(recordTotalDelayLine?.value ?: 0.0).toInt(),
             weatherCounts = weatherCounts,
             totalDistanceKm = Math.round(totalDistanceKm * 100) / 100.0,
+            totalOrsDistanceKm = Math.round(totalOrsDistanceKm * 100) / 100.0,
+            totalRmvDistanceKm = Math.round(totalRmvDistanceKm * 100) / 100.0,
             topLines = topLines,
             timeSlotStats = timeSlotStats,
             lineReliability = lineReliability,
@@ -710,11 +746,21 @@ object FirestoreService {
         val docRef = snapshot.documents[0].reference
         val existingData = snapshot.documents[0].data ?: return false
         val updates = mutableMapOf<String, Any>()
-        if (!binisDuragi.isNullOrBlank()) updates["binisDuragi"] = binisDuragi
+        if (!binisDuragi.isNullOrBlank()) {
+            updates["binisDuragi"] = binisDuragi
+            updates[FIELD_FROM_STOP_ID] = ""
+        }
         if (!binisTime.isNullOrBlank()) updates["planlananBinis"] = binisTime
-        if (!inisDuragi.isNullOrBlank()) updates["inisDuragi"] = inisDuragi
+        if (!inisDuragi.isNullOrBlank()) {
+            updates["inisDuragi"] = inisDuragi
+            updates[FIELD_TO_STOP_ID] = ""
+        }
         if (!inisTime.isNullOrBlank()) updates["planlananInis"] = inisTime
-        if (mesafe != null) updates["mesafe"] = mesafe
+        if (mesafe != null) {
+            updates["mesafe"] = mesafe
+            val distanceKm = parseDistanceKm(mesafe) ?: 0.0
+            updates.putAll(calculatedDistanceFields(distanceKm, resetRmvDistance = true))
+        }
         if (durakSayisi != null) updates["durakSayisi"] = durakSayisi
 
         // Recompute planlananYolSuresi if times change
@@ -725,7 +771,10 @@ object FirestoreService {
             if (yolSuresi.isNotBlank()) updates["planlananYolSuresi"] = yolSuresi
         }
 
-        if (updates.isNotEmpty()) docRef.update(updates).await()
+        if (updates.isNotEmpty()) {
+            updates["updatedAt"] = System.currentTimeMillis()
+            docRef.update(updates).await()
+        }
         return true
     }
 
@@ -737,10 +786,14 @@ object FirestoreService {
         if (snapshot.isEmpty) return false
         val docRef = snapshot.documents[0].reference
         docRef.update(
-            mapOf(
+            buildMap {
+                putAll(calculatedDistanceFields(parseDistanceKm(mesafe) ?: 0.0, resetRmvDistance = true))
+                putAll(mapOf(
                 "mesafe" to mesafe,
-                "durakSayisi" to durakSayisi
-            )
+                "durakSayisi" to durakSayisi,
+                "updatedAt" to System.currentTimeMillis()
+                ))
+            }
         ).await()
         return true
     }
@@ -754,13 +807,16 @@ object FirestoreService {
                 if (!enriched.containsKey("yearMonth")) enriched["yearMonth"] = computeYearMonth(tarih)
                 if (!enriched.containsKey("sortDate"))  enriched["sortDate"]  = computeSortDate(tarih)
             }
+            enriched["updatedAt"] = System.currentTimeMillis()
+            enrichNewDistanceFields(enriched)
             val ordered = buildOrderedMap(enriched)
             db.collection(COLLECTION).add(ordered).await()
             true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            false
+            Log.e("FirestoreService", "saveTripMap failed", e)
+            throw e
         }
     }
 
@@ -815,6 +871,7 @@ object FirestoreService {
             val cleanFields = fields.filterValues { it != null }.mapValues { it.value!! }
             val existing = docRef.get().await().data
             val updates = cleanFields.toMutableMap()
+            enrichUpdatedDistanceFields(updates)
 
             // Tarih değişince sortDate ve yearMonth'u da güncelle (Bug 1 + Bug 5)
             val newTarih = updates["tarih"]?.toString()
@@ -838,12 +895,14 @@ object FirestoreService {
                 updates["gecikme"] = computeGecikme(finalPlanlananBinis, finalGercekBinis)
             }
 
+            updates["updatedAt"] = System.currentTimeMillis()
             docRef.update(updates).await()
             true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            false
+            Log.e("FirestoreService", "updateTrip failed for docId: $docId", e)
+            throw e
         }
     }
 
@@ -855,7 +914,8 @@ object FirestoreService {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            false
+            Log.e("FirestoreService", "deleteTrip failed for docId: $docId", e)
+            throw e
         }
     }
 
@@ -902,10 +962,14 @@ object FirestoreService {
                 .whereEqualTo("id", tripId)
                 .get().await()
             if (snapshot.isEmpty) return false
-            snapshot.documents[0].reference.update(fields).await()
+            val updates = fields.toMutableMap()
+            enrichUpdatedDistanceFields(updates)
+            updates["updatedAt"] = System.currentTimeMillis()
+            snapshot.documents[0].reference.update(updates).await()
             true
         } catch (e: Exception) {
-            false
+            Log.e("FirestoreService", "updateExistingRecord failed for tripId: $tripId", e)
+            throw e
         }
     }
 
@@ -1003,27 +1067,48 @@ object FirestoreService {
     }
 
     // ── One-time migration: yearMonth alanını tüm eski kayıtlara ekle ──
-    // Bu fonksiyon Settings ekranındaki butonla tetiklenir, yalnızca bir kez çalıştırılması yeterlidir.
-    // Çalıştırıldıktan sonra fetchTripsForMonth tam koleksiyon okumak yerine
-    // sunucu taraflı WHERE sorgusuyla yalnızca o aya ait dökümanları getirir.
+    // Sayfalı (paginated) ve toplu (WriteBatch) okuma/yazma kullanılarak OOM riski önlenir.
     suspend fun migrateYearMonth(): Pair<Int, Int> { // (güncellenen, toplam)
-        val snapshot = db.collection(COLLECTION).get().await()
-        val total = snapshot.documents.size
         var updated = 0
+        var total = 0
+        var lastVisible: com.google.firebase.firestore.DocumentSnapshot? = null
+        val limit = 500L
 
-        for (doc in snapshot.documents) {
-            // Zaten yearMonth varsa geç
-            val existing = doc.getString("yearMonth")
-            if (!existing.isNullOrBlank()) continue
+        while (true) {
+            var query = db.collection(COLLECTION).limit(limit)
+            if (lastVisible != null) {
+                query = query.startAfter(lastVisible!!)
+            }
+            val snapshot = query.get().await()
+            if (snapshot.isEmpty) break
 
-            val tarih = doc.getString("tarih") ?: continue
-            val ym = computeYearMonth(tarih)
-            if (ym.isBlank()) continue
+            total += snapshot.documents.size
+            val batch = db.batch()
+            var batchCount = 0
 
-            try {
-                doc.reference.update("yearMonth", ym).await()
+            for (doc in snapshot.documents) {
+                val existing = doc.getString("yearMonth")
+                if (!existing.isNullOrBlank()) continue
+
+                val tarih = doc.getString("tarih") ?: continue
+                val ym = computeYearMonth(tarih)
+                if (ym.isBlank()) continue
+
+                batch.update(doc.reference, "yearMonth", ym)
+                batchCount++
                 updated++
-            } catch (_: Exception) { /* tek döküman başarısız olursa devam et */ }
+            }
+
+            if (batchCount > 0) {
+                try {
+                    batch.commit().await()
+                } catch (e: Exception) {
+                    Log.e("FirestoreService", "migrateYearMonth batch commit failed", e)
+                }
+            }
+
+            lastVisible = snapshot.documents[snapshot.size() - 1]
+            if (snapshot.size() < limit) break
         }
         return Pair(updated, total)
     }
@@ -1048,7 +1133,64 @@ object FirestoreService {
             try {
                 doc.reference.update("sortDate", sd).await()
                 updated++
-            } catch (_: Exception) { /* tek döküman başarısız olursa devam et */ }
+            } catch (e: Exception) {
+                Log.e("FirestoreService", "migrateSortDate failed for doc: ${doc.id}", e)
+                /* tek döküman başarısız olursa devam et */
+            }
+        }
+        return Pair(updated, total)
+    }
+
+    suspend fun migrateDistanceFields(): Pair<Int, Int> {
+        val snapshot = db.collection(COLLECTION).get().await()
+        val total = snapshot.documents.size
+        var updated = 0
+
+        for (doc in snapshot.documents) {
+            val data = doc.data ?: continue
+            val updates = linkedMapOf<String, Any>()
+
+            val existingOrsKm = parseDistanceKm(data[FIELD_ORS_DISTANCE_KM])
+            val orsKm = existingOrsKm
+                ?: parseDistanceKm(data["mesafe"])
+                ?: 0.0
+            val orsText = formatDistanceKm(orsKm)
+
+            if (!data.containsKey(FIELD_ORS_DISTANCE_KM) || (existingOrsKm == null && orsKm > 0.0)) {
+                updates[FIELD_ORS_DISTANCE_KM] = orsKm
+            }
+            if (!data.containsKey(FIELD_ORS_DISTANCE_TEXT) ||
+                (data[FIELD_ORS_DISTANCE_TEXT]?.toString().isNullOrBlank() && orsText.isNotBlank())
+            ) {
+                updates[FIELD_ORS_DISTANCE_TEXT] = orsText
+            }
+
+            val rmvKm = parseDistanceKm(data[FIELD_RMV_DISTANCE_KM])
+            val rmvText = data[FIELD_RMV_DISTANCE_TEXT]?.toString().orEmpty()
+            if (!data.containsKey(FIELD_RMV_DISTANCE_KM)) updates[FIELD_RMV_DISTANCE_KM] = 0.0
+            if (!data.containsKey(FIELD_RMV_DISTANCE_METERS)) updates[FIELD_RMV_DISTANCE_METERS] = 0
+            if (!data.containsKey(FIELD_RMV_DISTANCE_TEXT)) updates[FIELD_RMV_DISTANCE_TEXT] = ""
+            if (!data.containsKey(FIELD_RMV_DISTANCE_STATUS) ||
+                data[FIELD_RMV_DISTANCE_STATUS]?.toString().isNullOrBlank()
+            ) {
+                updates[FIELD_RMV_DISTANCE_STATUS] =
+                    if (rmvKm != null || rmvText.isNotBlank()) RMV_DISTANCE_READY else RMV_DISTANCE_PENDING
+            }
+            if (!data.containsKey(FIELD_RMV_DISTANCE_UPDATED_AT)) updates[FIELD_RMV_DISTANCE_UPDATED_AT] = ""
+            if (!data.containsKey(FIELD_RMV_API_VERSION)) updates[FIELD_RMV_API_VERSION] = ""
+            if (!data.containsKey(FIELD_JOURNEY_REF)) updates[FIELD_JOURNEY_REF] = ""
+            if (!data.containsKey(FIELD_FROM_STOP_ID)) updates[FIELD_FROM_STOP_ID] = ""
+            if (!data.containsKey(FIELD_TO_STOP_ID)) updates[FIELD_TO_STOP_ID] = ""
+
+            if (updates.isNotEmpty()) {
+                try {
+                    doc.reference.update(updates).await()
+                    updated++
+                } catch (e: Exception) {
+                    Log.e("FirestoreService", "migrateDistanceFields failed for doc: ${doc.id}", e)
+                    // Keep migrating remaining documents if a single document fails.
+                }
+            }
         }
         return Pair(updated, total)
     }
@@ -1068,7 +1210,8 @@ object FirestoreService {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logW("FirestoreFav", "saveFavorite failed: ${e.message}")
+            Log.e("FirestoreService", "saveFavorite failed for: ${fav.id}", e)
+            throw e
         }
     }
 
@@ -1078,7 +1221,8 @@ object FirestoreService {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logW("FirestoreFav", "deleteFavorite failed: ${e.message}")
+            Log.e("FirestoreService", "deleteFavorite failed for: $favId", e)
+            throw e
         }
     }
 
@@ -1095,7 +1239,10 @@ object FirestoreService {
                     com.example.toplutasima.model.UsageType.valueOf(
                         data["usageType"]?.toString() ?: "BOTH"
                     )
-                } catch (_: Exception) { com.example.toplutasima.model.UsageType.BOTH }
+                } catch (e: Exception) {
+                    Log.e("FirestoreService", "usageType parse failed for doc: ${doc.id}", e)
+                    com.example.toplutasima.model.UsageType.BOTH
+                }
                 com.example.toplutasima.model.FavoriteStop(
                     id = id, stopId = stopId, stopName = stopName,
                     label = label, usageType = usageType
@@ -1104,8 +1251,8 @@ object FirestoreService {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logW("FirestoreFav", "fetchAllFavorites failed: ${e.message}")
-            emptyList()
+            Log.e("FirestoreService", "fetchAllFavorites failed", e)
+            throw e
         }
     }
 }

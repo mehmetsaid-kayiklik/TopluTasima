@@ -35,7 +35,7 @@ fun RmvFooter(modifier: Modifier = Modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -43,7 +43,7 @@ fun RmvFooter(modifier: Modifier = Modifier) {
                 Image(
                     bitmap = logoBitmap,
                     contentDescription = "RMV Logo",
-                    modifier = Modifier.height(48.dp),
+                    modifier = Modifier.height(24.dp),
                     contentScale = ContentScale.FillHeight
                 )
                 Spacer(Modifier.width(6.dp))

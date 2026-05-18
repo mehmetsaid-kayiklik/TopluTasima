@@ -114,6 +114,8 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
             journeyRef = dep.journeyDetailRef,
+            fromStopId = input.fromId,
+            toStopId = input.toId,
             stopFromIdx = segFromIdx,
             stopToIdx = segToIdx,
             toStopLat = toCoords?.first ?: Double.NaN,
@@ -147,6 +149,7 @@ class TripPlanningUseCase(private val repository: TripRepository) {
 
         val result = mutableListOf<Segment>()
         val transferCoords = exactJourney.allStopCoords.getOrNull(transferIdx)
+        val transferStopId = guideSegments.firstOrNull()?.toStopId.orEmpty()
 
         result += Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
@@ -159,6 +162,8 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
             journeyRef = dep.journeyDetailRef,
+            fromStopId = input.fromId,
+            toStopId = transferStopId,
             stopFromIdx = segFromIdx,
             stopToIdx = transferIdx,
             toStopLat = transferCoords?.first ?: Double.NaN,
@@ -190,6 +195,8 @@ class TripPlanningUseCase(private val repository: TripRepository) {
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
             journeyRef = dep.journeyDetailRef,
+            fromStopId = input.fromId,
+            toStopId = input.toId,
             stopFromIdx = segFromIdx,
             stopToIdx = segToIdx,
             toStopLat = toCoords?.first ?: Double.NaN,
