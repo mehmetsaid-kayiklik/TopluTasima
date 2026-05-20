@@ -22,6 +22,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
+import java.util.UUID
+
 class TripRepository(private val appContext: Context? = null) {
 
     private fun getTripDao() = appContext?.let { AppDatabase.getDatabase(it).tripDao() }
@@ -60,16 +62,38 @@ class TripRepository(private val appContext: Context? = null) {
         oturabildim: Boolean,
         biletKontrolu: Boolean,
         note: String,
-        seatmateUuid: String = ""
+        seatmateUuid: String = "",
+        profileId: String? = null,
+        seatmateNote: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         val data = buildSegmentData(id, date, seg, havaDurumu, oturabildim, biletKontrolu, note, seatmateUuid)
         val tripDao = getTripDao()
         tripDao?.upsertAll(listOf(data.toEntity()))
+
+        // Save the profile link locally (it is ONLY local!)
+        if (!profileId.isNullOrBlank()) {
+            val linkDao = appContext?.let { com.example.toplutasima.data.local.AppDatabase.getDatabase(it).tripProfileLinkDao() }
+            linkDao?.upsert(
+                com.example.toplutasima.data.local.entity.TripProfileLinkEntity(
+                    id = UUID.randomUUID().toString(),
+                    tripStableKey = id,
+                    profileId = profileId,
+                    seatmateNote = seatmateNote,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+
         try {
             val firestoreDocId = FirestoreService.saveTrip(data)
             if (firestoreDocId.isNotBlank()) {
                 data["firestoreDocId"] = firestoreDocId
                 tripDao?.upsertAll(listOf(data.toEntity()))
+
+                // Update profile link stable key
+                val linkDao = appContext?.let { com.example.toplutasima.data.local.AppDatabase.getDatabase(it).tripProfileLinkDao() }
+                linkDao?.updateStableKey(id, firestoreDocId, System.currentTimeMillis())
             }
             true
         } catch (e: CancellationException) {
@@ -80,6 +104,44 @@ class TripRepository(private val appContext: Context? = null) {
                 return@withContext true
             }
             false
+        }
+    }
+
+    suspend fun updateTripProfileLink(tripStableKey: String, profileId: String?, seatmateNote: String?) = withContext(Dispatchers.IO) {
+        val linkDao = appContext?.let { com.example.toplutasima.data.local.AppDatabase.getDatabase(it).tripProfileLinkDao() } ?: return@withContext
+        if (profileId.isNullOrBlank()) {
+            val localTrip = getTripDao()?.getTripById(tripStableKey)
+            val firestoreDocId = localTrip?.firestoreDocId ?: ""
+            linkDao.deleteLinksForTrip(tripStableKey, firestoreDocId)
+        } else {
+            val localTrip = getTripDao()?.getTripById(tripStableKey)
+            val firestoreDocId = localTrip?.firestoreDocId ?: ""
+            val existingLinks = if (firestoreDocId.isNotBlank()) {
+                linkDao.getLinksForTrip(firestoreDocId)
+            } else {
+                linkDao.getLinksForTrip(tripStableKey)
+            }
+            if (existingLinks.isNotEmpty()) {
+                val existing = existingLinks.first()
+                linkDao.upsert(
+                    existing.copy(
+                        profileId = profileId,
+                        seatmateNote = seatmateNote,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            } else {
+                linkDao.upsert(
+                    com.example.toplutasima.data.local.entity.TripProfileLinkEntity(
+                        id = UUID.randomUUID().toString(),
+                        tripStableKey = firestoreDocId.ifBlank { tripStableKey },
+                        profileId = profileId,
+                        seatmateNote = seatmateNote,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
         }
     }
 

@@ -86,6 +86,10 @@ fun RecordsScreen(
     // Edit dialog state
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
+    LaunchedEffect(Unit) {
+        viewModel.loadProfileData()
+    }
+
     // Physical back button: sadece bu sekme aktifken çalışsın (Crossfade'de eski sekme arka planda kalır)
     BackHandler(enabled = isActive && showPersonal) { onTogglePersonal(false) }
     BackHandler(enabled = isActive && !showPersonal && state.selectedMonth != null) {
@@ -169,8 +173,9 @@ fun RecordsScreen(
             record = record,
             lang = lang,
             isSaving = state.isSaving,
+            activeProfiles = state.activeProfiles,
             onDismiss = { viewModel.setEditingRecord(null) },
-            onSave = { docId, fields -> viewModel.updateRecord(docId, fields) },
+            onSave = { docId, fields, profileId, seatmateNote -> viewModel.updateRecord(docId, fields, profileId, seatmateNote) },
             onDelete = { showDeleteConfirm = true },
             onRestore = if (onRestoreRecord != null) {
                 {
@@ -1213,6 +1218,36 @@ fun TripCard(trip: com.example.toplutasima.viewmodel.RecordRowUiModel, onClick: 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            if (trip.profileName.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.padding(top = 2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "👤 ${trip.profileName}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        if (trip.seatmateNote.isNotBlank()) {
+                            Text(
+                                text = "(${trip.seatmateNote})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1232,8 +1267,9 @@ private fun EditRecordDialog(
     record: Map<String, Any>,
     lang: com.example.toplutasima.ui.AppLanguage,
     isSaving: Boolean,
+    activeProfiles: List<com.example.toplutasima.data.local.entity.ProfileEntity>,
     onDismiss: () -> Unit,
-    onSave: (String, Map<String, Any?>) -> Unit,
+    onSave: (String, Map<String, Any?>, String?, String?) -> Unit,
     onDelete: () -> Unit,
     onRestore: (() -> Unit)? = null
 ) {
@@ -1265,6 +1301,8 @@ private fun EditRecordDialog(
     var biletKontrolu by remember(record) {
         mutableStateOf(record["biletKontrolü"]?.toString() == TicketStatus.HAPPENED.key)
     }
+    var profileId by remember(record) { mutableStateOf(record["profileId"]?.toString() ?: "") }
+    var seatmateNote by remember(record) { mutableStateOf(record["seatmateNote"]?.toString() ?: "") }
 
     // Helper to open DatePicker
     fun openDatePicker() {
@@ -1429,6 +1467,59 @@ private fun EditRecordDialog(
                     )
                 }
 
+                // Profile Selection Dropdown
+                var profileExpanded by remember { mutableStateOf(false) }
+
+                ExposedDropdownMenuBox(
+                    expanded = profileExpanded,
+                    onExpandedChange = { profileExpanded = it },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val currentProfile = activeProfiles.find { it.id == profileId }
+                    val currentDisplay = currentProfile?.displayName ?: S.profileNone(lang)
+
+                    OutlinedTextField(
+                        value = currentDisplay,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("👤 " + S.profileSelectionLabel(lang)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = profileExpanded,
+                        onDismissRequest = { profileExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(S.profileNone(lang)) },
+                            onClick = {
+                                profileId = ""
+                                profileExpanded = false
+                            }
+                        )
+                        activeProfiles.forEach { profile ->
+                            DropdownMenuItem(
+                                text = { Text(profile.displayName) },
+                                onClick = {
+                                    profileId = profile.id
+                                    profileExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                if (profileId.isNotEmpty()) {
+                    OutlinedTextField(
+                        value = seatmateNote,
+                        onValueChange = { seatmateNote = it },
+                        label = { Text("📝 " + S.profileSeatmateNoteLabel(lang)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
+
                 OutlinedTextField(
                     value = not,
                     onValueChange = { not = it },
@@ -1490,7 +1581,7 @@ private fun EditRecordDialog(
                             "oturabildimMi" to SeatingStatus.fromBoolean(oturabildim).key,
                             "biletKontrolü" to TicketStatus.fromBoolean(biletKontrolu).key
                         )
-                        onSave(docId, fields)
+                        onSave(docId, fields, profileId, seatmateNote)
                     },
                     enabled = !isSaving && docId.isNotBlank(),
                     shape = RoundedCornerShape(10.dp)

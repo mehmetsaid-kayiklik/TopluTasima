@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -78,6 +79,10 @@ fun RMVLogScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadActiveProfiles()
     }
 
     LaunchedEffect(state.segmentIds, state.selectedSegmentIndex) {
@@ -912,6 +917,63 @@ fun RMVLogScreen(
                         )
                     }
 
+                    var profileDropdownExpanded by remember { mutableStateOf(false) }
+                    val curProfileId = state.segmentProfileId[state.selectedSegmentIndex] ?: ""
+                    val curProfile = state.activeProfiles.find { it.id == curProfileId }
+                    val profileLabel = curProfile?.displayName ?: S.profileNone(lang)
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { profileDropdownExpanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("👤 ${S.profileSelectionLabel(lang)}: $profileLabel", style = MaterialTheme.typography.bodyMedium)
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = profileDropdownExpanded,
+                            onDismissRequest = { profileDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(S.profileNone(lang)) },
+                                onClick = {
+                                    viewModel.updateSegmentProfile(state.selectedSegmentIndex, "")
+                                    profileDropdownExpanded = false
+                                }
+                            )
+                            state.activeProfiles.forEach { profile ->
+                                DropdownMenuItem(
+                                    text = { Text(profile.displayName) },
+                                    onClick = {
+                                        viewModel.updateSegmentProfile(state.selectedSegmentIndex, profile.id)
+                                        profileDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    if (curProfileId.isNotEmpty()) {
+                        val curSeatmateNote = state.segmentSeatmateNote[state.selectedSegmentIndex] ?: ""
+                        OutlinedTextField(
+                            value = curSeatmateNote,
+                            onValueChange = { viewModel.updateSegmentSeatmateNote(state.selectedSegmentIndex, it) },
+                            label = { Text("📝 ${S.profileSeatmateNoteLabel(lang)}") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+
                     OutlinedTextField(
                         value = curNote,
                         onValueChange = { viewModel.updateNote(it) },
@@ -1520,6 +1582,62 @@ fun ManualLogForm(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(S.ticketControl(lang), style = MaterialTheme.typography.bodyMedium)
                 Switch(checked = state.manualBiletKontrolu, onCheckedChange = { viewModel.updateManualBilet(it) })
+            }
+
+            var profileDropdownExpanded by remember { mutableStateOf(false) }
+            val curProfileId = state.manual.profileId
+            val curProfile = state.activeProfiles.find { it.id == curProfileId }
+            val profileLabel = curProfile?.displayName ?: S.profileNone(lang)
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { profileDropdownExpanded = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("👤 ${S.profileSelectionLabel(lang)}: $profileLabel", style = MaterialTheme.typography.bodyMedium)
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = null
+                        )
+                    }
+                }
+                DropdownMenu(
+                    expanded = profileDropdownExpanded,
+                    onDismissRequest = { profileDropdownExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(S.profileNone(lang)) },
+                        onClick = {
+                            viewModel.updateManualField("profileId", "")
+                            profileDropdownExpanded = false
+                        }
+                    )
+                    state.activeProfiles.forEach { profile ->
+                        DropdownMenuItem(
+                            text = { Text(profile.displayName) },
+                            onClick = {
+                                viewModel.updateManualField("profileId", profile.id)
+                                profileDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (curProfileId.isNotEmpty()) {
+                OutlinedTextField(
+                    value = state.manual.seatmateNote,
+                    onValueChange = { viewModel.updateManualField("seatmateNote", it) },
+                    label = { Text("📝 ${S.profileSeatmateNoteLabel(lang)}") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
             }
 
             OutlinedTextField(

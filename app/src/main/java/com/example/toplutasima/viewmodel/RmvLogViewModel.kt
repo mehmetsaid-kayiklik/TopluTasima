@@ -66,7 +66,9 @@ data class ManualEntryState(
     val weatherMenuOpen: Boolean = false,
     val oturabildim: Boolean = false,
     val biletKontrolu: Boolean = false,
-    val note: String = ""
+    val note: String = "",
+    val profileId: String = "",
+    val seatmateNote: String = ""
 )
 
 data class RmvLogUiState(
@@ -98,6 +100,10 @@ data class RmvLogUiState(
     val segmentOturabildim: Map<Int, Boolean> = emptyMap(),
     val segmentBiletKontrolu: Map<Int, Boolean> = emptyMap(),
     val segmentNote: Map<Int, String> = emptyMap(),
+    val segmentProfileId: Map<Int, String> = emptyMap(),
+    val segmentSeatmateNote: Map<Int, String> = emptyMap(),
+    // ── Profil listesi ──
+    val activeProfiles: List<com.example.toplutasima.data.local.entity.ProfileEntity> = emptyList(),
     // ── UI durumu ──
     val status: String = "",
     val customBindimTime: String = "",
@@ -268,6 +274,7 @@ class RmvLogViewModel(
                 }
             }
         }
+        loadActiveProfiles()
     }
 
 
@@ -884,7 +891,11 @@ class RmvLogViewModel(
                         val otur = s.segmentOturabildim[idx] ?: false
                         val bilet = s.segmentBiletKontrolu[idx] ?: false
                         val not = s.segmentNote[idx] ?: ""
-                        val ok = repository.saveSegment(id, s.date, seg, hava, otur, bilet, not)
+                        val ok = repository.saveSegment(
+                            id, s.date, seg, hava, otur, bilet, not,
+                            profileId = s.segmentProfileId[idx].takeIf { !it.isNullOrBlank() },
+                            seatmateNote = s.segmentSeatmateNote[idx].takeIf { !it.isNullOrBlank() }
+                        )
                         if (!ok) throw Exception(S.errorSaveFailed(lang()))
                         if (idx == s.selectedSegmentIndex && (s.customBindimTime.isNotBlank() || s.customIndimTime.isNotBlank())) {
                             repository.updateActual(
@@ -919,6 +930,12 @@ class RmvLogViewModel(
                             "not" to not
                         ))
                         if (!ok) throw Exception(S.errorSaveFailed(lang()))
+
+                        repository.updateTripProfileLink(
+                            id,
+                            s.segmentProfileId[idx].takeIf { !it.isNullOrBlank() },
+                            s.segmentSeatmateNote[idx].takeIf { !it.isNullOrBlank() }
+                        )
                     }
                     _uiState.value = _uiState.value.copy(status = S.statusSaved(lang()))
                 }
@@ -1086,6 +1103,30 @@ class RmvLogViewModel(
             status = S.statusReady(lang())
         )
         prefs.edit().putString("first_id", customId).putString("last_id", customId).apply()
+
+        viewModelScope.launch {
+            try {
+                val linkDao = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication()).tripProfileLinkDao()
+                val links = if (docId.isNotBlank()) linkDao.getLinksForTrip(docId) else linkDao.getLinksForTrip(customId)
+                val link = links.firstOrNull()
+                if (link != null) {
+                    val current = _uiState.value
+                    if (current.isManualMode) {
+                        _uiState.value = current.copy(
+                            manual = current.manual.copy(
+                                profileId = link.profileId,
+                                seatmateNote = link.seatmateNote.orEmpty()
+                            )
+                        )
+                    } else {
+                        _uiState.value = current.copy(
+                            segmentProfileId = current.segmentProfileId + (0 to link.profileId),
+                            segmentSeatmateNote = current.segmentSeatmateNote + (0 to link.seatmateNote.orEmpty())
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     // ── Segment geçişi ────────────────────────────────────────────────────────
@@ -1403,8 +1444,49 @@ class RmvLogViewModel(
             "stopCount"    -> m.copy(stopCount = value)
             "weather"      -> m.copy(weather = value, weatherMenuOpen = false)
             "note"         -> m.copy(note = value)
+            "profileId"    -> m.copy(profileId = value)
+            "seatmateNote" -> m.copy(seatmateNote = value)
             else           -> m
         })
+    }
+
+    fun loadActiveProfiles() {
+        viewModelScope.launch {
+            try {
+                val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
+                val profiles = db.profileDao().getActiveProfiles()
+                _uiState.value = _uiState.value.copy(activeProfiles = profiles)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun updateSegmentProfile(index: Int, profileId: String) {
+        val s = _uiState.value
+        _uiState.value = s.copy(
+            segmentProfileId = s.segmentProfileId + (index to profileId)
+        )
+        val segId = _uiState.value.segmentIds.getOrNull(index)
+        if (segId != null) {
+            viewModelScope.launch {
+                repository.updateTripProfileLink(segId, profileId, s.segmentSeatmateNote[index].orEmpty())
+            }
+        }
+    }
+
+    fun updateSegmentSeatmateNote(index: Int, note: String) {
+        val s = _uiState.value
+        _uiState.value = s.copy(
+            segmentSeatmateNote = s.segmentSeatmateNote + (index to note)
+        )
+        val segId = _uiState.value.segmentIds.getOrNull(index)
+        if (segId != null) {
+            val profId = s.segmentProfileId[index].orEmpty()
+            if (profId.isNotBlank()) {
+                viewModelScope.launch {
+                    repository.updateTripProfileLink(segId, profId, note)
+                }
+            }
+        }
     }
 
     fun updateManualOtur(value: Boolean) {
@@ -1444,7 +1526,11 @@ class RmvLogViewModel(
 
                 if (s.segmentIds.isEmpty()) {
                     val newId = UUID.randomUUID().toString()
-                    val ok = repository.saveSegment(newId, s.date, segment, m.weather, m.oturabildim, m.biletKontrolu, m.note)
+                    val ok = repository.saveSegment(
+                        newId, s.date, segment, m.weather, m.oturabildim, m.biletKontrolu, m.note,
+                        profileId = m.profileId.takeIf { it.isNotBlank() },
+                        seatmateNote = m.seatmateNote.takeIf { it.isNotBlank() }
+                    )
 
                     if (ok) {
                         val actDep = formatTime(m.actualDep)
@@ -1498,6 +1584,13 @@ class RmvLogViewModel(
                     updateMap.putAll(FirestoreService.calculatedDistanceFields(distanceKm, resetRmvDistance = true))
                     val ok = repository.updateExistingRecord(docId, updateMap)
                     if (!ok) throw Exception(S.errorSaveFailed(lang()))
+
+                    repository.updateTripProfileLink(
+                        docId,
+                        m.profileId.takeIf { it.isNotBlank() },
+                        m.seatmateNote.takeIf { it.isNotBlank() }
+                    )
+
                     _uiState.value = _uiState.value.copy(status = S.statusSaved(lang()))
                 }
             } catch (e: Exception) {

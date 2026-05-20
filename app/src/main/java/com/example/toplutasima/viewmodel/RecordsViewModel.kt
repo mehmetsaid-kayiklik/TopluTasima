@@ -53,7 +53,10 @@ data class RecordRowUiModel(
     val rmvDistance: String,
     val rmvDistanceStatus: String,
     val stopCount: String,
-    val originalRecord: Map<String, Any>
+    val originalRecord: Map<String, Any>,
+    val profileId: String = "",
+    val profileName: String = "",
+    val seatmateNote: String = ""
 )
 
 data class DayGroup(
@@ -85,7 +88,8 @@ data class RecordsUiState(
     /** Ay listesinden tüm kayıtlarda serbest metin arama sonuçları */
     val globalSearchLoading: Boolean = false,
     val globalSearchError: String = "",
-    val globalSearchResults: List<RecordRowUiModel> = emptyList()
+    val globalSearchResults: List<RecordRowUiModel> = emptyList(),
+    val activeProfiles: List<com.example.toplutasima.data.local.entity.ProfileEntity> = emptyList()
 )
 
 class RecordsViewModel(application: Application) : AndroidViewModel(application) {
@@ -94,11 +98,34 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
 
     private val tripRepository: TripRepository
 
+    private var allProfilesMap = emptyMap<String, com.example.toplutasima.data.local.entity.ProfileEntity>()
+    private var allLinksMap = emptyMap<String, com.example.toplutasima.data.local.entity.TripProfileLinkEntity>()
+
     init {
         val app = application as TopluTasimaApp
         tripRepository = TripRepository(application, app.database.tripDao())
 
+        loadProfileData()
         loadMonthSummaries()
+    }
+
+    fun loadProfileData() {
+        viewModelScope.launch {
+            try {
+                val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
+                val profiles = db.profileDao().getAllProfiles()
+                val links = db.tripProfileLinkDao().getAllLinks()
+
+                allProfilesMap = profiles.associateBy { it.id }
+                allLinksMap = links.associateBy { it.tripStableKey }
+
+                _uiState.value = _uiState.value.copy(
+                    activeProfiles = profiles.filter { !it.archived }
+                )
+
+                _uiState.value.selectedMonth?.let { selectMonth(it) }
+            } catch (_: Exception) {}
+        }
     }
 
     fun loadMonthSummaries() {
@@ -317,6 +344,13 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
         val dayName = rec["gun"]?.toString() ?: ""
         val turValue = rec["tur"]?.toString() ?: ""
         val typeDisplay = "${typeEmoji(turValue)} $turValue"
+
+        val tripId = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
+            ?: rec["id"]?.toString()
+            ?: ""
+        val link = allLinksMap[tripId]
+        val profile = link?.profileId?.let { allProfilesMap[it] }
+
         return RecordRowUiModel(
             id = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: rec["id"]?.toString()
@@ -347,7 +381,10 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             rmvDistance = rec[FirestoreService.FIELD_RMV_DISTANCE_TEXT]?.toString().orEmpty(),
             rmvDistanceStatus = rec[FirestoreService.FIELD_RMV_DISTANCE_STATUS]?.toString().orEmpty(),
             stopCount = rec["durakSayisi"]?.toString() ?: "",
-            originalRecord = rec
+            originalRecord = rec,
+            profileId = link?.profileId ?: "",
+            profileName = profile?.displayName ?: "",
+            seatmateNote = link?.seatmateNote ?: ""
         )
     }
 
@@ -362,11 +399,21 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setEditingRecord(record: Map<String, Any>?) {
-        _uiState.value = _uiState.value.copy(editingRecord = record, saveMsg = "")
+        val enriched = record?.let { rec ->
+            val tripId = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: rec["id"]?.toString()
+                ?: ""
+            val link = allLinksMap[tripId]
+            rec + mapOf(
+                "profileId" to (link?.profileId ?: ""),
+                "seatmateNote" to (link?.seatmateNote ?: "")
+            )
+        }
+        _uiState.value = _uiState.value.copy(editingRecord = enriched, saveMsg = "")
     }
 
-    fun updateRecord(docId: String, fields: Map<String, Any?>) {
-        if (BuildConfig.DEBUG) Log.d("UpdateRecord", "docId='$docId' fields=${fields.keys}")
+    fun updateRecord(docId: String, fields: Map<String, Any?>, profileId: String? = null, seatmateNote: String? = null) {
+        if (BuildConfig.DEBUG) Log.d("UpdateRecord", "docId='$docId' fields=${fields.keys} profileId='$profileId'")
         if (docId.isBlank()) {
             _uiState.value = _uiState.value.copy(saveMsg = "❌ Kayıt ID bulunamadı")
             return
@@ -382,6 +429,43 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                         mergedMap.putAll(fields)
                         mergedMap["firestoreDocId"] = existingEntity.firestoreDocId?.takeIf { it.isNotBlank() } ?: docId
                         tripRepository.saveTrip(mergedMap.toEntity())
+
+                        // Update local-only profile link
+                        if (profileId != null) {
+                            val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
+                            val linkDao = db.tripProfileLinkDao()
+                            if (profileId.isBlank()) {
+                                linkDao.deleteLinksForTrip(docId, existingEntity.firestoreDocId ?: "")
+                            } else {
+                                val tripKey = existingEntity.firestoreDocId?.takeIf { it.isNotBlank() } ?: docId
+                                val existingLinks = if (existingEntity.firestoreDocId.orEmpty().isNotBlank()) {
+                                    linkDao.getLinksForTrip(existingEntity.firestoreDocId.orEmpty())
+                                } else {
+                                    linkDao.getLinksForTrip(docId)
+                                }
+                                if (existingLinks.isNotEmpty()) {
+                                    val existing = existingLinks.first()
+                                    linkDao.upsert(
+                                        existing.copy(
+                                            profileId = profileId,
+                                            seatmateNote = seatmateNote,
+                                            updatedAt = System.currentTimeMillis()
+                                        )
+                                    )
+                                } else {
+                                    linkDao.upsert(
+                                        com.example.toplutasima.data.local.entity.TripProfileLinkEntity(
+                                            id = java.util.UUID.randomUUID().toString(),
+                                            tripStableKey = tripKey,
+                                            profileId = profileId,
+                                            seatmateNote = seatmateNote,
+                                            createdAt = System.currentTimeMillis(),
+                                            updatedAt = System.currentTimeMillis()
+                                        )
+                                    )
+                                }
+                            }
+                        }
                         true
                     } else {
                         false
@@ -394,8 +478,8 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                     editingRecord = null
                 )
                 if (ok) {
+                    loadProfileData() // will refresh maps and selectMonth automatically!
                     loadMonthSummaries()
-                    currentMonth?.let { selectMonth(it) }
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(

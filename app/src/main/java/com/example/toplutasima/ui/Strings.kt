@@ -623,5 +623,34 @@ object S {
     )
     fun profileErrorTitle(l: AppLanguage) = m(l, "Hata Oluştu", "Fehler aufgetreten", "Error Occurred")
     fun profilePasswordHint(l: AppLanguage) = m(l, "Parola", "Passwort", "Password")
+
+    fun profileManagementTitle(l: AppLanguage) = m(l, "Profil Yönetimi", "Profilverwaltung", "Profile Management")
+    fun profileManagementDesc(l: AppLanguage) = m(l, "Yerel seyahat profillerini oluşturun, düzenleyin veya arşivleyin.", "Erstelle, bearbeite oder archiviere lokale Fahrprofile.", "Create, edit or archive local travel profiles.")
+    fun profileManageButton(l: AppLanguage) = m(l, "👤 Profilleri Yönet", "👤 Profile verwalten", "👤 Manage Profiles")
+
+    fun profileAddNewTitle(l: AppLanguage) = m(l, "Yeni Profil Ekle", "Neues Profil hinzufügen", "Add New Profile")
+    fun profileEditTitle(l: AppLanguage) = m(l, "Profili Düzenle", "Profil bearbeiten", "Edit Profile")
+    fun profileFieldDisplayName(l: AppLanguage) = m(l, "Takma Ad / İsim", "Spitzname / Name", "Nickname / Name")
+    fun profileFieldNameKind(l: AppLanguage) = m(l, "İsim Türü", "Namensart", "Name Type")
+    fun profileFieldInfoSource(l: AppLanguage) = m(l, "Bilgi Kaynağı", "Informationsquelle", "Info Source")
+    fun profileFieldBirthHint(l: AppLanguage) = m(l, "Doğum İpucu", "Geburtshinweis", "Birth Hint")
+    fun profileFieldMemoryNote(l: AppLanguage) = m(l, "Hatırlama Notu", "Gedächtnisnotiz", "Memory Note")
+    fun profileWarningMemoryNote(l: AppLanguage) = m(l, "Hatırlama notu yerel olarak şifreli saklanır. Lütfen hassas kişisel verileri kaydederken dikkatli olun.", "Die Gedächtnisnotiz wird lokal verschlüsselt gespeichert. Bitte sei vorsichtig bei der Eingabe sensibler Daten.", "Memory note is stored encrypted locally. Please be careful when saving sensitive personal data.")
+
+    fun profileNameKindNickname(l: AppLanguage) = m(l, "Takma Ad", "Spitzname", "Nickname")
+    fun profileNameKindFirstName(l: AppLanguage) = m(l, "İlk Ad", "Vorname", "First Name")
+    fun profileNameKindUnknown(l: AppLanguage) = m(l, "Bilinmeyen", "Unbekannt", "Unknown")
+
+    fun profileInfoSourceAsked(l: AppLanguage) = m(l, "Soruldu", "Gefragt", "Asked")
+    fun profileInfoSourceObserved(l: AppLanguage) = m(l, "Gözlemlendi", "Beobachtet", "Observed")
+    fun profileInfoSourceUnknown(l: AppLanguage) = m(l, "Bilinmeyen", "Unbekannt", "Unknown")
+
+    fun profileAddButton(l: AppLanguage) = m(l, "Yeni Profil Ekle", "Profil hinzufügen", "Add Profile")
+    fun profileNoProfilesYet(l: AppLanguage) = m(l, "Henüz profil eklenmemiş.", "Noch keine Profile hinzugefügt.", "No profiles added yet.")
+    fun profileBirthHintPrefix(l: AppLanguage) = m(l, "Doğum İpucu", "Geburtsdatum-Hinweis", "Birth Hint")
+
+    fun profileSelectionLabel(l: AppLanguage) = m(l, "Yolculuk Arkadaşı", "Reisebegleiter", "Travel Companion")
+    fun profileNone(l: AppLanguage) = m(l, "Hiçbiri", "Keine", "None")
+    fun profileSeatmateNoteLabel(l: AppLanguage) = m(l, "Yolculuk Arkadaşı Notu", "Reisebegleiter-Notiz", "Travel Companion Note")
 }
 
