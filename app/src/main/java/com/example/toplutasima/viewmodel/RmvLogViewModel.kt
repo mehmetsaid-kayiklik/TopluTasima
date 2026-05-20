@@ -156,10 +156,15 @@ class RmvLogViewModel(
     private val tripPlanner: TripPlanningUseCase,
     private val nearbyManager: com.example.toplutasima.location.NearbyStopsManager
 ) : AndroidViewModel(application) {
+    private companion object {
+        const val DEPARTURE_REFRESH_INTERVAL_MS = 30_000L
+    }
+
     private val prefs = application.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
 
     private var tripDetailJob: Job? = null
     private var actualTimesRefreshJob: Job? = null
+    private var departureRefreshJob: Job? = null
 
     private val _uiState = MutableStateFlow(
         RmvLogUiState(
@@ -189,6 +194,61 @@ class RmvLogViewModel(
             toStopLat = if (!details.toStopLat.isNaN()) details.toStopLat else seg.toStopLat,
             toStopLng = if (!details.toStopLng.isNaN()) details.toStopLng else seg.toStopLng
         )
+    }
+
+    private fun Departure.isSameDeparture(other: Departure): Boolean {
+        if (journeyDetailRef.isNotBlank() && other.journeyDetailRef.isNotBlank()) {
+            return journeyDetailRef == other.journeyDetailRef
+        }
+        return RmvApiService.normalizeLineForDisplay(line) == RmvApiService.normalizeLineForDisplay(other.line) &&
+            direction.trim().equals(other.direction.trim(), ignoreCase = true) &&
+            time.take(5) == other.time.take(5)
+    }
+
+    private fun Departure.withLiveFieldsFrom(fresh: Departure): Departure = copy(
+        realtime = fresh.realtime,
+        realtimeDate = fresh.realtimeDate,
+        track = fresh.track,
+        cancelled = fresh.cancelled
+    )
+
+    private fun stopDepartureRefresh() {
+        departureRefreshJob?.cancel()
+        departureRefreshJob = null
+    }
+
+    private fun startDepartureRefresh(fromId: String, toId: String, uiDate: String, apiDate: String, searchTime: String) {
+        stopDepartureRefresh()
+        departureRefreshJob = viewModelScope.launch {
+            while (isActive) {
+                delay(DEPARTURE_REFRESH_INTERVAL_MS)
+                val current = _uiState.value
+                if (current.fromId != fromId || current.toId != toId || current.date != uiDate) break
+                try {
+                    val freshDepartures = repository.fetchDepartures(fromId, toId, apiDate, searchTime)
+                    val latest = _uiState.value
+                    if (latest.fromId != fromId || latest.toId != toId || latest.date != uiDate) break
+                    val mergedDepartures = freshDepartures.map { fresh ->
+                        latest.departures.firstOrNull { it.isSameDeparture(fresh) }
+                            ?.withLiveFieldsFrom(fresh)
+                            ?: fresh
+                    }
+                    val selected = latest.selectedDeparture?.let { selectedDeparture ->
+                        freshDepartures.firstOrNull { selectedDeparture.isSameDeparture(it) }
+                            ?.let { selectedDeparture.withLiveFieldsFrom(it) }
+                            ?: selectedDeparture
+                    }
+                    _uiState.value = latest.copy(
+                        departures = mergedDepartures,
+                        selectedDeparture = selected
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // Realtime yenileme arka planda sessizce denenir; ana akışı bozmasın.
+                }
+            }
+        }
     }
 
     init {
@@ -245,6 +305,7 @@ class RmvLogViewModel(
     }
 
     fun selectNearbyStop(stop: com.example.toplutasima.network.RmvApiService.NearbyStop) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(
             from = stop.name,
             fromId = stop.id,
@@ -295,12 +356,14 @@ class RmvLogViewModel(
     }
 
     fun selectFavoriteFrom(stopId: String, stopName: String) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(
             from = stopName, fromId = stopId, fromOptions = emptyList(), fromMenuOpen = false
         )
     }
 
     fun selectFavoriteTo(stopId: String, stopName: String) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(
             to = stopName, toId = stopId, toOptions = emptyList(), toMenuOpen = false
         )
@@ -309,14 +372,17 @@ class RmvLogViewModel(
     // ── Durak arama ──────────────────────────────────────────────────────────
 
     fun updateFrom(value: String) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(from = value, fromId = "", fromOptions = emptyList())
     }
 
     fun updateTo(value: String) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(to = value, toId = "", toOptions = emptyList())
     }
 
     fun selectFrom(option: StopOption) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(
             from = option.routingName,
             fromId = option.routingId,
@@ -325,6 +391,7 @@ class RmvLogViewModel(
     }
 
     fun selectTo(option: StopOption) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(
             to = option.routingName,
             toId = option.routingId,
@@ -345,6 +412,7 @@ class RmvLogViewModel(
     }
 
     fun swapFromTo() {
+        stopDepartureRefresh()
         val s = _uiState.value
         _uiState.value = s.copy(
             from = s.to, fromId = s.toId, fromOptions = s.toOptions,
@@ -353,22 +421,27 @@ class RmvLogViewModel(
     }
 
     fun updateDate(value: String) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(date = value)
     }
 
     fun updateTime(value: String) {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(time = value.filter { it.isDigit() }.take(4))
     }
 
     fun clearFrom() {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(from = "", fromId = "", fromOptions = emptyList())
     }
 
     fun clearTo() {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(to = "", toId = "", toOptions = emptyList())
     }
 
     fun clearTime() {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(time = "")
     }
 
@@ -480,6 +553,7 @@ class RmvLogViewModel(
     // ── Form sıfırlama ───────────────────────────────────────────────────────
 
     fun clearForm() {
+        stopDepartureRefresh()
         _uiState.value = _uiState.value.copy(
             date = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")),
             from = "", fromId = "", fromOptions = emptyList(),
@@ -579,6 +653,7 @@ class RmvLogViewModel(
     fun fetchDepartures() {
         viewModelScope.launch {
             try {
+                stopDepartureRefresh()
                 val s = _uiState.value
                 _uiState.value = s.copy(
                     status = S.statusFetchingDepartures(lang()),
@@ -603,6 +678,9 @@ class RmvLogViewModel(
                     departures = deps,
                     status = if (deps.isEmpty()) S.statusNoDepartures(lang()) else S.statusDeparturesReady(deps.size, lang())
                 )
+                if (deps.isNotEmpty()) {
+                    startDepartureRefresh(s.fromId, s.toId, s.date, apiDate, searchTime)
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     transitAlertsLoading = false,
@@ -1639,5 +1717,12 @@ class RmvLogViewModel(
                 throw e
             } catch (_: Exception) { /* ağ hatası — sessizce geç */ }
         }
+    }
+
+    override fun onCleared() {
+        stopDepartureRefresh()
+        actualTimesRefreshJob?.cancel()
+        tripDetailJob?.cancel()
+        super.onCleared()
     }
 }

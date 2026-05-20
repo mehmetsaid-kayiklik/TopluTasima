@@ -77,7 +77,7 @@ object FirestoreService {
         "planlananBinis", "gercekBinis", "gecikme", "inisDuragi",
         "planlananInis", "gercekInis", "gununTipi", "havaDurumu",
         "oturabildimMi", "planlananYolSuresi", "gercekYolSuresi",
-        "not", "biletKontrolü", "mesafe",
+        "not", "biletKontrolü", "seatmateUuid", "mesafe",
         FIELD_ORS_DISTANCE_KM, FIELD_ORS_DISTANCE_TEXT,
         FIELD_RMV_DISTANCE_KM, FIELD_RMV_DISTANCE_METERS,
         FIELD_RMV_DISTANCE_TEXT, FIELD_RMV_DISTANCE_STATUS,
@@ -1203,6 +1203,49 @@ object FirestoreService {
             }
         }
         return Pair(updated, total)
+    }
+
+    suspend fun migrateSeatmateUuid(): Pair<Int, Int> { // (documentsScanned, documentsUpdated)
+        var updated = 0
+        var total = 0
+        var lastVisible: com.google.firebase.firestore.DocumentSnapshot? = null
+        val limit = 500L
+
+        while (true) {
+            var query = db.collection(COLLECTION).limit(limit)
+            if (lastVisible != null) {
+                query = query.startAfter(lastVisible!!)
+            }
+            val snapshot = query.get().await()
+            if (snapshot.isEmpty) break
+
+            total += snapshot.documents.size
+            val batch = db.batch()
+            var batchCount = 0
+
+            for (doc in snapshot.documents) {
+                val data = doc.data ?: continue
+                if (!data.containsKey("seatmateUuid")) {
+                    batch.update(
+                        doc.reference,
+                        mapOf(
+                            "seatmateUuid" to "",
+                            "updatedAt" to System.currentTimeMillis()
+                        )
+                    )
+                    batchCount++
+                }
+            }
+
+            if (batchCount > 0) {
+                batch.commit().await()
+                updated += batchCount
+            }
+
+            lastVisible = snapshot.documents[snapshot.size() - 1]
+            if (snapshot.size() < limit) break
+        }
+        return Pair(total, updated)
     }
 
     // ── Favorite Stops Firebase Backup ──────────────────────────────────────

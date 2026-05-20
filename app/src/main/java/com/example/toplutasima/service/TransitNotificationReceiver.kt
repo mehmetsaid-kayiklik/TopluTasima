@@ -50,9 +50,20 @@ class TransitNotificationReceiver : BroadcastReceiver() {
 
             ACTION_REMINDER_TRIGGER -> {
                 Log.d(TAG, "Hatırlatma alarm'ı tetiklendi")
+                if (!shouldShowTimeReminder(context)) {
+                    Log.d(TAG, "Hatırlatma alarm'ı güncel ayarlar nedeniyle yoksayıldı")
+                    return
+                }
                 showReminderNotification(context, intent)
             }
         }
+    }
+
+    private fun shouldShowTimeReminder(context: Context): Boolean {
+        val prefs = context.applicationContext.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
+        val notificationsEnabled = prefs.getBoolean("transit_notif_enabled", true)
+        val reminderType = prefs.getString("transit_reminder_type", "TIME") ?: "TIME"
+        return notificationsEnabled && reminderType == "TIME"
     }
 
     private fun enqueueWorker(context: Context, tripId: String, isBoarding: Boolean) {

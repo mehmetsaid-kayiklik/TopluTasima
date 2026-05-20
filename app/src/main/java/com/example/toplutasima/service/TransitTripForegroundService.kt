@@ -86,6 +86,7 @@ class TransitTripForegroundService : Service() {
         const val ACTION_NEXT_SEGMENT = "com.example.toplutasima.transit.NEXT_SEG"
         const val ACTION_START_PROXIMITY_WATCH = "com.example.toplutasima.transit.PROXIMITY_WATCH"
         const val ACTION_HANDLE_INDIM_FROM_NOTIF = "com.example.toplutasima.transit.INDIM_FROM_NOTIF"
+        const val ACTION_REFRESH_REMINDER_SETTINGS = "com.example.toplutasima.transit.REFRESH_REMINDER_SETTINGS"
 
         // Intent Extra anahtarları
         const val EXTRA_LINE = "line"
@@ -298,6 +299,23 @@ class TransitTripForegroundService : Service() {
                     updateTrackingNotificationWaiting()
                 }
             }
+            ACTION_REFRESH_REMINDER_SETTINGS -> {
+                if (!hasUsableServiceState()) {
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                if (!startForegroundForCurrentState(useLocationType = false)) {
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                cancelReminder()
+                cancelProximityWatchAlarm()
+                getSystemService(NotificationManager::class.java).cancel(NOTIF_ID_REMINDER)
+                usingTimeFallback = false
+                if (hasBoarded) scheduleReminderByType()
+                updateTrackingNotification()
+                logD("Hatırlatma ayarları yeniden uygulandı: ${PrefsManager.transitReminderType}")
+            }
             ACTION_STOP -> {
                 stopTracking()
             }
@@ -481,8 +499,7 @@ class TransitTripForegroundService : Service() {
 
     /**
      * PrefsManager.transitReminderType'a göre doğru hatırlatmayı kurar.
-     * LOCATION için 3 koşulda fallback:
-     *   1. Koordinat NaN   2. Konum izni yok   3. GPS alınamaz (startProximityWatch içinde)
+     * LOCATION seçiliyken GPS/izin/koordinat sorunu TIME alarmına düşmez.
      */
     private fun scheduleReminderByType() {
         val needsLocationWatch =
@@ -498,9 +515,7 @@ class TransitTripForegroundService : Service() {
             }
             if (PrefsManager.transitReminderType == TransitReminderType.LOCATION) {
                 val reason = if (!hasPermission) "izin yok" else "koordinat yok"
-                Log.w(TAG, "LOCATION secili ama fallback TIME: $reason")
-                usingTimeFallback = true
-                scheduleReminder()
+                Log.w(TAG, "LOCATION secili ama konum hatirlatmasi kurulamadi: $reason")
                 return
             }
             Log.w(TAG, "Otomatik saat icin GPS izleme baslatilamadi")
@@ -508,7 +523,7 @@ class TransitTripForegroundService : Service() {
 
         when (PrefsManager.transitReminderType) {
             TransitReminderType.LOCATION -> {
-                scheduleReminder()
+                logD("Hatırlatma türü LOCATION — saat bazlı fallback kurulmadı")
             }
             TransitReminderType.TIME -> scheduleReminder()
             TransitReminderType.NONE -> logD("Hatırlatma türü NONE — hatırlatma kurulmadı")
@@ -910,13 +925,19 @@ class TransitTripForegroundService : Service() {
     }
 
     private fun fallbackToTimeReminder(reason: String) {
-        Log.w(TAG, "LOCATION hatirlatma TIME fallback'e dustu: $reason")
-        usingTimeFallback = true
+        Log.w(TAG, "Konum takibi baslatilamadi: $reason")
+        usingTimeFallback = false
         if (!startForegroundForCurrentState(useLocationType = false)) {
             stopSelf()
             return
         }
-        scheduleReminder()
+        if (PrefsManager.transitReminderType == TransitReminderType.TIME) {
+            usingTimeFallback = true
+            scheduleReminder()
+        } else {
+            Log.w(TAG, "Saat bazli fallback kapali, hatirlatma kurulmayacak")
+            updateTrackingNotification()
+        }
     }
 
     private fun startProximityWatch() {
@@ -940,11 +961,13 @@ class TransitTripForegroundService : Service() {
                         consecutiveNullCount++
                         Log.w(TAG, "GPS alınamadı ($consecutiveNullCount/3)")
                         if (consecutiveNullCount >= 3) {
-                            // Koşul 3: GPS alınamıyor — TIME fallback
-                            Log.w(TAG, "GPS sürekli alınamıyor, TIME fallback devreye girdi")
-                            usingTimeFallback = true
+                            Log.w(TAG, "GPS surekli alinamiyor, konum hatirlatmasi durduruldu")
+                            usingTimeFallback = false
                             startForegroundForCurrentState(useLocationType = false)
-                            scheduleReminder()
+                            if (PrefsManager.transitReminderType == TransitReminderType.TIME) {
+                                usingTimeFallback = true
+                                scheduleReminder()
+                            }
                             updateTrackingNotification()
                             removeActivityUpdates()
                             break

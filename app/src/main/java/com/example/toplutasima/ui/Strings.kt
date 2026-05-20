@@ -367,6 +367,13 @@ object S {
     fun migrateDistanceFieldsRunning(l: AppLanguage) = m(l, "Mesafe alanları hazırlanıyor...", "Distanzfelder werden vorbereitet...", "Preparing distance fields...")
     fun migrateDistanceFieldsDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
 
+    // ── Seatmate Uuid Migration ──
+    fun migrateSeatmateUuidButton(l: AppLanguage) = m(l, "👥 Eski Kayıtlara Yanıma Oturan Kişi UUID Ekle", "👥 Seatmate-UUID zu alten Einträgen hinzufügen", "👥 Backfill Seatmate UUID on Old Records")
+    fun migrateSeatmateUuidConfirmTitle(l: AppLanguage) = m(l, "Seatmate UUID Ekle", "Seatmate-UUID hinzufügen", "Add Seatmate UUID")
+    fun migrateSeatmateUuidConfirmText(l: AppLanguage) = m(l, "Yanıma oturan kişi UUID alanı olmayan eski kayıtlara boş alan eklenecek. Devam etmek istiyor musunuz?", "Eine leere Seatmate-UUID wird zu allen alten Einträgen hinzugefügt. Fortfahren?", "An empty seatmate UUID field will be added to all old records. Continue?")
+    fun migrateSeatmateUuidRunning(l: AppLanguage) = m(l, "Alanlar güncelleniyor...", "Felder werden aktualisiert...", "Updating fields...")
+    fun migrateSeatmateUuidDone(updated: Int, scanned: Int, l: AppLanguage) = m(l, "✅ $scanned kayıt tarandı, $updated güncellendi", "✅ $scanned Einträge gescannt, $updated aktualisiert", "✅ $scanned records scanned, $updated updated")
+
     // ── Favorites ──
     fun favoritesTitle(l: AppLanguage) = m(l, "⭐ Favori Duraklar", "⭐ Lieblingshaltestellen", "⭐ Favorite Stops")
     fun favBoardingStops(l: AppLanguage) = m(l, "Biniş Favorileri", "Einstieg-Favoriten", "Boarding Favorites")
@@ -596,4 +603,25 @@ object S {
     fun personalSummaryAvgDuration(l: AppLanguage) = m(l, "Ort. Süre", "Ø Dauer", "Avg. Duration")
     fun personalSummaryMonthly(l: AppLanguage) = m(l, "Aylık Kırılım", "Monatliche Aufschlüsselung", "Monthly Breakdown")
 
+    // ── Profil Yedeği ──
+    fun profileBackupSectionTitle(l: AppLanguage) = m(l, "👥  Profil Yedeği", "👥  Profil-Backup", "👥  Profile Backup")
+    fun profileBackupDesc(l: AppLanguage) = m(l, "Profil ve yanıma oturan kişi bilgileri sadece bu cihazda saklanır. Şifreli dosya ile yedekleyebilirsiniz.", "Profil- und Sitzplatzdaten werden nur auf diesem Gerät gespeichert. Sie können sie als verschlüsselte Datei sichern.", "Profile and seatmate details are only stored on this device. You can back them up as an encrypted file.")
+    fun profileExportButton(l: AppLanguage) = m(l, "🔒  Yedeği Dışa Aktar", "🔒  Backup exportieren", "🔒  Export Backup")
+    fun profileImportButton(l: AppLanguage) = m(l, "🔓  Yedeği İçe Aktar", "🔓  Backup importieren", "🔓  Import Backup")
+    fun profileWipeButton(l: AppLanguage) = m(l, "🗑️  Tüm Profil Verilerini Sil", "🗑️  Alle Profildaten löschen", "🗑️  Wipe All Profile Data")
+    fun profileWipeConfirmTitle(l: AppLanguage) = m(l, "Profil Verilerini Sil", "Profildaten löschen", "Wipe Profile Data")
+    fun profileWipeConfirmText(l: AppLanguage) = m(l, "Tüm yerel profiller ve bunlara bağlı seyahat eşleşmeleri kalıcı olarak silinecektir. Seyahat kayıtlarınız silinmez. Devam etmek istiyor musunuz?", "Alle lokalen Profile und deren Verknüpfungen werden unwiderruflich gelöscht. Ihre Fahrten werden nicht gelöscht. Fortfahren?", "All local profiles and their travel associations will be permanently deleted. Your trip logs will not be deleted. Do you want to proceed?")
+    fun profilePasswordTitle(l: AppLanguage) = m(l, "Parola Belirleyin / Girin", "Passwort festlegen / eingeben", "Set / Enter Password")
+    fun profilePasswordExportDesc(l: AppLanguage) = m(l, "Yedek dosyasını şifrelemek için en az 4 karakterli bir parola girin. Bu parolayı unutursanız yedek geri yüklenemez!", "Gib ein Passwort mit mindestens 4 Zeichen ein, um das Backup zu verschlüsseln. Wenn du dieses Passwort vergisst, kann das Backup nicht wiederhergestellt werden!", "Enter a password of at least 4 characters to encrypt the backup file. If you forget this password, the backup cannot be restored!")
+    fun profilePasswordImportDesc(l: AppLanguage) = m(l, "Yedek dosyasını çözmek için şifreleme parolasını girin.", "Gib das Passwort ein, um die Backup-Datei zu entschlüsseln.", "Enter the password to decrypt the backup file.")
+    fun profileImportSuccessTitle(l: AppLanguage) = m(l, "İçe Aktarma Tamamlandı", "Import abgeschlossen", "Import Completed")
+    fun profileImportSuccessText(addedP: Int, updatedP: Int, addedL: Int, updatedL: Int, skippedL: Int, l: AppLanguage) = m(
+        l,
+        "Yedek başarıyla içe aktarıldı:\n• Eklenen Profil: $addedP\n• Güncellenen Profil: $updatedP\n• Eklenen Bağlantı: $addedL\n• Güncellenen Bağlantı: $updatedL\n• Atlanan Yetim Bağlantı: $skippedL",
+        "Backup erfolgreich importiert:\n• Profile hinzugefügt: $addedP\n• Profile aktualisiert: $updatedP\n• Verbindungen hinzugefügt: $addedL\n• Verbindungen aktualisiert: $updatedL\n• Übersprungene verwaiste Verbindungen: $skippedL",
+        "Backup successfully imported:\n• Profiles added: $addedP\n• Profiles updated: $updatedP\n• Links added: $addedL\n• Links updated: $updatedL\n• Skipped orphan links: $skippedL"
+    )
+    fun profileErrorTitle(l: AppLanguage) = m(l, "Hata Oluştu", "Fehler aufgetreten", "Error Occurred")
+    fun profilePasswordHint(l: AppLanguage) = m(l, "Parola", "Passwort", "Password")
 }
+

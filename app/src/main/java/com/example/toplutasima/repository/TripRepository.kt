@@ -59,9 +59,10 @@ class TripRepository(private val appContext: Context? = null) {
         havaDurumu: String,
         oturabildim: Boolean,
         biletKontrolu: Boolean,
-        note: String
+        note: String,
+        seatmateUuid: String = ""
     ): Boolean = withContext(Dispatchers.IO) {
-        val data = buildSegmentData(id, date, seg, havaDurumu, oturabildim, biletKontrolu, note)
+        val data = buildSegmentData(id, date, seg, havaDurumu, oturabildim, biletKontrolu, note, seatmateUuid)
         val tripDao = getTripDao()
         tripDao?.upsertAll(listOf(data.toEntity()))
         try {
@@ -230,7 +231,8 @@ class TripRepository(private val appContext: Context? = null) {
         havaDurumu: String,
         oturabildim: Boolean,
         biletKontrolu: Boolean,
-        note: String
+        note: String,
+        seatmateUuid: String = ""
     ): LinkedHashMap<String, Any?> {
         val data = LinkedHashMap<String, Any?>()
         data["tarih"] = date
@@ -252,6 +254,7 @@ class TripRepository(private val appContext: Context? = null) {
         data["gercekYolSuresi"] = ""
         data["not"] = note
         data["biletKontrolü"] = TicketStatus.fromBoolean(biletKontrolu).key
+        data["seatmateUuid"] = seatmateUuid
         val mesafeText = FirestoreService.formatDistanceKm(seg.distanceKm)
         data["mesafe"] = mesafeText
         data.putAll(FirestoreService.calculatedDistanceFields(seg.distanceKm, resetRmvDistance = true))

@@ -49,5 +49,6 @@ data class TripEntity(
     val toStopId: String? = null,
     val durakSayisi: String? = null,
     val yearMonth: String? = null,
-    val sortDate: String? = null
+    val sortDate: String? = null,
+    val seatmateUuid: String = ""
 )

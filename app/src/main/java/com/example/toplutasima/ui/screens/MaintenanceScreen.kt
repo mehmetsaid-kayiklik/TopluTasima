@@ -65,6 +65,11 @@ fun MaintenanceScreen(
     var distanceFieldsRunning by remember { mutableStateOf(false) }
     var distanceFieldsResult by remember { mutableStateOf("") }
 
+    // Dialog state for seatmate uuid migration
+    var showSeatmateUuidDialog by remember { mutableStateOf(false) }
+    var seatmateUuidRunning by remember { mutableStateOf(false) }
+    var seatmateUuidResult by remember { mutableStateOf("") }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
@@ -492,6 +497,89 @@ fun MaintenanceScreen(
                 }
             )
         }
+
+        // ── Seatmate UUID Migration Card ──
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("👥  Yanıma Oturan Kişi UUID Güncelleme", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Eski kayıtlara seatmateUuid alanı ekler. Bu alan sayesinde yeni profil ve oturma ilişkileri sorunsuz çalışacaktır. Migration bir kez yapılması yeterlidir.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (seatmateUuidRunning) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Text(S.migrateSeatmateUuidRunning(lang), style = MaterialTheme.typography.bodyMedium)
+                    }
+                } else {
+                    if (seatmateUuidResult.isNotBlank()) {
+                        Text(
+                            seatmateUuidResult,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (seatmateUuidResult.contains("✅")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Button(
+                        onClick = { showSeatmateUuidDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(vertical = 14.dp)
+                    ) {
+                        Text(S.migrateSeatmateUuidButton(lang), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+
+        if (showSeatmateUuidDialog) {
+            AlertDialog(
+                onDismissRequest = { showSeatmateUuidDialog = false },
+                title = { Text(S.migrateSeatmateUuidConfirmTitle(lang)) },
+                text = { Text(S.migrateSeatmateUuidConfirmText(lang)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showSeatmateUuidDialog = false
+                        seatmateUuidRunning = true
+                        seatmateUuidResult = ""
+                        scope.launch {
+                            try {
+                                val (total, updated) = withContext(Dispatchers.IO) {
+                                    val result = FirestoreService.migrateSeatmateUuid()
+                                    tripRepository.syncFromFirestore(fullSync = true)
+                                    result
+                                }
+                                seatmateUuidResult = S.migrateSeatmateUuidDone(updated, total, lang)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                seatmateUuidResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
+                            } finally {
+                                seatmateUuidRunning = false
+                            }
+                        }
+                    }) {
+                        Text(S.yes(lang))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSeatmateUuidDialog = false }) {
+                        Text(S.cancel(lang))
+                    }
+                }
+            )
+        }
+
         var healthRunning by remember { mutableStateOf(false) }
         var autoFixRunning by remember { mutableStateOf(false) }
         var healthIssues by remember { mutableStateOf<List<com.example.toplutasima.usecase.DataHealthChecker.HealthIssue>?>(null) }

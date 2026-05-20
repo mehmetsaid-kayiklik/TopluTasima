@@ -44,7 +44,8 @@ fun Map<String, Any?>.toEntity(): TripEntity {
         toStopId = this[FirestoreService.FIELD_TO_STOP_ID]?.toString(),
         durakSayisi = this["durakSayisi"]?.toString(),
         yearMonth = this["yearMonth"]?.toString(),
-        sortDate = this["sortDate"]?.toString()
+        sortDate = this["sortDate"]?.toString(),
+        seatmateUuid = this["seatmateUuid"]?.toString() ?: ""
     )
 }
 
@@ -85,6 +86,7 @@ fun TripEntity.toMap(): Map<String, Any?> {
         FirestoreService.FIELD_TO_STOP_ID to toStopId,
         "durakSayisi" to durakSayisi,
         "yearMonth" to yearMonth,
-        "sortDate" to sortDate
+        "sortDate" to sortDate,
+        "seatmateUuid" to seatmateUuid
     ).filterValues { it != null }
 }

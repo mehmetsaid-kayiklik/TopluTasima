@@ -115,11 +115,15 @@ class TripRepository(private val context: Context, private val tripDao: TripDao)
         tripDao.searchTrips("%$query%")
     }
 
+    private fun getProfileDao() = com.example.toplutasima.data.local.AppDatabase.getDatabase(context).profileDao()
+    private fun getTripProfileLinkDao() = com.example.toplutasima.data.local.AppDatabase.getDatabase(context).tripProfileLinkDao()
+
     suspend fun saveTrip(trip: TripEntity) = withContext(Dispatchers.IO) {
         tripDao.upsertAll(listOf(trip))
         val firestoreDocId = FirestoreService.saveTrip(trip.toMap())
         if (trip.firestoreDocId.isNullOrBlank() && firestoreDocId.isNotBlank()) {
             tripDao.upsertAll(listOf(trip.copy(firestoreDocId = firestoreDocId)))
+            getTripProfileLinkDao().updateStableKey(trip.id, firestoreDocId, System.currentTimeMillis())
         }
     }
 
@@ -131,6 +135,11 @@ class TripRepository(private val context: Context, private val tripDao: TripDao)
             tripDao.deleteTrip(id)
             tripDao.deleteTripByFirestoreDocId(id)
         }
+        
+        // programatik temizlik (cascade alternatifi)
+        val tripId = localTrip?.id ?: id
+        val firestoreDocId = localTrip?.firestoreDocId ?: ""
+        getTripProfileLinkDao().deleteLinksForTrip(tripId, firestoreDocId)
         
         // FirestoreService'ye dokunmamak adına işlemi burada yapıyoruz
         val collection = FirebaseFirestore.getInstance().collection("trips")
