@@ -5,7 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.toplutasima.data.local.AppDatabase
-import com.example.toplutasima.data.repository.TripRepository
+import com.example.toplutasima.data.repository.LocalTripRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -24,7 +24,7 @@ class PeriodicSyncWorker(
         return@withContext try {
             Log.d("PeriodicSyncWorker", "Starting periodic sync from Firestore")
             val database = AppDatabase.getDatabase(applicationContext)
-            val repository = TripRepository(applicationContext, database.tripDao())
+            val repository = LocalTripRepository(applicationContext, database.tripDao())
             val prefs = applicationContext.getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE)
             val now = System.currentTimeMillis()
             val lastFullSync = prefs.getLong(KEY_LAST_FULL_SYNC_TIMESTAMP, 0L)

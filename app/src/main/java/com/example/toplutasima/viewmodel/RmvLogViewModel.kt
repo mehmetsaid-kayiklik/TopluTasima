@@ -14,7 +14,6 @@ import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TripResult
-import com.example.toplutasima.model.TransitAlert
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.network.RmvApiService
@@ -24,7 +23,11 @@ import com.example.toplutasima.service.TransitNotificationReceiver
 import com.example.toplutasima.service.TransitTripForegroundService
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.usecase.TransitRecordCalculations
+import com.example.toplutasima.usecase.TransitTimeUtils
 import com.example.toplutasima.usecase.TripPlanningUseCase
+import com.example.toplutasima.viewmodel.rmvlog.LogMode
+import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -36,125 +39,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
-
-// ── Kayıt Modu ───────────────────────────────────────────────────────────────
-enum class LogMode { AUTO, MANUAL }
-
-// ── Manuel giriş alanları ayrı bir state paketine taşındı ────────────────────
-// Böylece RmvLogUiState daha az değişken barındırır ve form state'i net ayrılır.
-data class ManualEntryState(
-    val isManualMode: Boolean = false,
-    val typeTr: String = VehicleType.BUS.key,
-    val typeMenuOpen: Boolean = false,
-    val line: String = "",
-    val direction: String = "",
-    val boardingStop: String = "",
-    val alightingStop: String = "",
-    val plannedDep: String = "",
-    val actualDep: String = "",
-    val plannedArr: String = "",
-    val actualArr: String = "",
-    val distance: String = "",
-    val stopCount: String = "",
-    val weather: String = "Bilinmiyor",
-    val weatherMenuOpen: Boolean = false,
-    val oturabildim: Boolean = false,
-    val biletKontrolu: Boolean = false,
-    val note: String = "",
-    val profileId: String = "",
-    val seatmateNote: String = ""
-)
-
-data class RmvLogUiState(
-    // ── Durak arama formu ──
-    val from: String = "",
-    val to: String = "",
-    val fromId: String = "",
-    val toId: String = "",
-    val fromOptions: List<StopOption> = emptyList(),
-    val toOptions: List<StopOption> = emptyList(),
-    val fromMenuOpen: Boolean = false,
-    val toMenuOpen: Boolean = false,
-    // ── Zaman / tarih ──
-    val isEditingTimes: Boolean = false,
-    val date: String = "",
-    val time: String = "",
-    // ── Seyahat verisi ──
-    val departures: List<Departure> = emptyList(),
-    val selectedDeparture: Departure? = null,
-    val trip: TripResult? = null,
-    val transitAlerts: List<TransitAlert> = emptyList(),
-    val transitAlertsLoading: Boolean = false,
-    val journeyMatchCandidates: List<JourneyMatchCandidate> = emptyList(),
-    val journeyMatchLoading: Boolean = false,
-    val journeyMatchMessage: String = "",
-    // ── Segment ek bilgileri ──
-    val segmentHavaDurumu: Map<Int, String> = emptyMap(),
-    val havaMenuOpen: Boolean = false,
-    val segmentOturabildim: Map<Int, Boolean> = emptyMap(),
-    val segmentBiletKontrolu: Map<Int, Boolean> = emptyMap(),
-    val segmentNote: Map<Int, String> = emptyMap(),
-    val segmentProfileId: Map<Int, String> = emptyMap(),
-    val segmentSeatmateNote: Map<Int, String> = emptyMap(),
-    // ── Profil listesi ──
-    val activeProfiles: List<com.example.toplutasima.data.local.entity.ProfileEntity> = emptyList(),
-    // ── UI durumu ──
-    val status: String = "",
-    val customBindimTime: String = "",
-    val customIndimTime: String = "",
-    val firstSavedId: String = "",
-    val lastSavedId: String = "",
-    val segmentIds: List<String> = emptyList(),
-    val selectedSegmentIndex: Int = 0,
-    val persistentStops: List<com.example.toplutasima.model.Segment> = emptyList(),
-    // ── Durak değiştirme dialog ──
-    val changeStopSegIdx: Int = -1,
-    val changeStopMode: String = "",  // "binis" or "inis"
-    val changeStopSelectedIdx: Int = -1,
-    val changeStopManualText: String = "",
-    val isLoadingStopsForEdit: Boolean = false,
-    // ── Yakındaki duraklar ──
-    val nearbyStops: List<com.example.toplutasima.network.RmvApiService.NearbyStop> = emptyList(),
-    val nearbyLoading: Boolean = false,
-    val nearbyHasLoaded: Boolean = false,
-    // ── Favoriye ekleme dialog state ──
-    val showAddFavDialog: Boolean = false,
-    val addFavStopId: String = "",
-    val addFavStopName: String = "",
-    val addFavLabel: String = "",
-    val addFavUsageType: com.example.toplutasima.model.UsageType = com.example.toplutasima.model.UsageType.BOTH,
-    val addFavMessage: String = "",
-    // ── Kayıt Modu ─────────────────────────────────────────────────────────
-    val mode: LogMode = LogMode.AUTO,
-    // ── Manuel mod (ayrı state paketine taşındı) ──
-    val manual: ManualEntryState = ManualEntryState()
-) {
-    // Screen kodu değişmesin diye backward-compat property'ler
-    val isManualMode get() = mode == LogMode.MANUAL
-    val manualTypeTr get() = manual.typeTr
-    val manualTypeMenuOpen get() = manual.typeMenuOpen
-    val manualLine get() = manual.line
-    val manualDirection get() = manual.direction
-    val manualBoardingStop get() = manual.boardingStop
-    val manualAlightingStop get() = manual.alightingStop
-    val manualPlannedDep get() = manual.plannedDep
-    val manualActualDep get() = manual.actualDep
-    val manualPlannedArr get() = manual.plannedArr
-    val manualActualArr get() = manual.actualArr
-    val manualDistance get() = manual.distance
-    val manualStopCount get() = manual.stopCount
-    val manualWeather get() = manual.weather
-    val manualWeatherMenuOpen get() = manual.weatherMenuOpen
-    val manualOturabildim get() = manual.oturabildim
-    val manualBiletKontrolu get() = manual.biletKontrolu
-    val manualNote get() = manual.note
-}
 
 class RmvLogViewModel(
     application: Application,
@@ -529,7 +418,7 @@ class RmvLogViewModel(
         _uiState.value = s.copy(trip = t.copy(
             segments = newSegs,
             overallDep = newOverallDep,
-            durationMin = computeDuration(newOverallDep, newOverallArr)
+            durationMin = TransitTimeUtils.computeDuration(newOverallDep, newOverallArr)
         ))
     }
 
@@ -543,18 +432,8 @@ class RmvLogViewModel(
         _uiState.value = s.copy(trip = t.copy(
             segments = newSegs,
             overallArr = newOverallArr,
-            durationMin = computeDuration(newOverallDep, newOverallArr)
+            durationMin = TransitTimeUtils.computeDuration(newOverallDep, newOverallArr)
         ))
-    }
-
-    private fun computeDuration(dep: String, arr: String): Int {
-        return try {
-            val d = LocalTime.parse(dep.take(5))
-            val a = LocalTime.parse(arr.take(5))
-            var diff = Duration.between(d, a).toMinutes().toInt()
-            if (diff < 0) diff += 24 * 60
-            diff
-        } catch (_: Exception) { 0 }
     }
 
     // ── Form sıfırlama ───────────────────────────────────────────────────────
@@ -917,7 +796,7 @@ class RmvLogViewModel(
                         val otur = s.segmentOturabildim[idx] ?: false
                         val bilet = s.segmentBiletKontrolu[idx] ?: false
                         val not = s.segmentNote[idx] ?: ""
-                        val planlananSure = FirestoreService.computeYolSuresi(
+                        val planlananSure = TransitRecordCalculations.computeYolSuresi(
                             seg.dep.ifBlank { null }, seg.arr.ifBlank { null }
                         )
                         val ok = repository.updateExistingRecord(id, mapOf(
@@ -1056,7 +935,7 @@ class RmvLogViewModel(
         val mesafe = record["mesafe"]?.toString() ?: ""
         val durakSayisi = record["durakSayisi"]?.toString() ?: ""
 
-        val distanceKm = FirestoreService.orsDistanceKm(record) ?: FirestoreService.parseDistanceKm(mesafe) ?: 0.0
+        val distanceKm = TransitRecordCalculations.orsDistanceKm(record) ?: TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
         val stopCount = durakSayisi.toIntOrNull() ?: 0
 
         val segment = com.example.toplutasima.model.Segment(
@@ -1083,8 +962,6 @@ class RmvLogViewModel(
             } catch (_: Exception) { 0 }
         )
 
-        fun toDigits(t: String): String = t.replace(":", "").take(4)
-
         _uiState.value = _uiState.value.copy(
             date = tarih,
             from = binisDuragi,
@@ -1094,8 +971,8 @@ class RmvLogViewModel(
             firstSavedId = customId,
             lastSavedId = customId,
             selectedSegmentIndex = 0,
-            customBindimTime = if (gercekBinis.isNotBlank()) toDigits(gercekBinis) else "",
-            customIndimTime = if (gercekInis.isNotBlank()) toDigits(gercekInis) else "",
+            customBindimTime = if (gercekBinis.isNotBlank()) TransitTimeUtils.toDigits(gercekBinis) else "",
+            customIndimTime = if (gercekInis.isNotBlank()) TransitTimeUtils.toDigits(gercekInis) else "",
             segmentHavaDurumu = mapOf(0 to havaDurumu),
             segmentOturabildim = mapOf(0 to oturabildim),
             segmentBiletKontrolu = mapOf(0 to biletKontrolu),
@@ -1508,19 +1385,13 @@ class RmvLogViewModel(
                     throw IllegalStateException("Hat, biniş ve iniş durakları zorunludur.")
                 }
 
-                fun formatTime(t: String): String {
-                    if (t.isBlank()) return ""
-                    val padded = t.padStart(4, '0')
-                    return "${padded.substring(0, 2)}:${padded.substring(2, 4)}"
-                }
-
                 val distanceKm = m.distance.replace(",", ".").toDoubleOrNull() ?: 0.0
                 val stCount = m.stopCount.toIntOrNull() ?: 0
 
                 val segment = com.example.toplutasima.model.Segment(
                     typeTr = m.typeTr, line = m.line, direction = m.direction,
                     fromStop = m.boardingStop, toStop = m.alightingStop,
-                    dep = formatTime(m.plannedDep), arr = formatTime(m.plannedArr),
+                    dep = TransitTimeUtils.formatTime(m.plannedDep), arr = TransitTimeUtils.formatTime(m.plannedArr),
                     distanceKm = distanceKm, stopCount = stCount
                 )
 
@@ -1533,8 +1404,8 @@ class RmvLogViewModel(
                     )
 
                     if (ok) {
-                        val actDep = formatTime(m.actualDep)
-                        val actArr = formatTime(m.actualArr)
+                        val actDep = TransitTimeUtils.formatTime(m.actualDep)
+                        val actArr = TransitTimeUtils.formatTime(m.actualArr)
                         if (actDep.isNotBlank() || actArr.isNotBlank()) {
                             repository.updateActual(newId, actDep.ifBlank { null }, actArr.ifBlank { null })
                         }
@@ -1544,19 +1415,19 @@ class RmvLogViewModel(
                     _uiState.value = _uiState.value.copy(firstSavedId = newId, lastSavedId = newId, segmentIds = listOf(newId), status = S.statusSaved(lang()))
                 } else {
                     val docId = s.segmentIds.first()
-                    val actDep = formatTime(m.actualDep)
-                    val actArr = formatTime(m.actualArr)
+                    val actDep = TransitTimeUtils.formatTime(m.actualDep)
+                    val actArr = TransitTimeUtils.formatTime(m.actualArr)
 
                     // Bug 2 fix: türetilen alanları (gecikme, süreler) client-side hesapla ve
                     // updateMap'e ekle. updateExistingRecord ham alan yazdığından bunları
                     // yeniden hesaplamaz; burada açıkça eklemek gerekir.
-                    val gecikme = FirestoreService.computeGecikme(
+                    val gecikme = TransitRecordCalculations.computeGecikme(
                         segment.dep.ifBlank { null }, actDep.ifBlank { null }
                     )
-                    val planlananSure = FirestoreService.computeYolSuresi(
+                    val planlananSure = TransitRecordCalculations.computeYolSuresi(
                         segment.dep.ifBlank { null }, segment.arr.ifBlank { null }
                     )
-                    val gercekSure = FirestoreService.computeYolSuresi(
+                    val gercekSure = TransitRecordCalculations.computeYolSuresi(
                         actDep.ifBlank { null }, actArr.ifBlank { null }
                     )
 
@@ -1581,7 +1452,7 @@ class RmvLogViewModel(
                         "biletKontrolü" to TicketStatus.fromBoolean(m.biletKontrolu).key,
                         "not" to m.note
                     )
-                    updateMap.putAll(FirestoreService.calculatedDistanceFields(distanceKm, resetRmvDistance = true))
+                    updateMap.putAll(TransitRecordCalculations.calculatedDistanceFields(distanceKm, resetRmvDistance = true))
                     val ok = repository.updateExistingRecord(docId, updateMap)
                     if (!ok) throw Exception(S.errorSaveFailed(lang()))
 
@@ -1755,17 +1626,15 @@ class RmvLogViewModel(
             return
         }
 
-        fun formatTime(t: String) = t.replace(":", "").take(4)
-
         if (event.isBoarding) {
             _uiState.value = s.copy(
-                customBindimTime = formatTime(event.timestamp),
+                customBindimTime = TransitTimeUtils.toDigits(event.timestamp),
                 status = "Bindim ✅ (${event.timestamp}) — bildirimden"
             )
         } else {
             val isLastSeg = segIdx >= (s.trip?.segments?.size ?: 1) - 1
             _uiState.value = s.copy(
-                customIndimTime = formatTime(event.timestamp),
+                customIndimTime = TransitTimeUtils.toDigits(event.timestamp),
                 status = "İndim ✅ (${event.timestamp}) — bildirimden"
             )
             if (isLastSeg) {
@@ -1795,10 +1664,9 @@ class RmvLogViewModel(
                 if (latestSelectedId != selectedId) return@launch
                 val gercekBinis = record["gercekBinis"]?.toString().orEmpty()
                 val gercekInis = record["gercekInis"]?.toString().orEmpty()
-                fun toDigits(t: String) = t.replace(":", "").take(4)
-                val newBindim = if (gercekBinis.isNotBlank()) toDigits(gercekBinis)
+                val newBindim = if (gercekBinis.isNotBlank()) TransitTimeUtils.toDigits(gercekBinis)
                                 else latest.customBindimTime
-                val newIndim = if (gercekInis.isNotBlank()) toDigits(gercekInis)
+                val newIndim = if (gercekInis.isNotBlank()) TransitTimeUtils.toDigits(gercekInis)
                                else latest.customIndimTime
                 if (newBindim != latest.customBindimTime || newIndim != latest.customIndimTime) {
                     _uiState.value = latest.copy(

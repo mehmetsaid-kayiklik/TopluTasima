@@ -1,7 +1,7 @@
 package com.example.toplutasima.usecase
 
-import com.example.toplutasima.viewmodel.DayGroup
-import com.example.toplutasima.viewmodel.RecordRowUiModel
+import com.example.toplutasima.viewmodel.records.DayGroup
+import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 
 /**
  * Kayıt filtreleme state'i.

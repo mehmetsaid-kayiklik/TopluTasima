@@ -1,6 +1,7 @@
 package com.example.toplutasima
 
 import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.usecase.TransitTimeUtils
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -53,35 +54,35 @@ class FirestoreServiceTest {
     @Test
     fun `computeYolSuresi normal duration`() {
         // Implementation returns plain integer string (no "dk" suffix)
-        assertEquals("30", FirestoreService.computeYolSuresi("07:00", "07:30"))
+        assertEquals("30", TransitTimeUtils.computeYolSuresi("07:00", "07:30"))
     }
 
     @Test
     fun `computeYolSuresi midnight crossing`() {
-        assertEquals("20", FirestoreService.computeYolSuresi("23:50", "00:10"))
+        assertEquals("20", TransitTimeUtils.computeYolSuresi("23:50", "00:10"))
     }
 
     @Test
     fun `computeYolSuresi blank inputs`() {
-        assertEquals("", FirestoreService.computeYolSuresi("", "07:30"))
-        assertEquals("", FirestoreService.computeYolSuresi("07:00", ""))
+        assertEquals("", TransitTimeUtils.computeYolSuresi("", "07:30"))
+        assertEquals("", TransitTimeUtils.computeYolSuresi("07:00", ""))
     }
 
     // ── stripSeconds ──
 
     @Test
     fun `stripSeconds removes seconds`() {
-        assertEquals("07:17", FirestoreService.stripSeconds("07:17:00"))
+        assertEquals("07:17", TransitTimeUtils.stripSeconds("07:17:00"))
     }
 
     @Test
     fun `stripSeconds preserves HH-mm format`() {
-        assertEquals("07:17", FirestoreService.stripSeconds("07:17"))
+        assertEquals("07:17", TransitTimeUtils.stripSeconds("07:17"))
     }
 
     @Test
     fun `stripSeconds handles blank`() {
-        assertEquals("", FirestoreService.stripSeconds(""))
+        assertEquals("", TransitTimeUtils.stripSeconds(""))
     }
 
     // ── computeGun ──

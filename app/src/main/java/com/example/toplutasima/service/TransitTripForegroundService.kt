@@ -24,7 +24,7 @@ import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.TransitAutoActualTimeMode
 import com.example.toplutasima.data.TransitReminderType
-import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.worker.TransitActionWorker
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.DetectedActivity
@@ -561,20 +561,11 @@ class TransitTripForegroundService : Service() {
 
     // ── Takip Bildirimi ──────────────────────────────────────────────────────
 
-    private fun vehicleEmoji(type: String = currentVehicleType): String = when (type) {
-        VehicleType.UBAHN.key -> "🚇"
-        VehicleType.SBAHN.key -> "🚆"
-        VehicleType.RERB.key -> "🚂"
-        VehicleType.FERNZUG.key -> "🚄"
-        VehicleType.STRASSENBAHN.key -> "🚋"
-        else -> "🚌"
-    }
-
     private fun segmentPrefix(): String =
         if (totalSegments > 1) "(${currentSegmentIndex + 1}/$totalSegments) " else ""
 
     private fun buildTrackingNotification(): Notification {
-        val emoji = vehicleEmoji()
+        val emoji = vehicleIcon(currentVehicleType)
         val prefix = segmentPrefix()
 
         val title = if (hasBoarded) {
@@ -756,7 +747,7 @@ class TransitTripForegroundService : Service() {
         line: String, alightingStop: String, plannedArr: String, vehicleType: String,
         tripId: String = currentTripId
     ): Notification {
-        val emoji = vehicleEmoji(vehicleType)
+        val emoji = vehicleIcon(vehicleType)
 
         val indimPi = createTransitActionPendingIntent(
             this,

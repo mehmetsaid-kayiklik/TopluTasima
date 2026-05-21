@@ -6,8 +6,8 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
-import com.example.toplutasima.viewmodel.DayGroup
-import com.example.toplutasima.viewmodel.RecordRowUiModel
+import com.example.toplutasima.viewmodel.records.DayGroup
+import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File

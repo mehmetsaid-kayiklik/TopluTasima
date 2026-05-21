@@ -5,10 +5,13 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
-import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.usecase.RecordFilterUtils
+import com.example.toplutasima.viewmodel.records.DayGroup
+import com.example.toplutasima.viewmodel.records.RecordRowUiModel
+import com.example.toplutasima.viewmodel.records.RecordsUiState
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,89 +24,23 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlinx.coroutines.flow.firstOrNull
 import com.example.toplutasima.TopluTasimaApp
-import com.example.toplutasima.data.repository.TripRepository
+import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.data.repository.toEntity
 import com.example.toplutasima.data.repository.toMap
 import kotlinx.coroutines.CancellationException
-
-data class RecordRowUiModel(
-    val id: String,
-    val date: String,
-    val day: String,
-    val type: String,
-    val typeDisplay: String,
-    val line: String,
-    val direction: String,
-    val boardingStop: String,
-    val plannedDep: String,
-    val actualDep: String,
-    val delay: String,
-    val alightingStop: String,
-    val plannedArr: String,
-    val actualArr: String,
-    val dayType: String,
-    val weather: String,
-    val seated: String,
-    val plannedDuration: String,
-    val actualDuration: String,
-    val note: String,
-    val ticketControl: String,
-    val distance: String,
-    val orsDistance: String,
-    val rmvDistance: String,
-    val rmvDistanceStatus: String,
-    val stopCount: String,
-    val originalRecord: Map<String, Any>,
-    val profileId: String = "",
-    val profileName: String = "",
-    val seatmateNote: String = ""
-)
-
-data class DayGroup(
-    val date: String,
-    val dayName: String,
-    val trips: List<RecordRowUiModel>
-)
-
-data class RecordsUiState(
-    val monthSummaries: List<FirestoreService.MonthSummary> = emptyList(),
-    val selectedMonth: FirestoreService.MonthSummary? = null,
-    val selectedMonthTrips: List<DayGroup> = emptyList(),
-    val isLoading: Boolean = false,
-    val errorMsg: String = "",
-    val editingRecord: Map<String, Any>? = null,
-    val isSaving: Boolean = false,
-    val saveMsg: String = "",
-    val filterState: RecordFilterState = RecordFilterState(),
-    val isFilterPanelOpen: Boolean = false,
-    val filteredTrips: List<DayGroup> = emptyList(),
-    val filteredTotalCount: Int = 0,
-    val unfilteredTotalCount: Int = 0,
-    val incompleteRecords: List<RecordRowUiModel> = emptyList(),
-    val isIncompleteExpanded: Boolean = false,
-    // ── Export state ──
-    val isExporting: Boolean = false,
-    val exportResult: String = "",
-    val showExportDialog: Boolean = false,
-    /** Ay listesinden tüm kayıtlarda serbest metin arama sonuçları */
-    val globalSearchLoading: Boolean = false,
-    val globalSearchError: String = "",
-    val globalSearchResults: List<RecordRowUiModel> = emptyList(),
-    val activeProfiles: List<com.example.toplutasima.data.local.entity.ProfileEntity> = emptyList()
-)
 
 class RecordsViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(RecordsUiState())
     val uiState: StateFlow<RecordsUiState> = _uiState.asStateFlow()
 
-    private val tripRepository: TripRepository
+    private val tripRepository: LocalTripRepository
 
     private var allProfilesMap = emptyMap<String, com.example.toplutasima.data.local.entity.ProfileEntity>()
     private var allLinksMap = emptyMap<String, com.example.toplutasima.data.local.entity.TripProfileLinkEntity>()
 
     init {
         val app = application as TopluTasimaApp
-        tripRepository = TripRepository(application, app.database.tripDao())
+        tripRepository = LocalTripRepository(application, app.database.tripDao())
 
         loadProfileData()
         loadMonthSummaries()
@@ -343,7 +280,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
         val date = rec["tarih"]?.toString() ?: ""
         val dayName = rec["gun"]?.toString() ?: ""
         val turValue = rec["tur"]?.toString() ?: ""
-        val typeDisplay = "${typeEmoji(turValue)} $turValue"
+        val typeDisplay = "${vehicleIcon(turValue)} $turValue"
 
         val tripId = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
             ?: rec["id"]?.toString()
@@ -386,16 +323,6 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             profileName = profile?.displayName ?: "",
             seatmateNote = link?.seatmateNote ?: ""
         )
-    }
-
-    private fun typeEmoji(type: String): String = when (type) {
-        VehicleType.BUS.key -> "\uD83D\uDE8C"
-        VehicleType.SBAHN.key -> "\uD83D\uDE86"
-        VehicleType.UBAHN.key -> "\uD83D\uDE87"
-        VehicleType.RERB.key -> "\uD83D\uDE82"
-        VehicleType.STRASSENBAHN.key -> "\uD83D\uDE8B"
-        VehicleType.FERNZUG.key -> "\uD83D\uDE84"
-        else -> "\uD83D\uDE8C"
     }
 
     fun setEditingRecord(record: Map<String, Any>?) {

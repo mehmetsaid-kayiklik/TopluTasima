@@ -5,6 +5,7 @@ import com.example.toplutasima.data.local.dao.TripDao
 import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.model.SummaryData
+import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -15,7 +16,7 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 
-class TripRepository(private val context: Context, private val tripDao: TripDao) {
+class LocalTripRepository(private val context: Context, private val tripDao: TripDao) {
 
     private companion object {
         const val SYNC_PREFS = "sync_prefs"
@@ -64,7 +65,7 @@ class TripRepository(private val context: Context, private val tripDao: TripDao)
 
         val maxSortDate = tripsMap.mapNotNull { row ->
             row["sortDate"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: FirestoreService.computeSortDate(row["tarih"]?.toString().orEmpty()).takeIf { it.isNotBlank() }
+                ?: TransitRecordCalculations.computeSortDate(row["tarih"]?.toString().orEmpty()).takeIf { it.isNotBlank() }
         }.maxOrNull()
         val editor = prefs.edit().putLong(KEY_LAST_SYNC_TIMESTAMP, now)
         if (maxSortDate != null) editor.putString(KEY_LAST_SYNC_SORT_DATE, maxSortDate)

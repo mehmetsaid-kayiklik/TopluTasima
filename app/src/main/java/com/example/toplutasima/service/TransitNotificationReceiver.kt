@@ -7,7 +7,7 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.ui.util.vehicleIcon
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -106,14 +106,7 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         val vehicleType = intent.getStringExtra(TransitTripForegroundService.EXTRA_VEHICLE_TYPE) ?: ""
         val tripId = intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
 
-        val emoji = when (vehicleType) {
-            VehicleType.UBAHN.key -> "🚇"
-            VehicleType.SBAHN.key -> "🚆"
-            VehicleType.RERB.key -> "🚂"
-            VehicleType.FERNZUG.key -> "🚄"
-            VehicleType.STRASSENBAHN.key -> "🚋"
-            else -> "🚌"
-        }
+        val emoji = vehicleIcon(vehicleType)
 
         val indimPi = TransitTripForegroundService.createTransitActionPendingIntent(
             context,

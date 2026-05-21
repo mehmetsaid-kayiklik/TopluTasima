@@ -30,21 +30,6 @@ object PersonalFirestoreService {
         return "${parts[2].padStart(4,'0')}-${parts[1].padStart(2,'0')}"
     }
 
-    /** kaldigiSaat → varisSaat farkını dakika olarak hesaplar. */
-    fun computeYolSuresi(dep: String, arr: String): String {
-        if (dep.isBlank() || arr.isBlank()) return ""
-        return try {
-            fun toMin(t: String): Int {
-                val p = t.trim().split(":")
-                if (p.size < 2) return 0
-                return p[0].toInt() * 60 + p[1].toInt()
-            }
-            var diff = toMin(arr) - toMin(dep)
-            if (diff < 0) diff += 24 * 60
-            diff.toString()
-        } catch (_: Exception) { "" }
-    }
-
     // ── Map → PersonalTrip dönüştürücü ──────────────────────────────────────
 
     private fun Map<String, Any>.toPersonalTrip(docId: String): PersonalTrip {

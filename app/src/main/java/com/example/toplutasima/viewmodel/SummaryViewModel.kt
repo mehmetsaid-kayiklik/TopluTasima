@@ -5,7 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.TopluTasimaApp
-import com.example.toplutasima.data.repository.TripRepository
+import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
@@ -47,7 +47,7 @@ data class SummaryUiState(
 class SummaryViewModel(
     application: Application
 ) : AndroidViewModel(application) {
-    private val repository: TripRepository = TripRepository(
+    private val repository: LocalTripRepository = LocalTripRepository(
         application,
         (application as TopluTasimaApp).database.tripDao()
     )

@@ -59,7 +59,7 @@ object HeatmapUtils {
                 dailyDelayCount[d] = (dailyDelayCount[d] ?: 0) + 1
 
                 val ticketControl = trip["biletKontrolü"]?.toString()
-                    ?: trip["biletKontrolÃ¼"]?.toString()
+                    ?: trip["biletKontrolü"]?.toString()
                     ?: ""
                 if (ticketControl == TicketStatus.HAPPENED.key) {
                     dailyTicketCounts[d] = (dailyTicketCounts[d] ?: 0) + 1

@@ -9,18 +9,14 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -29,8 +25,10 @@ import androidx.compose.ui.unit.sp
 import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.components.personaltrip.PersonalTripActionRow
+import com.example.toplutasima.ui.components.personaltrip.PersonalTripInfoRows
+import com.example.toplutasima.ui.components.personaltrip.PersonalTripStatusBadge
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
-import java.util.Locale
 
 /**
  * Kişisel araç yolculuğu kartı.
@@ -147,156 +145,36 @@ fun PersonalTripCard(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
-            // ── Durum Kartı (toplu taşıma tarzı) ────────────────────────────
-            val durumColor = when (trip.durum) {
-                PersonalTrip.DURUM_BEKLEMEDE -> Color(0xFFFFC107)
-                PersonalTrip.DURUM_AKTIF     -> Color(0xFF4CAF50)
-                else                          -> Color(0xFF4CAF50)
-            }
-            val durumText = when (trip.durum) {
-                PersonalTrip.DURUM_BEKLEMEDE -> S.personalStatusPending(lang)
-                PersonalTrip.DURUM_AKTIF     -> S.personalStatusActive(lang)
-                else                          -> "✅ Tamamlandı"
-            }
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(durumColor)
-                            .alpha(if (trip.durum == PersonalTrip.DURUM_AKTIF) pulse else 1f)
-                    )
-                    Column {
-                        Text(
-                            S.statusLabel(lang),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                        )
-                        Text(
-                            durumText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
+            PersonalTripStatusBadge(
+                trip = trip,
+                lang = lang,
+                pulse = pulse
+            )
 
-            // ── Konum & zaman bilgisi ────────────────────────────────────────
-            when (trip.durum) {
-                PersonalTrip.DURUM_BEKLEMEDE -> {
-                    Text(
-                        "📍 ${S.personalFrom(lang)}: —\n📍 ${S.personalTo(lang)}: —",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                PersonalTrip.DURUM_AKTIF -> {
-                    // Kalkış
-                    if (trip.kaldigiYer.isNotBlank()) {
-                        Text(
-                            "📍 ${trip.kaldigiSaat}  ${trip.kaldigiYer}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    // Canlı mesafe
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.alpha(pulse)
-                    ) {
-                        Text(
-                            "📏 ${String.format(Locale.US, "%.1f km", liveDistanceKm)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
-                        )
-                    }
-                }
-                else -> {
-                    // Tamamlandı
-                    if (trip.kaldigiYer.isNotBlank() || trip.kaldigiSaat.isNotBlank()) {
-                        Text(
-                            "📍 ${trip.kaldigiSaat}  ${trip.kaldigiYer.ifBlank { "—" }}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    if (trip.varisYeri.isNotBlank() || trip.varisSaat.isNotBlank()) {
-                        Text(
-                            "🏁 ${trip.varisSaat}  ${trip.varisYeri.ifBlank { "—" }}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    // Özet çip'leri
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (trip.mesafe.isNotBlank()) {
-                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                                Text("📏 ${trip.mesafe}", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                        if (trip.yolSuresi.isNotBlank()) {
-                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
-                                Text("⏱️ ${trip.yolSuresi} ${S.minutesShort(lang)}", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-                }
-            }
+            PersonalTripInfoRows(
+                trip = trip,
+                liveDistanceKm = liveDistanceKm,
+                lang = lang,
+                pulse = pulse
+            )
 
-            // Not
-            if (trip.not.isNotBlank()) {
-                Text(
-                    "💬 ${trip.not.lines().first()}${if (trip.not.contains('\n')) "…" else ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // ── Aksiyon Butonu ───────────────────────────────────────────────
-            when (trip.durum) {
-                PersonalTrip.DURUM_BEKLEMEDE -> {
-                    Button(
-                        onClick = {
-                            if (viewModel.hasLocationPermission()) {
-                                viewModel.recordBindim(context, trip.firestoreDocId)
-                            } else {
-                                bindimPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                    ) {
-                        Text(S.personalBindim(lang), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+            PersonalTripActionRow(
+                trip = trip,
+                lang = lang,
+                onBindim = {
+                    if (viewModel.hasLocationPermission()) {
+                        viewModel.recordBindim(context, trip.firestoreDocId)
+                    } else {
+                        bindimPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        )
                     }
-                }
-                PersonalTrip.DURUM_AKTIF -> {
-                    Button(
-                        onClick = { viewModel.recordIndim(context, trip.firestoreDocId) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                    ) {
-                        Text(S.personalIndim(lang), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
-                    }
-                }
-                else -> Unit
-            }
+                },
+                onIndim = { viewModel.recordIndim(context, trip.firestoreDocId) }
+            )
         }
     }
 

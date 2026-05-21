@@ -8,10 +8,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.location.PersonalLocationHelper
 import com.example.toplutasima.model.PersonalTrip
-import com.example.toplutasima.network.PersonalFirestoreService
 import com.example.toplutasima.repository.PersonalTripRepository
 import com.example.toplutasima.service.PersonalTripForegroundService
 import com.example.toplutasima.ui.LocaleManager
+import com.example.toplutasima.usecase.TransitRecordCalculations
+import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,30 +24,6 @@ import java.time.format.DateTimeFormatter
 import java.time.LocalTime
 import java.util.Locale
 import java.util.UUID
-
-data class PersonalTripUiState(
-    val trips: List<PersonalTrip> = emptyList(),
-    val isLoading: Boolean = false,
-    val selectedYearMonth: String? = null,     // null = tümü
-    val showAddDialog: Boolean = false,
-    val editingTrip: PersonalTrip? = null,
-    val activeDocId: String? = null,           // Bindim yapılmış ama İndim yapılmamış kaydın docId'si
-    val liveDistanceKm: Double = 0.0,          // ORS'ten gelen anlık km
-    val isTrackingActive: Boolean = false,
-    val isResolvingLocation: Boolean = false,
-    val statusMessage: String = "",
-    // ── İnline form alanları (toplu taşıma gibi her zaman görünür) ──────────
-    val formAracTuru: String = "Otomobil",
-    val formPlaka: String = "",
-    val formHavaDurumu: String = "Bilinmiyor",
-    val formTarih: String = "",               // init sırasında bugünün tarihi set edilir
-    val formSurucu: Boolean? = null,
-    val formYolcuSayisi: String = "",
-    val formNot: String = "",
-    val readyPlates: List<String> = emptyList(),
-    val formAracMenuOpen: Boolean = false,
-    val formHavaMenuOpen: Boolean = false
-)
 
 class PersonalTripViewModel(
     application: Application,
@@ -356,7 +333,7 @@ class PersonalTripViewModel(
 
             // Bindim saatini bul (yolSuresi hesabı için)
             val activeTrip = _uiState.value.trips.find { it.firestoreDocId == docId }
-            val yolSuresi = PersonalFirestoreService.computeYolSuresi(
+            val yolSuresi = TransitRecordCalculations.computeYolSuresi(
                 activeTrip?.kaldigiSaat ?: "", now
             )
 

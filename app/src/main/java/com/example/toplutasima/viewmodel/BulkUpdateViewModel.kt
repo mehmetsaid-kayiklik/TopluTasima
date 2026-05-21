@@ -6,12 +6,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.TopluTasimaApp
-import com.example.toplutasima.data.repository.TripRepository
+import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.RmvApiService
+import com.example.toplutasima.usecase.TransitRecordCalculations
+import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdateMode
+import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdatePhase
+import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdateUiState
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,34 +28,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-enum class BulkUpdatePhase {
-    IDLE, LOADING, RUNNING, PAUSED, RATE_LIMITED, DONE
-}
-
-enum class BulkUpdateMode {
-    DISTANCE_STOPS, STOP_NAMES
-}
-
-data class BulkUpdateUiState(
-    val phase: BulkUpdatePhase = BulkUpdatePhase.IDLE,
-    val mode: BulkUpdateMode = BulkUpdateMode.DISTANCE_STOPS,
-    val rows: List<BulkUpdateRow> = emptyList(),
-    val totalRows: Int = 0,
-    val currentIndex: Int = 0,
-    val successCount: Int = 0,
-    val failCount: Int = 0,
-    val skipCount: Int = 0,
-    val currentRowInfo: String = "",
-    val rateLimitCountdown: Int = 0,
-    val rateLimitReason: String = "",
-    val errorMessage: String = "",
-    val elapsedMs: Long = 0L,
-    val avgMsPerRow: Long = 0L
-)
-
 class BulkUpdateViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val tripRepository = TripRepository(
+    private val tripRepository = LocalTripRepository(
         application,
         (application as TopluTasimaApp).database.tripDao()
     )
@@ -299,7 +278,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
                                 "durakSayisi" to ""
                             )
                             fields.putAll(
-                                com.example.toplutasima.network.FirestoreService.calculatedDistanceFields(
+                                TransitRecordCalculations.calculatedDistanceFields(
                                     0.0,
                                     resetRmvDistance = true
                                 )
@@ -472,7 +451,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
             "durakSayisi" to stopCountStr
         )
         updateFields.putAll(
-            com.example.toplutasima.network.FirestoreService.calculatedDistanceFields(
+            TransitRecordCalculations.calculatedDistanceFields(
                 distanceKm,
                 resetRmvDistance = true
             )

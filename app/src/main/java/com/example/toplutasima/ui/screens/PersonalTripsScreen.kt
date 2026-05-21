@@ -26,7 +26,7 @@ import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.WarningAmber
 import com.example.toplutasima.ui.components.AddPersonalTripDialog
 import com.example.toplutasima.ui.components.PersonalTripCard
-import com.example.toplutasima.viewmodel.PersonalTripUiState
+import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 
 /**
