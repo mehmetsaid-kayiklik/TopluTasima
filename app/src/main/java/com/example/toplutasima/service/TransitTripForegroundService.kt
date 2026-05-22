@@ -1,58 +1,31 @@
 package com.example.toplutasima.service
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.location.Location
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import androidx.core.content.ContextCompat
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.TransitAutoActualTimeMode
 import com.example.toplutasima.data.TransitReminderType
-import com.example.toplutasima.service.transit.TransitActionIntents
 import com.example.toplutasima.service.transit.TransitNotificationBuilder
+import com.example.toplutasima.service.transit.TransitProximityTracker
 import com.example.toplutasima.service.transit.TransitReminderScheduler
 import com.example.toplutasima.service.transit.TransitServiceStateStore
 import com.example.toplutasima.worker.TransitActionWorker
-import com.google.android.gms.location.ActivityRecognition
-import com.google.android.gms.location.DetectedActivity
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
-import kotlin.coroutines.resume
-import kotlin.math.asin
-import kotlin.math.cos
-import kotlin.math.pow
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * Toplu taşıma yolculuğu sırasında sürekli (ongoing) bildirim gösterir.
@@ -100,12 +73,6 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_ALIGHTING_LAT = "alightingLat"
         const val EXTRA_ALIGHTING_LNG = "alightingLng"
         private const val EXTRA_FROM_NOTIFICATION_ACTION = "fromNotificationAction"
-        private const val PROXIMITY_CHECK_INTERVAL_MS = 30_000L
-        private const val ALIGHTING_PROXIMITY_METERS = 100.0
-        private const val CLOSE_ALIGHTING_PROXIMITY_METERS = 50.0
-        private const val VALID_WALKING_CONFIDENCE = 70
-        private const val CLOSE_AUTO_ALIGHTING_MAX_SPEED_MPS = 1.0
-        private const val AUTO_ALIGHTING_MAX_SPEED_MPS = 2.0
         // ViewModel tarafından gözlemlenen durum
         private val _isActive = MutableStateFlow(false)
         val isActive: StateFlow<Boolean> = _isActive
@@ -113,9 +80,8 @@ class TransitTripForegroundService : Service() {
         private val _activeSegmentIndex = MutableStateFlow(0)
         val activeSegmentIndex: StateFlow<Int> = _activeSegmentIndex
 
-        internal val _currentActivityConfidence =
-            MutableStateFlow(DetectedActivity.UNKNOWN to 0)
-        val currentActivityConfidence: StateFlow<Pair<Int, Int>> = _currentActivityConfidence
+        val currentActivityConfidence: StateFlow<Pair<Int, Int>> =
+            TransitProximityTracker.currentActivityConfidence
 
     }
 
@@ -134,11 +100,6 @@ class TransitTripForegroundService : Service() {
     // Proximity alert alanları
     private var alightingLat: Double = Double.NaN
     private var alightingLng: Double = Double.NaN
-    private var proximityJob: Job? = null
-    private var isCurrentlyWalking = false
-    private var consecutiveWalkingLoops = 0
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
     /** LOCATION seçiliyken GPS/izin sorunu nedeniyle TIME'a düşüldü mü? */
     private var usingTimeFallback = false
 
@@ -151,8 +112,16 @@ class TransitTripForegroundService : Service() {
             logDebug = ::logD
         )
     }
-    private val fusedClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
-    private val activityRecognitionClient by lazy { ActivityRecognition.getClient(this) }
+    private val proximityTracker by lazy {
+        TransitProximityTracker(
+            context = this,
+            autoModeProvider = { PrefsManager.transitAutoActualTimeMode },
+            onGpsFallback = ::handleGpsFallback,
+            onManualReminderReached = ::handleProximityReminder,
+            onAutoAlighting = ::handleAutoAlighting,
+            logDebug = ::logD
+        )
+    }
 
     private fun logD(message: String) {
         if (BuildConfig.DEBUG) Log.d(TAG, message)
@@ -296,7 +265,7 @@ class TransitTripForegroundService : Service() {
         super.onDestroy()
         cancelReminder()
         cancelProximityWatchAlarm()
-        serviceScope.cancel()
+        proximityTracker.shutdown()
         _isActive.value = false
     }
 
@@ -451,7 +420,7 @@ class TransitTripForegroundService : Service() {
 
         if (needsLocationWatch) {
             val hasCoords = !alightingLat.isNaN() && !alightingLng.isNaN()
-            val hasPermission = hasLocationPermission()
+            val hasPermission = proximityTracker.hasLocationPermission()
             if (hasCoords && hasPermission) {
                 scheduleProximityWatchAlarm()
                 return
@@ -598,11 +567,7 @@ class TransitTripForegroundService : Service() {
 
     /** Proximity watch alarmını ve coroutine'ini iptal eder. */
     private fun cancelProximityWatchAlarm() {
-        proximityJob?.cancel()
-        proximityJob = null
-        isCurrentlyWalking = false
-        consecutiveWalkingLoops = 0
-        removeActivityUpdates()
+        proximityTracker.stop()
         reminderScheduler.cancelProximityWatchAlarm()
     }
 
@@ -613,49 +578,16 @@ class TransitTripForegroundService : Service() {
      * TIME fallback devreye girer ve proximity watch durur.
      */
     private fun startProximityWatchInForeground() {
-        val hasCoords = !alightingLat.isNaN() && !alightingLng.isNaN()
-        if (!hasCoords || !hasLocationPermission()) {
-            fallbackToTimeReminder(if (!hasCoords) "koordinat yok" else "konum izni yok")
+        val reason = proximityTracker.missingPrerequisiteReason(alightingLat, alightingLng)
+        if (reason != null) {
+            fallbackToTimeReminder(reason)
             return
         }
         if (!startForegroundForCurrentState(useLocationType = true)) {
             fallbackToTimeReminder("location foreground baslatilamadi")
             return
         }
-        startProximityWatch()
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun requestActivityUpdates() {
-        _currentActivityConfidence.value = DetectedActivity.UNKNOWN to 0
-        if (!hasActivityRecognitionPermission()) {
-            logD("Activity Recognition izni yok, GPS fallback aktif kalacak")
-            return
-        }
-
-        activityRecognitionClient
-            .requestActivityUpdates(
-                PROXIMITY_CHECK_INTERVAL_MS,
-                TransitActionIntents.activityRecognitionPendingIntent(this)
-            )
-            .addOnSuccessListener { logD("Activity Recognition updates baslatildi") }
-            .addOnFailureListener { e ->
-                Log.w(TAG, "Activity Recognition updates baslatilamadi: ${e.message}")
-            }
-    }
-
-    private fun removeActivityUpdates() {
-        _currentActivityConfidence.value = DetectedActivity.UNKNOWN to 0
-        try {
-            activityRecognitionClient
-                .removeActivityUpdates(TransitActionIntents.activityRecognitionPendingIntent(this))
-                .addOnSuccessListener { logD("Activity Recognition updates durduruldu") }
-                .addOnFailureListener { e ->
-                    Log.w(TAG, "Activity Recognition updates durdurulamadi: ${e.message}")
-                }
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Activity Recognition updates durdurulamadi: ${e.message}")
-        }
+        proximityTracker.start(alightingLat, alightingLng)
     }
 
     private fun fallbackToTimeReminder(reason: String) {
@@ -674,90 +606,21 @@ class TransitTripForegroundService : Service() {
         }
     }
 
-    private fun startProximityWatch() {
-        if (alightingLat.isNaN() || alightingLng.isNaN()) return
-        if (!hasLocationPermission()) return
-        logD("Proximity watch başlıyor → hedef: ($alightingLat, $alightingLng)")
-        proximityJob?.cancel()
-        isCurrentlyWalking = false
-        consecutiveWalkingLoops = 0
-        requestActivityUpdates()
-        proximityJob = serviceScope.launch {
-            var consecutiveNullCount = 0
-            var previousLocation: Location? = null
-            while (isActive) {
-                delay(PROXIMITY_CHECK_INTERVAL_MS)
-                try {
-                    val loc = getCurrentLocationSuspend()
-                    if (loc == null) {
-                        isCurrentlyWalking = false
-                        consecutiveWalkingLoops = 0
-                        consecutiveNullCount++
-                        Log.w(TAG, "GPS alınamadı ($consecutiveNullCount/3)")
-                        if (consecutiveNullCount >= 3) {
-                            Log.w(TAG, "GPS surekli alinamiyor, konum hatirlatmasi durduruldu")
-                            usingTimeFallback = false
-                            startForegroundForCurrentState(useLocationType = false)
-                            if (PrefsManager.transitReminderType == TransitReminderType.TIME) {
-                                usingTimeFallback = true
-                                scheduleReminder()
-                            }
-                            updateTrackingNotification()
-                            removeActivityUpdates()
-                            break
-                        }
-                        continue
-                    }
-                    consecutiveNullCount = 0
-                    val dist = haversineMeters(loc.latitude, loc.longitude, alightingLat, alightingLng)
-                    val speedMps = movementSpeedMps(loc, previousLocation)
-                    previousLocation = loc
-                    logD("Proximity check: ${dist.toInt()}m speed=${speedMps?.let { "%.1f".format(it) } ?: "unknown"}m/s")
-                    if (dist <= ALIGHTING_PROXIMITY_METERS) {
-                        if (PrefsManager.transitAutoActualTimeMode == TransitAutoActualTimeMode.AUTO) {
-                            if (dist <= CLOSE_ALIGHTING_PROXIMITY_METERS) {
-                                consecutiveWalkingLoops = 0
-                                if (speedMps != null && speedMps <= CLOSE_AUTO_ALIGHTING_MAX_SPEED_MPS) {
-                                    handleAutoAlighting()
-                                    break
-                                }
-                                logD("Auto Indim bekliyor: 50m icinde ama hareket hizi hala yuksek")
-                            } else {
-                                isCurrentlyWalking = isValidWalkingActivity(_currentActivityConfidence.value)
-                                if (isCurrentlyWalking) {
-                                    consecutiveWalkingLoops++
-                                    if (consecutiveWalkingLoops >= 2) {
-                                        handleAutoAlighting()
-                                        break
-                                    }
-                                    logD("Auto Indim yurume teyidi bekliyor: $consecutiveWalkingLoops/2")
-                                } else {
-                                    consecutiveWalkingLoops = 0
-                                    if (isSlowEnoughForAutoAlighting(speedMps)) {
-                                        handleAutoAlighting()
-                                        break
-                                    }
-                                    logD("Auto Indim bekliyor: hedefe yakin ama hareket hizi hala yuksek")
-                                }
-                            }
-                        } else {
-                            showReminderNotification()
-                            cancelReminder()   // Fallback AlarmManager'ı da iptal et
-                            startForegroundForCurrentState(useLocationType = false)
-                            removeActivityUpdates()
-                            break
-                        }
-                    } else {
-                        isCurrentlyWalking = false
-                        consecutiveWalkingLoops = 0
-                    }
-                } catch (e: Exception) {
-                    isCurrentlyWalking = false
-                    consecutiveWalkingLoops = 0
-                    Log.w(TAG, "Proximity check hatası: ${e.message}")
-                }
-            }
+    private fun handleGpsFallback() {
+        Log.w(TAG, "GPS surekli alinamiyor, konum hatirlatmasi durduruldu")
+        usingTimeFallback = false
+        startForegroundForCurrentState(useLocationType = false)
+        if (PrefsManager.transitReminderType == TransitReminderType.TIME) {
+            usingTimeFallback = true
+            scheduleReminder()
         }
+        updateTrackingNotification()
+    }
+
+    private fun handleProximityReminder() {
+        showReminderNotification()
+        cancelReminder()
+        startForegroundForCurrentState(useLocationType = false)
     }
 
     private fun handleAutoAlighting() {
@@ -771,73 +634,5 @@ class TransitTripForegroundService : Service() {
             updateTrackingNotificationWaiting()
         }
         logD("GPS proximity otomatik Indim kaydi olusturdu")
-    }
-
-
-    @Suppress("MissingPermission")
-    private suspend fun getCurrentLocationSuspend(): Location? {
-        if (!hasLocationPermission()) return null
-        val tokenSource = CancellationTokenSource()
-        return kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            cont.invokeOnCancellation { tokenSource.cancel() }
-            fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, tokenSource.token)
-                .addOnSuccessListener { loc ->
-                    if (loc != null) cont.resume(loc)
-                    else fusedClient.lastLocation
-                        .addOnSuccessListener { last -> cont.resume(last) }
-                        .addOnFailureListener { cont.resume(null) }
-                }
-                .addOnFailureListener { cont.resume(null) }
-        }
-    }
-
-    private fun isSlowEnoughForAutoAlighting(speedMps: Double?): Boolean =
-        speedMps != null && speedMps <= AUTO_ALIGHTING_MAX_SPEED_MPS
-
-    private fun movementSpeedMps(current: Location, previous: Location?): Double? {
-        if (current.hasSpeed()) return current.speed.toDouble()
-        if (previous == null) return null
-        val seconds = locationDeltaSeconds(previous, current) ?: return null
-        if (seconds <= 0.0) return null
-        val meters = haversineMeters(previous.latitude, previous.longitude, current.latitude, current.longitude)
-        return meters / seconds
-    }
-
-    private fun locationDeltaSeconds(previous: Location, current: Location): Double? {
-        val elapsedNanos = current.elapsedRealtimeNanos - previous.elapsedRealtimeNanos
-        if (elapsedNanos > 0L) return elapsedNanos / 1_000_000_000.0
-        val wallMillis = current.time - previous.time
-        if (wallMillis > 0L) return wallMillis / 1_000.0
-        return null
-    }
-
-    private fun hasLocationPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-                PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
-                PackageManager.PERMISSION_GRANTED
-
-    private fun hasActivityRecognitionPermission(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) ==
-                PackageManager.PERMISSION_GRANTED
-
-    private fun isValidWalkingActivity(activityConfidence: Pair<Int, Int>): Boolean {
-        val (activityType, confidence) = activityConfidence
-        return activityType in setOf(
-            DetectedActivity.WALKING,
-            DetectedActivity.ON_FOOT,
-            DetectedActivity.RUNNING
-        ) && confidence >= VALID_WALKING_CONFIDENCE
-    }
-
-    /** Haversine formülü ile iki koordinat arasındaki mesafeyi metre cinsinden hesaplar. */
-    private fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
-        val R = 6_371_000.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLng = Math.toRadians(lng2 - lng1)
-        val a = sin(dLat / 2).pow(2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)
-        return R * 2 * asin(sqrt(a))
     }
 }

@@ -105,6 +105,65 @@ class TransitReminderScheduler(
         alarmManager.cancel(TransitActionIntents.reminderTriggerPendingIntent(context))
     }
 
+    @SuppressLint("MissingPermission", "ScheduleExactAlarm")
+    fun scheduleProximityWatch(plannedArr: String, onImmediateStart: () -> Unit) {
+        if (plannedArr.isBlank()) return
+
+        try {
+            val timeString = plannedArr.take(5)
+            val paddedTime = if (timeString.contains(":") && timeString.length < 5) {
+                timeString.padStart(5, '0')
+            } else {
+                timeString
+            }
+            val arrTime = LocalTime.parse(paddedTime, DateTimeFormatter.ofPattern("HH:mm"))
+            val watchTime = arrTime.minusMinutes(3)
+            val now = LocalTime.now()
+            var delayMs = now.until(watchTime, ChronoUnit.MILLIS)
+
+            if (delayMs < 0) {
+                if (delayMs < -12 * 60 * 60 * 1000L) {
+                    delayMs += 24 * 60 * 60 * 1000L
+                } else {
+                    onImmediateStart()
+                    return
+                }
+            }
+            if (delayMs < 5_000L) {
+                onImmediateStart()
+                return
+            }
+
+            val triggerAt = System.currentTimeMillis() + delayMs
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val pendingIntent = TransitActionIntents.proximityWatchPendingIntent(context)
+            val canUseExactAlarm =
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+
+            if (canUseExactAlarm) {
+                try {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAt,
+                        pendingIntent
+                    )
+                } catch (e: SecurityException) {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+                }
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            }
+            logDebug("Proximity watch alarmi kuruldu: ${delayMs / 1000}s sonra ($watchTime)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Proximity watch alarmi kurulamadi: ${e.message}")
+        }
+    }
+
+    fun cancelProximityWatchAlarm() {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(TransitActionIntents.proximityWatchPendingIntent(context))
+    }
+
     private companion object {
         const val TAG = "TransitReminderSched"
     }
