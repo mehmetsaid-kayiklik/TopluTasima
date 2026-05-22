@@ -16,8 +16,33 @@ class TransitServiceStateStore(private val context: Context) {
         val tripId: String,
         val alightingLat: Double,
         val alightingLng: Double,
-        val hasBoarded: Boolean
+        val hasBoarded: Boolean,
+        val segmentIds: List<String> = emptyList()
     )
+
+    enum class Phase {
+        WAITING_TO_BOARD,
+        WAITING_TO_ALIGHT
+    }
+
+    data class ActiveState(
+        val state: State,
+        val phase: Phase
+    ) {
+        val isActive: Boolean = true
+        val isWaitingToBoard: Boolean = phase == Phase.WAITING_TO_BOARD
+        val isWaitingToAlight: Boolean = phase == Phase.WAITING_TO_ALIGHT
+    }
+
+    fun readActiveState(): ActiveState? {
+        val state = restore() ?: return null
+        val hasValidSegment = state.totalSegments > 0 && state.segmentIndex in 0 until state.totalSegments
+        if (!hasValidSegment || state.tripId.isBlank()) return null
+        return ActiveState(
+            state = state,
+            phase = if (state.hasBoarded) Phase.WAITING_TO_ALIGHT else Phase.WAITING_TO_BOARD
+        )
+    }
 
     private companion object {
         const val TAG = "TransitStateStore"
@@ -32,6 +57,7 @@ class TransitServiceStateStore(private val context: Context) {
         const val PKEY_LAT = "transit_state_lat"
         const val PKEY_LNG = "transit_state_lng"
         const val PKEY_HAS_BOARDED = "transit_state_has_boarded"
+        const val PKEY_SEGMENT_IDS = "transit_state_segment_ids"
     }
 
     private val prefs by lazy { createPrefs() }
@@ -48,6 +74,7 @@ class TransitServiceStateStore(private val context: Context) {
             .putLong(PKEY_LAT, state.alightingLat.toBits())
             .putLong(PKEY_LNG, state.alightingLng.toBits())
             .putBoolean(PKEY_HAS_BOARDED, state.hasBoarded)
+            .putString(PKEY_SEGMENT_IDS, state.segmentIds.joinToString("\n"))
             .apply()
     }
 
@@ -63,7 +90,11 @@ class TransitServiceStateStore(private val context: Context) {
             tripId = prefs.getString(PKEY_TRIP_ID, "") ?: "",
             alightingLat = Double.fromBits(prefs.getLong(PKEY_LAT, Double.NaN.toBits())),
             alightingLng = Double.fromBits(prefs.getLong(PKEY_LNG, Double.NaN.toBits())),
-            hasBoarded = prefs.getBoolean(PKEY_HAS_BOARDED, false)
+            hasBoarded = prefs.getBoolean(PKEY_HAS_BOARDED, false),
+            segmentIds = prefs.getString(PKEY_SEGMENT_IDS, "")
+                ?.takeIf { it.isNotBlank() }
+                ?.split("\n")
+                ?: emptyList()
         )
     }
 

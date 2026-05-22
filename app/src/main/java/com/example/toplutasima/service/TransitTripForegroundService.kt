@@ -70,6 +70,7 @@ class TransitTripForegroundService : Service() {
         // Legacy name: this is the Firestore id for the active segment record
         // (RmvLogUiState.segmentIds[index]), not a parent TripResult id.
         const val EXTRA_TRIP_ID = "tripId"
+        const val EXTRA_SEGMENT_IDS = "segmentIds"
         const val EXTRA_ALIGHTING_LAT = "alightingLat"
         const val EXTRA_ALIGHTING_LNG = "alightingLng"
         private const val EXTRA_FROM_NOTIFICATION_ACTION = "fromNotificationAction"
@@ -95,6 +96,7 @@ class TransitTripForegroundService : Service() {
     // Legacy name kept to avoid changing the existing intent/prefs contract.
     // Holds the active segment record id, not a parent trip id.
     private var currentTripId = ""
+    private var segmentIds: List<String> = emptyList()
     private var hasBoarded = false
 
     // Proximity alert alanları
@@ -279,6 +281,9 @@ class TransitTripForegroundService : Service() {
         currentSegmentIndex = intent.getIntExtra(EXTRA_SEGMENT_INDEX, currentSegmentIndex)
         totalSegments = intent.getIntExtra(EXTRA_TOTAL_SEGMENTS, totalSegments)
         currentTripId = intent.getStringExtra(EXTRA_TRIP_ID) ?: currentTripId
+        intent.getStringArrayExtra(EXTRA_SEGMENT_IDS)?.let { ids ->
+            segmentIds = ids.toList()
+        }
         // Proximity alert koordinatları (ACTION_START ve ACTION_NEXT_SEGMENT'te gelir)
         if (intent.hasExtra(EXTRA_ALIGHTING_LAT)) alightingLat = intent.getDoubleExtra(EXTRA_ALIGHTING_LAT, Double.NaN)
         if (intent.hasExtra(EXTRA_ALIGHTING_LNG)) alightingLng = intent.getDoubleExtra(EXTRA_ALIGHTING_LNG, Double.NaN)
@@ -318,9 +323,19 @@ class TransitTripForegroundService : Service() {
                 tripId = currentTripId,
                 alightingLat = alightingLat,
                 alightingLng = alightingLng,
-                hasBoarded = hasBoarded
+                hasBoarded = hasBoarded,
+                segmentIds = normalizedSegmentIds()
             )
         )
+    }
+
+    private fun normalizedSegmentIds(): List<String> {
+        val validTotal = totalSegments.coerceAtLeast(1)
+        val normalized = MutableList(validTotal) { index -> segmentIds.getOrNull(index).orEmpty() }
+        if (currentSegmentIndex in normalized.indices && normalized[currentSegmentIndex].isBlank()) {
+            normalized[currentSegmentIndex] = currentTripId
+        }
+        return normalized
     }
 
     /** Restart sonrası state'i geri yükler. */
@@ -337,6 +352,7 @@ class TransitTripForegroundService : Service() {
         currentSegmentIndex = state.segmentIndex
         totalSegments = state.totalSegments
         currentTripId = state.tripId
+        segmentIds = state.segmentIds
         alightingLat = state.alightingLat
         alightingLng = state.alightingLng
         hasBoarded = state.hasBoarded

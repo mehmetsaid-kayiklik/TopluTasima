@@ -64,7 +64,7 @@ fun RMVLogScreen(
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshActualTimesFromPrefs()
+                viewModel.refreshTransitServiceState()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -77,7 +77,7 @@ fun RMVLogScreen(
 
     LaunchedEffect(state.segmentIds, state.selectedSegmentIndex) {
         if (state.segmentIds.isNotEmpty()) {
-            viewModel.refreshActualTimesFromPrefs()
+            viewModel.refreshTransitServiceState()
         }
     }
 

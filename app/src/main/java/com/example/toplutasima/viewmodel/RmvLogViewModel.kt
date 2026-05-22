@@ -22,6 +22,7 @@ import com.example.toplutasima.repository.TripProfileLinkRepository
 import com.example.toplutasima.service.JourneyMatchForegroundService
 import com.example.toplutasima.service.TransitNotificationReceiver
 import com.example.toplutasima.service.TransitTripForegroundService
+import com.example.toplutasima.service.transit.TransitServiceStateStore
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.TransitRecordCalculations
@@ -59,10 +60,12 @@ class RmvLogViewModel(
     }
 
     private val prefs = application.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
+    private val transitServiceStateStore = TransitServiceStateStore(application)
 
     private var tripDetailJob: Job? = null
     private var actualTimesRefreshJob: Job? = null
     private var departureRefreshJob: Job? = null
+    private var serviceStateRefreshJob: Job? = null
 
     private val _uiState = MutableStateFlow(
         RmvLogUiState(
@@ -150,6 +153,7 @@ class RmvLogViewModel(
     }
 
     init {
+        refreshTransitServiceState()
         // AppEventBus — bildirimden yapılan Bindim/İndim işlemlerini UI'a yansıt
         viewModelScope.launch {
             AppEventBus.events.collect { event ->
@@ -1530,6 +1534,7 @@ class RmvLogViewModel(
                 putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, segIdx)
                 putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
                 putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, segId)
+                putExtra(TransitTripForegroundService.EXTRA_SEGMENT_IDS, s.segmentIds.toTypedArray())
                 if (!seg.toStopLat.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LAT, seg.toStopLat)
                 if (!seg.toStopLng.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LNG, seg.toStopLng)
             }
@@ -1574,6 +1579,10 @@ class RmvLogViewModel(
             val nextIdx = currentIdx + 1
             val nextSeg = tr.segments.getOrNull(nextIdx) ?: return
             val nextSegId = s.segmentIds.getOrNull(nextIdx).orEmpty()
+            if (nextSegId.isBlank()) {
+                updateTransitNotificationAlighting(s.segmentIds.getOrNull(currentIdx).orEmpty())
+                return
+            }
             try {
                 val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
                     action = TransitTripForegroundService.ACTION_NEXT_SEGMENT
@@ -1584,6 +1593,7 @@ class RmvLogViewModel(
                     putExtra(TransitTripForegroundService.EXTRA_SEGMENT_INDEX, nextIdx)
                     putExtra(TransitTripForegroundService.EXTRA_TOTAL_SEGMENTS, tr.segments.size)
                     putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, nextSegId)
+                    putExtra(TransitTripForegroundService.EXTRA_SEGMENT_IDS, s.segmentIds.toTypedArray())
                     if (!nextSeg.toStopLat.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LAT, nextSeg.toStopLat)
                     if (!nextSeg.toStopLng.isNaN()) putExtra(TransitTripForegroundService.EXTRA_ALIGHTING_LNG, nextSeg.toStopLng)
                 }
@@ -1593,6 +1603,21 @@ class RmvLogViewModel(
             }
             // ViewModel'de de sonraki segmente geç
             nextSegment()
+        }
+    }
+
+    private fun updateTransitNotificationAlighting(segId: String) {
+        if (!PrefsManager.transitNotificationsEnabled) return
+        if (!hasNotificationPermission()) return
+        if (segId.isBlank()) return
+        try {
+            val intent = Intent(ctx(), TransitTripForegroundService::class.java).apply {
+                action = TransitTripForegroundService.ACTION_HANDLE_INDIM_FROM_NOTIF
+                putExtra(TransitTripForegroundService.EXTRA_TRIP_ID, segId)
+            }
+            ctx().startService(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("RmvLogViewModel", "Bildirim indirimi güncellenemedi: ${e.message}")
         }
     }
 
@@ -1651,6 +1676,122 @@ class RmvLogViewModel(
      * DB'den mevcut segmentlerin gerçek biniş/iniş saatlerini tazeler.
      * SharedFlow geçmişi yoktur; bu metod kaçırılan event'lerin telafisidir.
      */
+    fun refreshTransitServiceState() {
+        val activeState = transitServiceStateStore.readActiveState()
+        if (activeState == null) {
+            refreshActualTimesFromPrefs()
+            return
+        }
+
+        val serviceState = activeState.state
+        val current = _uiState.value
+        val currentId = current.segmentIds.getOrNull(current.selectedSegmentIndex).orEmpty()
+        if (current.trip != null && currentId == serviceState.tripId) {
+            if (current.selectedSegmentIndex != serviceState.segmentIndex) {
+                _uiState.value = current.copy(selectedSegmentIndex = serviceState.segmentIndex)
+            }
+            refreshActualTimesFromPrefs()
+            return
+        }
+
+        serviceStateRefreshJob?.cancel()
+        serviceStateRefreshJob = viewModelScope.launch {
+            try {
+                val record = transitRecordRepository.fetchRecord(serviceState.tripId) ?: return@launch
+                restoreActiveTransitServiceState(activeState, record)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                refreshActualTimesFromPrefs()
+            }
+        }
+    }
+
+    private fun restoreActiveTransitServiceState(
+        activeState: TransitServiceStateStore.ActiveState,
+        record: Map<String, Any>
+    ) {
+        val serviceState = activeState.state
+        val docId = record["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
+        val customId = record["id"]?.toString()?.takeIf { it.isNotBlank() }
+            ?: docId
+            ?: serviceState.tripId
+        val tarih = record["tarih"]?.toString().orEmpty()
+        val tur = record["tur"]?.toString().orEmpty()
+        val hat = record["hat"]?.toString().orEmpty()
+        val yon = record["yon"]?.toString().orEmpty()
+        val binisDuragi = record["binisDuragi"]?.toString().orEmpty()
+        val inisDuragi = record["inisDuragi"]?.toString().orEmpty()
+        val planlananBinis = record["planlananBinis"]?.toString().orEmpty()
+        val planlananInis = record["planlananInis"]?.toString().orEmpty()
+        val gercekBinis = record["gercekBinis"]?.toString().orEmpty()
+        val gercekInis = record["gercekInis"]?.toString().orEmpty()
+        val havaDurumu = record["havaDurumu"]?.toString() ?: "Bilinmiyor"
+        val oturabildim = record["oturabildimMi"]?.toString() == SeatingStatus.YES.key
+        val biletKontrolu = record["biletKontrolü"]?.toString() == TicketStatus.HAPPENED.key
+        val not = record["not"]?.toString().orEmpty()
+        val mesafe = record["mesafe"]?.toString().orEmpty()
+        val durakSayisi = record["durakSayisi"]?.toString().orEmpty()
+        val selectedIndex = serviceState.segmentIndex.coerceIn(0, (serviceState.totalSegments - 1).coerceAtLeast(0))
+        val totalSegments = serviceState.totalSegments.coerceAtLeast(1)
+        val segmentIds = MutableList(totalSegments) { index ->
+            serviceState.segmentIds.getOrNull(index).orEmpty()
+        }
+        segmentIds[selectedIndex] = customId
+
+        val distanceKm = TransitRecordCalculations.orsDistanceKm(record)
+            ?: TransitRecordCalculations.parseDistanceKm(mesafe)
+            ?: 0.0
+        val stopCount = durakSayisi.toIntOrNull() ?: 0
+        val activeSegment = Segment(
+            typeTr = tur,
+            line = hat,
+            direction = yon,
+            fromStop = binisDuragi,
+            toStop = inisDuragi,
+            dep = planlananBinis,
+            arr = planlananInis,
+            distanceKm = distanceKm,
+            stopCount = stopCount,
+            journeyRef = record[TransitRecordCalculations.FIELD_JOURNEY_REF]?.toString().orEmpty(),
+            fromStopId = record[TransitRecordCalculations.FIELD_FROM_STOP_ID]?.toString().orEmpty(),
+            toStopId = record[TransitRecordCalculations.FIELD_TO_STOP_ID]?.toString().orEmpty(),
+            toStopLat = serviceState.alightingLat,
+            toStopLng = serviceState.alightingLng
+        )
+        val segments = MutableList(totalSegments) { activeSegment }
+        segments[selectedIndex] = activeSegment
+        val trip = TripResult(
+            segments = segments,
+            overallDep = segments.firstOrNull()?.dep.orEmpty(),
+            overallArr = segments.lastOrNull()?.arr.orEmpty(),
+            durationMin = TransitRecordCalculations.computeYolSuresi(planlananBinis, planlananInis).toIntOrNull() ?: 0
+        )
+
+        _uiState.value = _uiState.value.copy(
+            mode = LogMode.AUTO,
+            date = tarih.ifBlank { _uiState.value.date },
+            from = binisDuragi,
+            to = inisDuragi,
+            trip = trip,
+            segmentIds = segmentIds,
+            firstSavedId = segmentIds.firstOrNull { it.isNotBlank() }.orEmpty(),
+            lastSavedId = segmentIds.lastOrNull { it.isNotBlank() }.orEmpty(),
+            selectedSegmentIndex = selectedIndex,
+            customBindimTime = if (gercekBinis.isNotBlank()) TransitTimeUtils.toDigits(gercekBinis) else "",
+            customIndimTime = if (gercekInis.isNotBlank()) TransitTimeUtils.toDigits(gercekInis) else "",
+            segmentHavaDurumu = mapOf(selectedIndex to havaDurumu),
+            segmentOturabildim = mapOf(selectedIndex to oturabildim),
+            segmentBiletKontrolu = mapOf(selectedIndex to biletKontrolu),
+            segmentNote = mapOf(selectedIndex to not),
+            status = if (activeState.isWaitingToBoard) S.statusReady(lang()) else S.statusReady(lang())
+        )
+        prefs.edit()
+            .putString("first_id", segmentIds.firstOrNull { it.isNotBlank() }.orEmpty())
+            .putString("last_id", segmentIds.lastOrNull { it.isNotBlank() }.orEmpty())
+            .apply()
+    }
+
     fun refreshActualTimesFromPrefs() {
         val s = _uiState.value
         val segmentIds = s.segmentIds

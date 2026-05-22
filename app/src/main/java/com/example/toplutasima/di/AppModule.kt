@@ -9,6 +9,7 @@ import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.repository.PersonalTripRepository
 import com.example.toplutasima.repository.RmvTripRepository
 import com.example.toplutasima.repository.TransitRecordRepository
+import com.example.toplutasima.repository.TripRecordMapper
 import com.example.toplutasima.repository.TripProfileLinkRepository
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
@@ -35,7 +36,14 @@ val appModule = module {
     // ── Repository ──────────────────────────────────────────────────────────
     single { RmvTripRepository() }
     single { TripProfileLinkRepository(androidContext()) }
-    single { TransitRecordRepository(androidContext(), get(), get(), get()) }
+    single {
+        TransitRecordRepository(
+            appContext = androidContext(),
+            profileLinkRepository = get(),
+            recordMapper = TripRecordMapper,
+            tripRemoteDataSource = get()
+        )
+    }
     single {
         LocalTripRepository(
             androidContext(),
