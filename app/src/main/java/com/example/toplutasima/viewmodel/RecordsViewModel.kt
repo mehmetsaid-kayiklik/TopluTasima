@@ -6,10 +6,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.MonthSummary
-import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.usecase.RecordFilterUtils
-import com.example.toplutasima.usecase.TransitRecordCalculations
+import com.example.toplutasima.usecase.RecordRowMapper
 import com.example.toplutasima.viewmodel.records.DayGroup
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 import com.example.toplutasima.viewmodel.records.RecordsUiState
@@ -278,48 +277,14 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun mapFirestoreRecordToRow(rec: Map<String, Any>): RecordRowUiModel {
-        val date = rec["tarih"]?.toString() ?: ""
-        val dayName = rec["gun"]?.toString() ?: ""
-        val turValue = rec["tur"]?.toString() ?: ""
-        val typeDisplay = "${vehicleIcon(turValue)} $turValue"
-
         val tripId = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
             ?: rec["id"]?.toString()
             ?: ""
         val link = allLinksMap[tripId]
         val profile = link?.profileId?.let { allProfilesMap[it] }
 
-        return RecordRowUiModel(
-            id = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
-                ?: rec["id"]?.toString()
-                ?: java.util.UUID.randomUUID().toString(),
-            date = date,
-            day = dayName,
-            type = turValue,
-            typeDisplay = typeDisplay,
-            line = rec["hat"]?.toString() ?: "",
-            direction = rec["yon"]?.toString() ?: "",
-            boardingStop = rec["binisDuragi"]?.toString() ?: "",
-            plannedDep = rec["planlananBinis"]?.toString() ?: "",
-            actualDep = rec["gercekBinis"]?.toString() ?: "",
-            delay = rec["gecikme"]?.toString() ?: "",
-            alightingStop = rec["inisDuragi"]?.toString() ?: "",
-            plannedArr = rec["planlananInis"]?.toString() ?: "",
-            actualArr = rec["gercekInis"]?.toString() ?: "",
-            dayType = rec["gununTipi"]?.toString() ?: "",
-            weather = rec["havaDurumu"]?.toString() ?: "",
-            seated = rec["oturabildimMi"]?.toString() ?: "",
-            plannedDuration = rec["planlananYolSuresi"]?.toString() ?: "",
-            actualDuration = rec["gercekYolSuresi"]?.toString() ?: "",
-            note = rec["not"]?.toString() ?: "",
-            ticketControl = rec["biletKontrolü"]?.toString() ?: "",
-            distance = rec["mesafe"]?.toString() ?: "",
-            orsDistance = rec[TransitRecordCalculations.FIELD_ORS_DISTANCE_TEXT]?.toString()?.takeIf { it.isNotBlank() }
-                ?: rec["mesafe"]?.toString().orEmpty(),
-            rmvDistance = rec[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT]?.toString().orEmpty(),
-            rmvDistanceStatus = rec[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS]?.toString().orEmpty(),
-            stopCount = rec["durakSayisi"]?.toString() ?: "",
-            originalRecord = rec,
+        return RecordRowMapper.fromFirestoreRecord(
+            rec = rec,
             profileId = link?.profileId ?: "",
             profileName = profile?.displayName ?: "",
             seatmateNote = link?.seatmateNote ?: ""

@@ -15,7 +15,9 @@ data class RecordFilterState(
     val ticketFilter: Boolean? = null,     // null = tümü, true = kontrol oldu, false = olmadı
     val minDelay: Int? = null,             // gecikme alt sınırı (dk)
     val maxDelay: Int? = null,             // gecikme üst sınırı (dk)
-    val stopName: String = ""              // biniş veya iniş durağı adı araması
+    val stopName: String = "",             // biniş veya iniş durağı adı araması
+    val startDate: String = "",            // dd.MM.yyyy, boş = başlangıç yok
+    val endDate: String = ""               // dd.MM.yyyy, boş = bitiş yok
 ) {
     /** Herhangi bir filtre aktif mi? */
     val hasActiveFilters: Boolean
@@ -26,7 +28,9 @@ data class RecordFilterState(
                 ticketFilter != null ||
                 minDelay != null ||
                 maxDelay != null ||
-                stopName.isNotBlank()
+                stopName.isNotBlank() ||
+                startDate.isNotBlank() ||
+                endDate.isNotBlank()
 
     /** Aktif filtre sayısı (chip gösterimi için) */
     val activeFilterCount: Int
@@ -39,6 +43,7 @@ data class RecordFilterState(
             if (ticketFilter != null) count++
             if (minDelay != null || maxDelay != null) count++
             if (stopName.isNotBlank()) count++
+            if (startDate.isNotBlank() || endDate.isNotBlank()) count++
             return count
         }
 }
@@ -87,6 +92,24 @@ object RecordFilterUtils {
         val delay = record.delay.toIntOrNull() ?: 0
         if (filter.minDelay != null && delay < filter.minDelay) return false
         if (filter.maxDelay != null && delay > filter.maxDelay) return false
+
+        // Tarih aralığı filtresi (dd.MM.yyyy -> yyyy-MM-dd)
+        if (filter.startDate.isNotBlank() || filter.endDate.isNotBlank()) {
+            val recordSortDate = TransitRecordCalculations.computeSortDate(record.date)
+            if (recordSortDate.isBlank()) return false
+
+            val startSortDate = filter.startDate
+                .takeIf { it.isNotBlank() }
+                ?.let { TransitRecordCalculations.computeSortDate(it) }
+                ?.takeIf { it.isNotBlank() }
+            val endSortDate = filter.endDate
+                .takeIf { it.isNotBlank() }
+                ?.let { TransitRecordCalculations.computeSortDate(it) }
+                ?.takeIf { it.isNotBlank() }
+
+            if (startSortDate != null && recordSortDate < startSortDate) return false
+            if (endSortDate != null && recordSortDate > endSortDate) return false
+        }
 
         // Durak adı filtresi (biniş veya iniş)
         if (filter.stopName.isNotBlank()) {
