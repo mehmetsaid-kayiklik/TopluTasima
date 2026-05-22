@@ -68,12 +68,14 @@ class TransitProximityTracker(
         proximityJob = trackerScope.launch {
             var consecutiveNullCount = 0
             var previousLocation: Location? = null
+            var nextCheckIntervalMs = DEFAULT_PROXIMITY_CHECK_INTERVAL_MS
             while (isActive) {
-                delay(PROXIMITY_CHECK_INTERVAL_MS)
+                delay(nextCheckIntervalMs)
                 try {
                     val loc = getCurrentLocationSuspend()
                     if (loc == null) {
                         resetWalkingState()
+                        nextCheckIntervalMs = DEFAULT_PROXIMITY_CHECK_INTERVAL_MS
                         consecutiveNullCount++
                         Log.w(TAG, "GPS alinamadi ($consecutiveNullCount/3)")
                         if (consecutiveNullCount >= 3) {
@@ -86,12 +88,13 @@ class TransitProximityTracker(
 
                     consecutiveNullCount = 0
                     val dist = haversineMeters(loc.latitude, loc.longitude, targetLat, targetLng)
+                    nextCheckIntervalMs = checkIntervalForDistance(dist)
                     val speedMps = movementSpeedMps(loc, previousLocation)
                     previousLocation = loc
                     logDebug(
                         "Proximity check: ${dist.toInt()}m speed=" +
                             (speedMps?.let { "%.1f".format(it) } ?: "unknown") +
-                            "m/s"
+                            "m/s next=${nextCheckIntervalMs / 1000}s"
                     )
 
                     if (dist <= ALIGHTING_PROXIMITY_METERS) {
@@ -157,6 +160,13 @@ class TransitProximityTracker(
         return false
     }
 
+    private fun checkIntervalForDistance(distanceMeters: Double): Long =
+        when {
+            distanceMeters <= CLOSE_ALIGHTING_PROXIMITY_METERS -> CLOSE_PROXIMITY_CHECK_INTERVAL_MS
+            distanceMeters <= ALIGHTING_PROXIMITY_METERS -> NEAR_PROXIMITY_CHECK_INTERVAL_MS
+            else -> DEFAULT_PROXIMITY_CHECK_INTERVAL_MS
+        }
+
     @SuppressLint("MissingPermission")
     private fun requestActivityUpdates() {
         _currentActivityConfidence.value = DetectedActivity.UNKNOWN to 0
@@ -167,7 +177,7 @@ class TransitProximityTracker(
 
         activityRecognitionClient
             .requestActivityUpdates(
-                PROXIMITY_CHECK_INTERVAL_MS,
+                DEFAULT_PROXIMITY_CHECK_INTERVAL_MS,
                 TransitActionIntents.activityRecognitionPendingIntent(context)
             )
             .addOnSuccessListener { logDebug("Activity Recognition updates baslatildi") }
@@ -261,7 +271,9 @@ class TransitProximityTracker(
 
     companion object {
         private const val TAG = "TransitProximity"
-        private const val PROXIMITY_CHECK_INTERVAL_MS = 30_000L
+        private const val DEFAULT_PROXIMITY_CHECK_INTERVAL_MS = 30_000L
+        private const val NEAR_PROXIMITY_CHECK_INTERVAL_MS = 10_000L
+        private const val CLOSE_PROXIMITY_CHECK_INTERVAL_MS = 5_000L
         private const val ALIGHTING_PROXIMITY_METERS = 100.0
         private const val CLOSE_ALIGHTING_PROXIMITY_METERS = 50.0
         private const val VALID_WALKING_CONFIDENCE = 70
