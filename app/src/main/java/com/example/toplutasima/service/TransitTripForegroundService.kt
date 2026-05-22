@@ -6,7 +6,6 @@ import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -16,15 +15,15 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.TransitAutoActualTimeMode
 import com.example.toplutasima.data.TransitReminderType
-import com.example.toplutasima.ui.util.vehicleIcon
+import com.example.toplutasima.service.transit.TransitActionIntents
+import com.example.toplutasima.service.transit.TransitNotificationBuilder
+import com.example.toplutasima.service.transit.TransitReminderScheduler
+import com.example.toplutasima.service.transit.TransitServiceStateStore
 import com.example.toplutasima.worker.TransitActionWorker
 import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.DetectedActivity
@@ -101,31 +100,12 @@ class TransitTripForegroundService : Service() {
         const val EXTRA_ALIGHTING_LAT = "alightingLat"
         const val EXTRA_ALIGHTING_LNG = "alightingLng"
         private const val EXTRA_FROM_NOTIFICATION_ACTION = "fromNotificationAction"
-        private const val PROXIMITY_WATCH_REQUEST_CODE = 9012
-        private const val ACTIVITY_RECOGNITION_REQUEST_CODE = 9013
-        private const val ACTION_ACTIVITY_RECOGNITION_UPDATE =
-            "com.example.toplutasima.transit.ACTIVITY_RECOGNITION_UPDATE"
         private const val PROXIMITY_CHECK_INTERVAL_MS = 30_000L
         private const val ALIGHTING_PROXIMITY_METERS = 100.0
         private const val CLOSE_ALIGHTING_PROXIMITY_METERS = 50.0
         private const val VALID_WALKING_CONFIDENCE = 70
         private const val CLOSE_AUTO_ALIGHTING_MAX_SPEED_MPS = 1.0
         private const val AUTO_ALIGHTING_MAX_SPEED_MPS = 2.0
-        private val REMINDER_VIBRATION_PATTERN = longArrayOf(0L, 350L, 150L, 350L)
-
-        // SharedPreferences anahtarları — servis state'ini restart sonrası geri yükler
-        private const val PREFS_STATE_NAME = "transit_service_state"
-        private const val PKEY_LINE = "transit_state_line"
-        private const val PKEY_ALIGHTING_STOP = "transit_state_alighting_stop"
-        private const val PKEY_PLANNED_ARR = "transit_state_planned_arr"
-        private const val PKEY_VEHICLE_TYPE = "transit_state_vehicle_type"
-        private const val PKEY_SEG_IDX = "transit_state_seg_idx"
-        private const val PKEY_TOTAL_SEGS = "transit_state_total_segs"
-        private const val PKEY_TRIP_ID = "transit_state_trip_id"
-        private const val PKEY_LAT = "transit_state_lat"
-        private const val PKEY_LNG = "transit_state_lng"
-        private const val PKEY_HAS_BOARDED = "transit_state_has_boarded"
-
         // ViewModel tarafından gözlemlenen durum
         private val _isActive = MutableStateFlow(false)
         val isActive: StateFlow<Boolean> = _isActive
@@ -137,29 +117,6 @@ class TransitTripForegroundService : Service() {
             MutableStateFlow(DetectedActivity.UNKNOWN to 0)
         val currentActivityConfidence: StateFlow<Pair<Int, Int>> = _currentActivityConfidence
 
-        fun createTransitActionPendingIntent(
-            context: Context,
-            notificationAction: String,
-            tripId: String
-        ): PendingIntent {
-            val serviceAction = when (notificationAction) {
-                TransitNotificationReceiver.ACTION_NOTIF_BINDIM -> ACTION_UPDATE_BOARDING
-                TransitNotificationReceiver.ACTION_NOTIF_INDIM -> ACTION_HANDLE_INDIM_FROM_NOTIF
-                else -> notificationAction
-            }
-            val intent = Intent(context, TransitTripForegroundService::class.java).apply {
-                action = serviceAction
-                putExtra(EXTRA_TRIP_ID, tripId)
-                putExtra(EXTRA_FROM_NOTIFICATION_ACTION, true)
-            }
-            val requestCode = 31 * notificationAction.hashCode() + tripId.hashCode()
-            return PendingIntent.getForegroundService(
-                context,
-                requestCode,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-        }
     }
 
     // Aktif segment bilgileri
@@ -185,7 +142,15 @@ class TransitTripForegroundService : Service() {
     /** LOCATION seçiliyken GPS/izin sorunu nedeniyle TIME'a düşüldü mü? */
     private var usingTimeFallback = false
 
-    private lateinit var statePrefs: android.content.SharedPreferences
+    private val stateStore by lazy { TransitServiceStateStore(this) }
+    private val notificationBuilder by lazy { TransitNotificationBuilder(this) }
+    private val reminderScheduler by lazy {
+        TransitReminderScheduler(
+            context = this,
+            onImmediateReminder = ::showReminderNotification,
+            logDebug = ::logD
+        )
+    }
     private val fusedClient by lazy { LocationServices.getFusedLocationProviderClient(this) }
     private val activityRecognitionClient by lazy { ActivityRecognition.getClient(this) }
 
@@ -195,7 +160,6 @@ class TransitTripForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        statePrefs = getEncryptedStatePrefs()
         createNotificationChannels()
     }
 
@@ -358,7 +322,7 @@ class TransitTripForegroundService : Service() {
         cancelReminder()
         cancelProximityWatchAlarm()
         // State prefs'ini temizle
-        if (::statePrefs.isInitialized) statePrefs.edit().clear().apply()
+        stateStore.clear()
         // Hatırlatma bildirimini de kaldır
         val nm = getSystemService(NotificationManager::class.java)
         nm.cancel(NOTIF_ID_REMINDER)
@@ -369,65 +333,44 @@ class TransitTripForegroundService : Service() {
 
     // ── State Persist / Restore ────────────────────────────────────────
 
-    private fun getEncryptedStatePrefs(): android.content.SharedPreferences {
-        return try {
-            val masterKey = MasterKey.Builder(this)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                this,
-                PREFS_STATE_NAME,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (e: java.security.GeneralSecurityException) {
-            Log.e(TAG, "EncryptedSharedPreferences fail, fallback to plain", e)
-            getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
-        } catch (e: java.io.IOException) {
-            Log.e(TAG, "EncryptedSharedPreferences io fail, fallback to plain", e)
-            getSharedPreferences(PREFS_STATE_NAME, Context.MODE_PRIVATE)
-        }
-    }
-
     /**
      * Tüm segment state'ini SharedPreferences'a yazar.
      * Restart (intent == null) veya alarm ile tetiklenmeden önce state kayıplarına karşı.
      */
     private fun persistServiceState() {
-        if (!::statePrefs.isInitialized) return
-        statePrefs.edit()
-            .putString(PKEY_LINE, currentLine)
-            .putString(PKEY_ALIGHTING_STOP, currentAlightingStop)
-            .putString(PKEY_PLANNED_ARR, currentPlannedArr)
-            .putString(PKEY_VEHICLE_TYPE, currentVehicleType)
-            .putInt(PKEY_SEG_IDX, currentSegmentIndex)
-            .putInt(PKEY_TOTAL_SEGS, totalSegments)
-            .putString(PKEY_TRIP_ID, currentTripId)
-            .putLong(PKEY_LAT, alightingLat.toBits())
-            .putLong(PKEY_LNG, alightingLng.toBits())
-            .putBoolean(PKEY_HAS_BOARDED, hasBoarded)
-            .apply()
+        stateStore.save(
+            TransitServiceStateStore.State(
+                line = currentLine,
+                alightingStop = currentAlightingStop,
+                plannedArr = currentPlannedArr,
+                vehicleType = currentVehicleType,
+                segmentIndex = currentSegmentIndex,
+                totalSegments = totalSegments,
+                tripId = currentTripId,
+                alightingLat = alightingLat,
+                alightingLng = alightingLng,
+                hasBoarded = hasBoarded
+            )
+        )
     }
 
     /** Restart sonrası state'i geri yükler. */
     private fun restoreServiceState(): Boolean {
-        if (!::statePrefs.isInitialized)
-            statePrefs = getEncryptedStatePrefs()
-        if (!statePrefs.contains(PKEY_TRIP_ID)) {
+        val state = stateStore.restore()
+        if (state == null) {
             Log.w(TAG, "Kayitli transit servis state'i bulunamadi")
             return false
         }
-        currentLine = statePrefs.getString(PKEY_LINE, "") ?: ""
-        currentAlightingStop = statePrefs.getString(PKEY_ALIGHTING_STOP, "") ?: ""
-        currentPlannedArr = statePrefs.getString(PKEY_PLANNED_ARR, "") ?: ""
-        currentVehicleType = statePrefs.getString(PKEY_VEHICLE_TYPE, "") ?: ""
-        currentSegmentIndex = statePrefs.getInt(PKEY_SEG_IDX, 0)
-        totalSegments = statePrefs.getInt(PKEY_TOTAL_SEGS, 1)
-        currentTripId = statePrefs.getString(PKEY_TRIP_ID, "") ?: ""
-        alightingLat = Double.fromBits(statePrefs.getLong(PKEY_LAT, Double.NaN.toBits()))
-        alightingLng = Double.fromBits(statePrefs.getLong(PKEY_LNG, Double.NaN.toBits()))
-        hasBoarded = statePrefs.getBoolean(PKEY_HAS_BOARDED, false)
+        currentLine = state.line
+        currentAlightingStop = state.alightingStop
+        currentPlannedArr = state.plannedArr
+        currentVehicleType = state.vehicleType
+        currentSegmentIndex = state.segmentIndex
+        totalSegments = state.totalSegments
+        currentTripId = state.tripId
+        alightingLat = state.alightingLat
+        alightingLng = state.alightingLng
+        hasBoarded = state.hasBoarded
         logD("Servis state geri yüklendi: line=$currentLine seg=$currentSegmentIndex/$totalSegments")
         return hasUsableServiceState()
     }
@@ -553,7 +496,7 @@ class TransitTripForegroundService : Service() {
         ).apply {
             description = "İnmeniz gereken durak yaklaştığında uyarır"
             enableVibration(true)
-            setVibrationPattern(REMINDER_VIBRATION_PATTERN)
+            setVibrationPattern(TransitNotificationBuilder.REMINDER_VIBRATION_PATTERN)
             setSound(null, null)
         }
         nm.createNotificationChannel(reminderChannel)
@@ -561,62 +504,20 @@ class TransitTripForegroundService : Service() {
 
     // ── Takip Bildirimi ──────────────────────────────────────────────────────
 
-    private fun segmentPrefix(): String =
-        if (totalSegments > 1) "(${currentSegmentIndex + 1}/$totalSegments) " else ""
-
-    private fun buildTrackingNotification(): Notification {
-        val emoji = vehicleIcon(currentVehicleType)
-        val prefix = segmentPrefix()
-
-        val title = if (hasBoarded) {
-            "$emoji $prefix$currentLine — Yolculuk aktif"
-        } else {
-            "$emoji $prefix$currentLine"
-        }
-
-        val arrText = if (currentPlannedArr.isNotBlank()) " ($currentPlannedArr)" else ""
-        val fallbackSuffix = if (usingTimeFallback) " · ⏰ Saat bazlı hatırlatma aktif" else ""
-        val text = "📍 İniş: $currentAlightingStop$arrText$fallbackSuffix"
-
-        val contentIntent = Intent(this, com.example.toplutasima.MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val contentPendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            contentIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_TRACKING)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_menu_directions)
-            .setContentIntent(contentPendingIntent)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setSilent(true)
-
-        if (totalSegments > 1) {
-            builder.setProgress(totalSegments, currentSegmentIndex + 1, false)
-        }
-
-        // Aksiyon butonları
-        if (!hasBoarded) {
-            builder.addAction(
-                0,
-                "Bindim ✋",
-                createActionPendingIntent(TransitNotificationReceiver.ACTION_NOTIF_BINDIM)
+    private fun buildTrackingNotification(): Notification =
+        notificationBuilder.buildTrackingNotification(
+            TransitNotificationBuilder.TrackingState(
+                line = currentLine,
+                alightingStop = currentAlightingStop,
+                plannedArr = currentPlannedArr,
+                vehicleType = currentVehicleType,
+                segmentIndex = currentSegmentIndex,
+                totalSegments = totalSegments,
+                tripId = currentTripId,
+                hasBoarded = hasBoarded,
+                usingTimeFallback = usingTimeFallback
             )
-        }
-        builder.addAction(
-            0,
-            "İndim 🏁",
-            createActionPendingIntent(TransitNotificationReceiver.ACTION_NOTIF_INDIM)
         )
-
-        return builder.build()
-    }
 
     private fun updateTrackingNotification() {
         val nm = getSystemService(NotificationManager::class.java)
@@ -625,110 +526,24 @@ class TransitTripForegroundService : Service() {
 
     /** Bir sonraki segment bekleniyor ara durumu bildirimi. */
     private fun updateTrackingNotificationWaiting() {
-        val contentIntent = Intent(this, com.example.toplutasima.MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val contentPi = PendingIntent.getActivity(
-            this, 0, contentIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val notification = NotificationCompat.Builder(this, CHANNEL_TRACKING)
-            .setContentTitle("🔄 Aktarma bekleniyor")
-            .setContentText("Sonraki aktarma bekleniyor...")
-            .setSmallIcon(android.R.drawable.ic_menu_directions)
-            .setContentIntent(contentPi)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setSilent(true)
-            .build()
         val nm = getSystemService(NotificationManager::class.java)
-        nm.notify(NOTIF_ID_TRACKING, notification)
+        nm.notify(NOTIF_ID_TRACKING, notificationBuilder.buildWaitingForNextSegmentNotification())
     }
 
     // ── Hatırlatma Zamanlayıcısı ──────────────────────────────────────────────
-
-    @SuppressLint("MissingPermission", "ScheduleExactAlarm")
     private fun scheduleReminder() {
-        if (currentPlannedArr.isBlank()) {
-            Log.w(TAG, "Planlanan varış saati yok, hatırlatma kurulamıyor")
-            return
-        }
-
-        try {
-            val timeString = currentPlannedArr.take(5)
-            val paddedTime = if (timeString.contains(":") && timeString.length < 5) timeString.padStart(5, '0') else timeString
-            val arrTime = LocalTime.parse(paddedTime, DateTimeFormatter.ofPattern("HH:mm"))
-            val offsetMinutes = PrefsManager.reminderOffsetMinutes.toLong()
-            val reminderTime = arrTime.plusMinutes(offsetMinutes)
-            val zoneId = java.time.ZoneId.systemDefault()
-            val now = java.time.ZonedDateTime.now(zoneId)
-            var targetZdt = now.with(reminderTime)
-
-            // Eğer hedef zaman geçmişte kaldıysa (gece yarısı geçişi veya zaten geçmiş)
-            if (targetZdt.isBefore(now)) {
-                // Eğer hedef saat 12 saatten daha fazla geride görünüyorsa, yarına aittir (gece yarısı geçişi)
-                if (java.time.temporal.ChronoUnit.HOURS.between(targetZdt, now) > 12) {
-                    targetZdt = targetZdt.plusDays(1)
-                } else {
-                    // Sadece birkaç saat/dakika geçmişteyse, gerçekten geçmiş demektir
-                    showReminderNotification()
-                    return
-                }
-            }
-
-            val triggerAt = targetZdt.toInstant().toEpochMilli()
-            val delayMs = triggerAt - now.toInstant().toEpochMilli()
-
-            // Eğer çok kısa (5 saniye altı) ise hemen göster
-            if (delayMs < 5_000L) {
-                showReminderNotification()
-                return
-            }
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(this, TransitNotificationReceiver::class.java).apply {
-                action = TransitNotificationReceiver.ACTION_REMINDER_TRIGGER
-                putExtra(EXTRA_LINE, currentLine)
-                putExtra(EXTRA_ALIGHTING_STOP, currentAlightingStop)
-                putExtra(EXTRA_PLANNED_ARR, currentPlannedArr)
-                putExtra(EXTRA_VEHICLE_TYPE, currentVehicleType)
-                putExtra(EXTRA_TRIP_ID, currentTripId)
-            }
-            val pi = PendingIntent.getBroadcast(
-                this, NOTIF_ID_REMINDER, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        reminderScheduler.schedule(
+            TransitReminderScheduler.ReminderState(
+                line = currentLine,
+                alightingStop = currentAlightingStop,
+                plannedArr = currentPlannedArr,
+                vehicleType = currentVehicleType,
+                tripId = currentTripId
             )
-
-            val canUseExactAlarm =
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-
-            if (canUseExactAlarm) {
-                try {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-                    logD("Hatırlatma kuruldu: ${delayMs / 1000}s sonra ($reminderTime)")
-                } catch (e: SecurityException) {
-                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-                    Log.w(TAG, "Exact alarm güvenlik hatası, inexact alarm kullanılıyor: ${e.message}")
-                }
-            } else {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-                Log.w(TAG, "Exact alarm izni yok, inexact alarm kullanılıyor")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Hatırlatma kurulamadı: ${e.message}")
-        }
-    }
-
-    private fun cancelReminder() {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(this, TransitNotificationReceiver::class.java).apply {
-            action = TransitNotificationReceiver.ACTION_REMINDER_TRIGGER
-        }
-        val pi = PendingIntent.getBroadcast(
-            this, NOTIF_ID_REMINDER, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        alarmManager.cancel(pi)
     }
+
+    private fun cancelReminder() = reminderScheduler.cancel()
 
     /**
      * Servis içinden doğrudan hatırlatma göstermek gerektiğinde (çok kısa delay).
@@ -736,7 +551,7 @@ class TransitTripForegroundService : Service() {
     private fun showReminderNotification() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIF_ID_REMINDER, buildReminderNotification(
-            currentLine, currentAlightingStop, currentPlannedArr, currentVehicleType
+            currentLine, currentAlightingStop, currentPlannedArr, currentVehicleType, currentTripId
         ))
     }
 
@@ -746,33 +561,10 @@ class TransitTripForegroundService : Service() {
     fun buildReminderNotification(
         line: String, alightingStop: String, plannedArr: String, vehicleType: String,
         tripId: String = currentTripId
-    ): Notification {
-        val emoji = vehicleIcon(vehicleType)
-
-        val indimPi = createTransitActionPendingIntent(
-            this,
-            TransitNotificationReceiver.ACTION_NOTIF_INDIM,
-            tripId
-        )
-
-        return NotificationCompat.Builder(this, CHANNEL_REMINDER)
-            .setContentTitle("⏰ İnmeniz gereken durak!")
-            .setContentText("$emoji $line → 📍 $alightingStop ($plannedArr)")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setAutoCancel(false)   // Mevcut bildirimi koru, otomatik kapanmasın
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVibrate(REMINDER_VIBRATION_PATTERN)
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
-            .addAction(0, "İndim 🏁", indimPi)
-            .build()
-    }
+    ): Notification =
+        notificationBuilder.buildReminderNotification(line, alightingStop, plannedArr, vehicleType, tripId)
 
     // ── PendingIntent Yardımcıları ────────────────────────────────────────────
-
-    private fun createActionPendingIntent(action: String): PendingIntent {
-        return createTransitActionPendingIntent(this, action, currentTripId)
-    }
 
     private fun enqueueTransitActionWorker(isBoarding: Boolean) {
         if (currentTripId.isBlank()) return
@@ -796,44 +588,12 @@ class TransitTripForegroundService : Service() {
      * Alarm tetiklenince ACTION_START_PROXIMITY_WATCH → startProximityWatch() çalışır.
      * Koordinat yoksa (manuel kayıt) sessizce çıkar — scheduleReminder() fallback olarak yeterli.
      */
-    @SuppressLint("MissingPermission", "ScheduleExactAlarm")
     private fun scheduleProximityWatchAlarm() {
         if (alightingLat.isNaN() || alightingLng.isNaN()) return
-        if (currentPlannedArr.isBlank()) return
-        try {
-            val timeString = currentPlannedArr.take(5)
-            val paddedTime = if (timeString.contains(":") && timeString.length < 5)
-                timeString.padStart(5, '0') else timeString
-            val arrTime = LocalTime.parse(paddedTime, DateTimeFormatter.ofPattern("HH:mm"))
-            val watchTime = arrTime.minusMinutes(3)
-            val now = LocalTime.now()
-            var delayMs = now.until(watchTime, ChronoUnit.MILLIS)
-            if (delayMs < 0) {
-                if (delayMs < -12 * 60 * 60 * 1000L) delayMs += 24 * 60 * 60 * 1000L
-                else { startProximityWatchInForeground(); return }
-            }
-            if (delayMs < 5_000L) { startProximityWatchInForeground(); return }
-
-            val triggerAt = System.currentTimeMillis() + delayMs
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val pi = PendingIntent.getForegroundService(
-                this, PROXIMITY_WATCH_REQUEST_CODE,
-                Intent(this, TransitTripForegroundService::class.java).apply {
-                    action = ACTION_START_PROXIMITY_WATCH
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-            if (canExact) {
-                try { alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi) }
-                catch (e: SecurityException) { alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi) }
-            } else {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-            }
-            logD("Proximity watch alarmı kuruldu: ${delayMs / 1000}s sonra ($watchTime)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Proximity watch alarmı kurulamadı: ${e.message}")
-        }
+        reminderScheduler.scheduleProximityWatch(
+            plannedArr = currentPlannedArr,
+            onImmediateStart = ::startProximityWatchInForeground
+        )
     }
 
     /** Proximity watch alarmını ve coroutine'ini iptal eder. */
@@ -843,17 +603,7 @@ class TransitTripForegroundService : Service() {
         isCurrentlyWalking = false
         consecutiveWalkingLoops = 0
         removeActivityUpdates()
-        try {
-            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val pi = PendingIntent.getForegroundService(
-                this, PROXIMITY_WATCH_REQUEST_CODE,
-                Intent(this, TransitTripForegroundService::class.java).apply {
-                    action = ACTION_START_PROXIMITY_WATCH
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            alarmManager.cancel(pi)
-        } catch (_: Exception) {}
+        reminderScheduler.cancelProximityWatchAlarm()
     }
 
     /**
@@ -875,16 +625,6 @@ class TransitTripForegroundService : Service() {
         startProximityWatch()
     }
 
-    private fun activityRecognitionPendingIntent(): PendingIntent =
-        PendingIntent.getBroadcast(
-            this,
-            ACTIVITY_RECOGNITION_REQUEST_CODE,
-            Intent(this, ActivityRecognitionReceiver::class.java).apply {
-                action = ACTION_ACTIVITY_RECOGNITION_UPDATE
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-
     @SuppressLint("MissingPermission")
     private fun requestActivityUpdates() {
         _currentActivityConfidence.value = DetectedActivity.UNKNOWN to 0
@@ -894,7 +634,10 @@ class TransitTripForegroundService : Service() {
         }
 
         activityRecognitionClient
-            .requestActivityUpdates(PROXIMITY_CHECK_INTERVAL_MS, activityRecognitionPendingIntent())
+            .requestActivityUpdates(
+                PROXIMITY_CHECK_INTERVAL_MS,
+                TransitActionIntents.activityRecognitionPendingIntent(this)
+            )
             .addOnSuccessListener { logD("Activity Recognition updates baslatildi") }
             .addOnFailureListener { e ->
                 Log.w(TAG, "Activity Recognition updates baslatilamadi: ${e.message}")
@@ -905,7 +648,7 @@ class TransitTripForegroundService : Service() {
         _currentActivityConfidence.value = DetectedActivity.UNKNOWN to 0
         try {
             activityRecognitionClient
-                .removeActivityUpdates(activityRecognitionPendingIntent())
+                .removeActivityUpdates(TransitActionIntents.activityRecognitionPendingIntent(this))
                 .addOnSuccessListener { logD("Activity Recognition updates durduruldu") }
                 .addOnFailureListener { e ->
                     Log.w(TAG, "Activity Recognition updates durdurulamadi: ${e.message}")

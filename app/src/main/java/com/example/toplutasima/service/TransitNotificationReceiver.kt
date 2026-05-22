@@ -5,9 +5,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.example.toplutasima.ui.util.vehicleIcon
+import com.example.toplutasima.service.transit.TransitNotificationBuilder
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -106,25 +105,13 @@ class TransitNotificationReceiver : BroadcastReceiver() {
         val vehicleType = intent.getStringExtra(TransitTripForegroundService.EXTRA_VEHICLE_TYPE) ?: ""
         val tripId = intent.getStringExtra(TransitTripForegroundService.EXTRA_TRIP_ID).orEmpty()
 
-        val emoji = vehicleIcon(vehicleType)
-
-        val indimPi = TransitTripForegroundService.createTransitActionPendingIntent(
-            context,
-            ACTION_NOTIF_INDIM,
-            tripId
+        val notification = TransitNotificationBuilder(context).buildReminderNotification(
+            line = line,
+            alightingStop = alightingStop,
+            plannedArr = plannedArr,
+            vehicleType = vehicleType,
+            tripId = tripId
         )
-
-        val notification = NotificationCompat.Builder(context, TransitTripForegroundService.CHANNEL_REMINDER)
-            .setContentTitle("⏰ İnmeniz gereken durak!")
-            .setContentText("$emoji $line → 📍 $alightingStop ($plannedArr)")
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setAutoCancel(false)   // İndim'e basılana kadar bildirim kalıcı kalsın
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVibrate(longArrayOf(0L, 350L, 150L, 350L))
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
-            .addAction(0, "İndim 🏁", indimPi)
-            .build()
 
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(TransitTripForegroundService.NOTIF_ID_REMINDER, notification)
