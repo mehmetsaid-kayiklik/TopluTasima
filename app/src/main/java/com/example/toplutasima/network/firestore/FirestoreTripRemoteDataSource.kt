@@ -2,6 +2,7 @@ package com.example.toplutasima.network.firestore
 
 import android.util.Log
 import com.example.toplutasima.BuildConfig
+import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
@@ -122,6 +123,28 @@ class FirestoreTripRemoteDataSource(
         }
     }
 
+    suspend fun fetchTripsAfter(sortDate: String): List<Map<String, Any>> {
+        val snapshot = db.collection(collectionName)
+            .whereGreaterThanOrEqualTo("sortDate", sortDate)
+            .get()
+            .await()
+        return snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            data + ("firestoreDocId" to doc.id)
+        }
+    }
+
+    suspend fun fetchTripsUpdatedAfter(updatedAt: Long): List<Map<String, Any>> {
+        val snapshot = db.collection(collectionName)
+            .whereGreaterThan("updatedAt", updatedAt)
+            .get()
+            .await()
+        return snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            data + ("firestoreDocId" to doc.id)
+        }
+    }
+
     suspend fun fetchTripsFiltered(
         month: String = "T\u00fcm\u00fc",
         type: String = "T\u00fcm\u00fc"
@@ -214,6 +237,61 @@ class FirestoreTripRemoteDataSource(
         }
     }
 
+    suspend fun updateStops(
+        tripId: String,
+        binisDuragi: String?,
+        binisTime: String?,
+        inisDuragi: String?,
+        inisTime: String?,
+        mesafe: String? = null,
+        durakSayisi: String? = null
+    ): Boolean {
+        val snapshot = db.collection(collectionName)
+            .whereEqualTo("id", tripId)
+            .get()
+            .await()
+        if (snapshot.isEmpty) return false
+
+        val docRef = snapshot.documents[0].reference
+        val existingData = snapshot.documents[0].data ?: return false
+        val updates = mutableMapOf<String, Any>()
+
+        if (!binisDuragi.isNullOrBlank()) {
+            updates["binisDuragi"] = binisDuragi
+            updates[TransitRecordCalculations.FIELD_FROM_STOP_ID] = ""
+        }
+        if (!binisTime.isNullOrBlank()) updates["planlananBinis"] = binisTime
+        if (!inisDuragi.isNullOrBlank()) {
+            updates["inisDuragi"] = inisDuragi
+            updates[TransitRecordCalculations.FIELD_TO_STOP_ID] = ""
+        }
+        if (!inisTime.isNullOrBlank()) updates["planlananInis"] = inisTime
+        if (mesafe != null) {
+            updates["mesafe"] = mesafe
+            val distanceKm = TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
+            updates.putAll(
+                TransitRecordCalculations.calculatedDistanceFields(
+                    distanceKm,
+                    resetRmvDistance = true
+                )
+            )
+        }
+        if (durakSayisi != null) updates["durakSayisi"] = durakSayisi
+
+        if (binisTime != null || inisTime != null) {
+            val finalBinis = binisTime ?: existingData["planlananBinis"]?.toString()
+            val finalInis = inisTime ?: existingData["planlananInis"]?.toString()
+            val yolSuresi = TransitRecordCalculations.computeYolSuresi(finalBinis, finalInis)
+            if (yolSuresi.isNotBlank()) updates["planlananYolSuresi"] = yolSuresi
+        }
+
+        if (updates.isNotEmpty()) {
+            updates["updatedAt"] = System.currentTimeMillis()
+            docRef.update(updates).await()
+        }
+        return true
+    }
+
     suspend fun deleteTrip(docId: String): Boolean {
         return try {
             db.collection(collectionName).document(docId).delete().await()
@@ -224,6 +302,30 @@ class FirestoreTripRemoteDataSource(
             Log.e(TAG, "deleteTrip failed for docId: $docId", e)
             throw e
         }
+    }
+
+    suspend fun bulkUpdate(tripId: String, mesafe: String, durakSayisi: Int): Boolean {
+        val snapshot = db.collection(collectionName)
+            .whereEqualTo("id", tripId)
+            .get()
+            .await()
+        if (snapshot.isEmpty) return false
+
+        val docRef = snapshot.documents[0].reference
+        docRef.update(
+            buildMap {
+                putAll(
+                    TransitRecordCalculations.calculatedDistanceFields(
+                        TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0,
+                        resetRmvDistance = true
+                    )
+                )
+                put("mesafe", mesafe)
+                put("durakSayisi", durakSayisi)
+                put("updatedAt", System.currentTimeMillis())
+            }
+        ).await()
+        return true
     }
 
     suspend fun updateExistingRecord(tripId: String, fields: Map<String, Any>): Boolean {
@@ -240,6 +342,77 @@ class FirestoreTripRemoteDataSource(
         } catch (e: Exception) {
             Log.e(TAG, "updateExistingRecord failed for tripId: $tripId", e)
             throw e
+        }
+    }
+
+    suspend fun saveTripMap(data: Map<String, Any?>): Boolean {
+        return try {
+            val enriched = data.toMutableMap()
+            val tarih = enriched["tarih"]?.toString()
+            if (!tarih.isNullOrBlank()) {
+                if (!enriched.containsKey("yearMonth")) {
+                    enriched["yearMonth"] = TransitRecordCalculations.computeYearMonth(tarih)
+                }
+                if (!enriched.containsKey("sortDate")) {
+                    enriched["sortDate"] = TransitRecordCalculations.computeSortDate(tarih)
+                }
+            }
+            enriched["updatedAt"] = System.currentTimeMillis()
+            enrichNewDistanceFields(enriched)
+            db.collection(collectionName).add(buildOrderedMap(enriched)).await()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "saveTripMap failed", e)
+            throw e
+        }
+    }
+
+    suspend fun fetchRowsForBulkUpdate(): List<BulkUpdateRow> {
+        val snapshot = db.collection(collectionName).get().await()
+        val results = mutableListOf<BulkUpdateRow>()
+        for (doc in snapshot.documents) {
+            val data = doc.data ?: continue
+            val mesafe = data["mesafe"]?.toString() ?: ""
+            val durakSayisi = data["durakSayisi"]?.toString() ?: ""
+
+            if (mesafe.isBlank() || durakSayisi.isBlank() || durakSayisi == "0") {
+                results.add(
+                    BulkUpdateRow(
+                        rowIndex = 0,
+                        sheetName = "",
+                        hat = data["hat"]?.toString() ?: "",
+                        tur = data["tur"]?.toString() ?: "",
+                        yon = data["yon"]?.toString() ?: "",
+                        binisDuragi = data["binisDuragi"]?.toString() ?: "",
+                        inisDuragi = data["inisDuragi"]?.toString() ?: "",
+                        planlananBinis = data["planlananBinis"]?.toString() ?: "",
+                        tarih = data["tarih"]?.toString() ?: "",
+                        firestoreDocId = doc.id
+                    )
+                )
+            }
+        }
+        return results
+    }
+
+    suspend fun fetchAllRowsForStopNameUpdate(): List<BulkUpdateRow> {
+        val snapshot = db.collection(collectionName).get().await()
+        return snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+            BulkUpdateRow(
+                rowIndex = 0,
+                sheetName = "",
+                hat = data["hat"]?.toString() ?: "",
+                tur = data["tur"]?.toString() ?: "",
+                yon = data["yon"]?.toString() ?: "",
+                binisDuragi = data["binisDuragi"]?.toString() ?: "",
+                inisDuragi = data["inisDuragi"]?.toString() ?: "",
+                planlananBinis = data["planlananBinis"]?.toString() ?: "",
+                tarih = data["tarih"]?.toString() ?: "",
+                firestoreDocId = doc.id
+            )
         }
     }
 
@@ -293,7 +466,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     private companion object {
-        private const val TAG = "FirestoreService"
+        private const val TAG = "FirestoreTripRemoteDataSource"
         private const val ALL_FILTER = "T\u00fcm\u00fc"
         private const val FIELD_JOURNEY_REF = "journeyRef"
         private const val FIELD_FROM_STOP_ID = "fromStopId"

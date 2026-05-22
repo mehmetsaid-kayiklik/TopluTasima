@@ -1,8 +1,15 @@
 package com.example.toplutasima.di
 
+import com.example.toplutasima.TopluTasimaApp
+import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.location.NearbyStopsManager
+import com.example.toplutasima.network.firestore.FirestoreFavoriteDataSource
+import com.example.toplutasima.network.firestore.FirestoreMigrationService
+import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.repository.PersonalTripRepository
-import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.repository.RmvTripRepository
+import com.example.toplutasima.repository.TransitRecordRepository
+import com.example.toplutasima.repository.TripProfileLinkRepository
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
@@ -17,16 +24,25 @@ import org.koin.dsl.module
 
 /**
  * Uygulamanın tek Koin modülü.
- *
- * – FirestoreService ve RmvApiService Kotlin `object` (global singleton) oldukları için
- *   buraya kaydetmeye gerek yok; TripRepository onlara doğrudan erişmeye devam eder.
- * – ViewModels, Koin'in `viewModel { }` bloğu ile tanımlanır; böylece
- *   Compose ekranlarında `koinViewModel()` ile inject edilebilirler.
  */
 val appModule = module {
 
+    // ── Remote Data Sources ─────────────────────────────────────────────────
+    single { FirestoreTripRemoteDataSource() }
+    single { FirestoreMigrationService() }
+    single { FirestoreFavoriteDataSource() }
+
     // ── Repository ──────────────────────────────────────────────────────────
-    single { TripRepository(androidContext()) }
+    single { RmvTripRepository() }
+    single { TripProfileLinkRepository(androidContext()) }
+    single { TransitRecordRepository(androidContext(), get(), get(), get()) }
+    single {
+        LocalTripRepository(
+            androidContext(),
+            (androidApplication() as TopluTasimaApp).database.tripDao(),
+            get()
+        )
+    }
     single { PersonalTripRepository() }       // Kişisel Araç — "personaltrips"
 
     // ── Use Case ────────────────────────────────────────────────────────────
@@ -36,10 +52,10 @@ val appModule = module {
     single { NearbyStopsManager(androidContext(), get()) }
 
     // ── ViewModels ──────────────────────────────────────────────────────────
-    viewModel { RmvLogViewModel(androidApplication(), get(), get(), get()) }
+    viewModel { RmvLogViewModel(androidApplication(), get(), get(), get(), get(), get()) }
     viewModel { SummaryViewModel(androidApplication()) }
     viewModel { RecordsViewModel(androidApplication()) }
-    viewModel { BulkUpdateViewModel(androidApplication()) }
+    viewModel { BulkUpdateViewModel(androidApplication(), get()) }
     viewModel { SettingsViewModel(androidApplication()) }
     viewModel { PersonalTripViewModel(androidApplication(), get()) }  // Kişisel Araç
 }

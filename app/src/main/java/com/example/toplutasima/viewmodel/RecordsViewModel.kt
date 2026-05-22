@@ -5,10 +5,11 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.usecase.RecordFilterUtils
+import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.viewmodel.records.DayGroup
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 import com.example.toplutasima.viewmodel.records.RecordsUiState
@@ -118,7 +119,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun selectMonth(month: FirestoreService.MonthSummary) {
+    fun selectMonth(month: MonthSummary) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 selectedMonth = month,
@@ -313,10 +314,10 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             note = rec["not"]?.toString() ?: "",
             ticketControl = rec["biletKontrolü"]?.toString() ?: "",
             distance = rec["mesafe"]?.toString() ?: "",
-            orsDistance = rec[FirestoreService.FIELD_ORS_DISTANCE_TEXT]?.toString()?.takeIf { it.isNotBlank() }
+            orsDistance = rec[TransitRecordCalculations.FIELD_ORS_DISTANCE_TEXT]?.toString()?.takeIf { it.isNotBlank() }
                 ?: rec["mesafe"]?.toString().orEmpty(),
-            rmvDistance = rec[FirestoreService.FIELD_RMV_DISTANCE_TEXT]?.toString().orEmpty(),
-            rmvDistanceStatus = rec[FirestoreService.FIELD_RMV_DISTANCE_STATUS]?.toString().orEmpty(),
+            rmvDistance = rec[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT]?.toString().orEmpty(),
+            rmvDistanceStatus = rec[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS]?.toString().orEmpty(),
             stopCount = rec["durakSayisi"]?.toString() ?: "",
             originalRecord = rec,
             profileId = link?.profileId ?: "",

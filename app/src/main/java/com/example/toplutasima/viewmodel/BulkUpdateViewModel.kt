@@ -12,6 +12,7 @@ import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.RmvApiService
+import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdateMode
 import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdatePhase
@@ -28,11 +29,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-class BulkUpdateViewModel(application: Application) : AndroidViewModel(application) {
+class BulkUpdateViewModel(
+    application: Application,
+    private val tripRemoteDataSource: FirestoreTripRemoteDataSource = FirestoreTripRemoteDataSource()
+) : AndroidViewModel(application) {
 
     private val tripRepository = LocalTripRepository(
         application,
-        (application as TopluTasimaApp).database.tripDao()
+        (application as TopluTasimaApp).database.tripDao(),
+        tripRemoteDataSource
     )
     private val _uiState = MutableStateFlow(BulkUpdateUiState())
     val uiState: StateFlow<BulkUpdateUiState> = _uiState.asStateFlow()
@@ -72,7 +77,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.value = _uiState.value.copy(phase = BulkUpdatePhase.LOADING, errorMessage = "")
             try {
                 val rows = withContext(Dispatchers.IO) { 
-                    com.example.toplutasima.network.FirestoreService.fetchRowsForBulkUpdate()
+                    tripRemoteDataSource.fetchRowsForBulkUpdate()
                 }
                 _uiState.value = _uiState.value.copy(
                     phase = BulkUpdatePhase.IDLE,
@@ -97,7 +102,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
             _uiState.value = _uiState.value.copy(phase = BulkUpdatePhase.LOADING, mode = BulkUpdateMode.STOP_NAMES, errorMessage = "")
             try {
                 val rows = withContext(Dispatchers.IO) { 
-                    com.example.toplutasima.network.FirestoreService.fetchAllRowsForStopNameUpdate()
+                    tripRemoteDataSource.fetchAllRowsForStopNameUpdate()
                 }
                 _uiState.value = _uiState.value.copy(
                     phase = BulkUpdatePhase.IDLE,
@@ -237,7 +242,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
             )
             try {
                 // Fetch all from Firestore
-                val trips = withContext(Dispatchers.IO) { com.example.toplutasima.network.FirestoreService.fetchTrips() }
+                val trips = withContext(Dispatchers.IO) { tripRemoteDataSource.fetchTrips() }
 
                 _uiState.value = _uiState.value.copy(
                     phase = BulkUpdatePhase.RUNNING,
@@ -283,7 +288,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
                                     resetRmvDistance = true
                                 )
                             )
-                            com.example.toplutasima.network.FirestoreService.updateTrip(docId, fields)
+                            tripRemoteDataSource.updateTrip(docId, fields)
                         }
                         if (ok) success++ else fail++
                     } catch (e: Exception) {
@@ -456,7 +461,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
                 resetRmvDistance = true
             )
         )
-        val ok = com.example.toplutasima.network.FirestoreService.updateTrip(row.firestoreDocId, updateFields)
+        val ok = tripRemoteDataSource.updateTrip(row.firestoreDocId, updateFields)
         logD("Row ${row.rowIndex} / doc ${row.firestoreDocId}: distance=$mesafeStr, stops=$stopCount, ok=$ok")
         return ok
     }
@@ -513,7 +518,7 @@ class BulkUpdateViewModel(application: Application) : AndroidViewModel(applicati
         ?: return false
 
         // 4) Update stop names and direction
-        val ok = com.example.toplutasima.network.FirestoreService.updateTrip(row.firestoreDocId, mapOf(
+        val ok = tripRemoteDataSource.updateTrip(row.firestoreDocId, mapOf(
             "binisDuragi" to seg.fromStop,
             "inisDuragi" to seg.toStop,
             "yon" to seg.direction

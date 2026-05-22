@@ -5,7 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.toplutasima.data.AppEventBus
-import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.repository.TransitRecordRepository
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -28,7 +28,7 @@ class TransitActionWorker(
             ?: LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
         return try {
-            val repository = TripRepository(applicationContext)
+            val repository = TransitRecordRepository(applicationContext)
             val updated = if (isBoarding) {
                 repository.updateActual(tripId, timestamp, null)
             } else {

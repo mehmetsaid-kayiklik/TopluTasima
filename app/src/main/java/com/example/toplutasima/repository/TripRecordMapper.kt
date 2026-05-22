@@ -3,7 +3,6 @@ package com.example.toplutasima.repository
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.TicketStatus
-import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
 import java.time.LocalDate
@@ -43,9 +42,9 @@ object TripRecordMapper {
         val mesafeText = TransitRecordCalculations.formatDistanceKm(seg.distanceKm)
         data["mesafe"] = mesafeText
         data.putAll(TransitRecordCalculations.calculatedDistanceFields(seg.distanceKm, resetRmvDistance = true))
-        data[FirestoreService.FIELD_JOURNEY_REF] = seg.journeyRef
-        data[FirestoreService.FIELD_FROM_STOP_ID] = seg.fromStopId
-        data[FirestoreService.FIELD_TO_STOP_ID] = seg.toStopId
+        data[TransitRecordCalculations.FIELD_JOURNEY_REF] = seg.journeyRef
+        data[TransitRecordCalculations.FIELD_FROM_STOP_ID] = seg.fromStopId
+        data[TransitRecordCalculations.FIELD_TO_STOP_ID] = seg.toStopId
         data["durakSayisi"] = if (seg.stopCount > 0) seg.stopCount.toString() else ""
         data["id"] = id
         data["yearMonth"] = TransitRecordCalculations.computeYearMonth(date)

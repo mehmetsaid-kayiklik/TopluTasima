@@ -7,7 +7,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.toplutasima.network.ApiRequestException
 import com.example.toplutasima.network.RmvApiService
-import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.repository.RmvTripRepository
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -22,7 +22,7 @@ import kotlin.coroutines.resume
  */
 class NearbyStopsManager(
     private val context: Context,
-    private val repository: TripRepository
+    private val repository: RmvTripRepository
 ) {
     companion object {
         private const val TAG = "NearbyStops"

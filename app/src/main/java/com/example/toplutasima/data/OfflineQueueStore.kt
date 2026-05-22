@@ -7,7 +7,7 @@ import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.worker.OfflineSyncWorker
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -23,6 +23,7 @@ object OfflineQueueStore {
     private const val TYPE_UPDATE_ACTUAL = "updateActual"
     private const val TYPE_UPDATE_RECORD = "updateRecord"
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val tripRemoteDataSource by lazy { FirestoreTripRemoteDataSource() }
 
     @Serializable
     data class QueuedAction(
@@ -92,16 +93,16 @@ object OfflineQueueStore {
         for (action in actions) {
             try {
                 when (action.type) {
-                    TYPE_SAVE_TRIP -> FirestoreService.saveTrip(action.payload.toAnyMap())
+                    TYPE_SAVE_TRIP -> tripRemoteDataSource.saveTrip(action.payload.toAnyMap())
                     TYPE_UPDATE_ACTUAL -> {
                         val payload = JSONObject(action.payload)
-                        FirestoreService.updateActual(
+                        tripRemoteDataSource.updateActual(
                             tripId = action.recordId,
                             actualDep = payload.optString("actualDep").ifBlank { null },
                             actualArr = payload.optString("actualArr").ifBlank { null }
                         )
                     }
-                    TYPE_UPDATE_RECORD -> FirestoreService.updateExistingRecord(
+                    TYPE_UPDATE_RECORD -> tripRemoteDataSource.updateExistingRecord(
                         tripId = action.recordId,
                         fields = action.payload.toAnyMap().filterValues { it != null }.mapValues { it.value as Any }
                     )

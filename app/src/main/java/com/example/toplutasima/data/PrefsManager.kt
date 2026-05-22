@@ -8,7 +8,7 @@ import com.example.toplutasima.model.FavoriteStop
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.network.firestore.FirestoreFavoriteDataSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,6 +44,7 @@ object PrefsManager {
     private lateinit var prefs: SharedPreferences
     private var appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val favoriteDataSource by lazy { FirestoreFavoriteDataSource() }
     private const val STOP_CACHE_KEY = "stop_search_cache"
     private const val STOP_CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
     private const val STOP_CACHE_MAX_ENTRIES = 30
@@ -186,14 +187,14 @@ object PrefsManager {
         favorites = favorites + fav
         saveFavorites()
         // Fire-and-forget Firebase backup
-        appScope.launch { FirestoreService.saveFavorite(fav) }
+        appScope.launch { favoriteDataSource.saveFavorite(fav) }
         return fav
     }
 
     fun removeFavorite(id: String) {
         favorites = favorites.filter { it.id != id }
         saveFavorites()
-        appScope.launch { FirestoreService.deleteFavorite(id) }
+        appScope.launch { favoriteDataSource.deleteFavorite(id) }
     }
 
     fun updateFavorite(id: String, label: String? = null, usageType: UsageType? = null) {
@@ -209,7 +210,7 @@ object PrefsManager {
         // Sync updated favorite to Firebase
         val updated = favorites.find { it.id == id }
         if (updated != null) {
-            appScope.launch { FirestoreService.saveFavorite(updated) }
+            appScope.launch { favoriteDataSource.saveFavorite(updated) }
         }
     }
 
@@ -224,7 +225,7 @@ object PrefsManager {
     // Aynı ID'ye sahip olanlar: Firebase versiyonu locale'i override eder.
     // Lokal-only favoriler korunur.
     suspend fun restoreFromFirebase(): Int {
-        val remoteFavs = FirestoreService.fetchAllFavorites()
+        val remoteFavs = favoriteDataSource.fetchAllFavorites()
         if (remoteFavs.isEmpty()) return 0
 
         val localById = favorites.associateBy { it.id }.toMutableMap()

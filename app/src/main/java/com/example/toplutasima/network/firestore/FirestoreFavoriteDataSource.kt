@@ -73,6 +73,6 @@ class FirestoreFavoriteDataSource(
     }
 
     private companion object {
-        private const val TAG = "FirestoreService"
+        private const val TAG = "FirestoreFavoriteDataSource"
     }
 }

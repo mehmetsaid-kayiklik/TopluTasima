@@ -1,6 +1,6 @@
 package com.example.toplutasima.viewmodel.records
 
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.usecase.RecordFilterState
 
 data class RecordRowUiModel(
@@ -43,8 +43,8 @@ data class DayGroup(
 )
 
 data class RecordsUiState(
-    val monthSummaries: List<FirestoreService.MonthSummary> = emptyList(),
-    val selectedMonth: FirestoreService.MonthSummary? = null,
+    val monthSummaries: List<MonthSummary> = emptyList(),
+    val selectedMonth: MonthSummary? = null,
     val selectedMonthTrips: List<DayGroup> = emptyList(),
     val isLoading: Boolean = false,
     val errorMsg: String = "",

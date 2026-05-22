@@ -16,7 +16,7 @@ object PersonalFirestoreService {
     private val db get() = FirebaseFirestore.getInstance()
     private const val COLLECTION = "personaltrips"
 
-    // ── Yardımcılar (FirestoreService'tekiyle aynı mantık) ──────────────────
+    // ── Yardımcılar ─────────────────────────────────────────────────────────
 
     fun computeSortDate(tarih: String): String {
         val parts = tarih.split(".")

@@ -12,7 +12,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.toplutasima.TopluTasimaApp
 import com.example.toplutasima.data.repository.LocalTripRepository
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.network.firestore.FirestoreMigrationService
+import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.RmvFooter
@@ -36,8 +37,10 @@ fun MaintenanceScreen(
 
     val context = LocalContext.current
     val app = context.applicationContext as TopluTasimaApp
-    val tripRepository = remember(context) {
-        LocalTripRepository(context.applicationContext, app.database.tripDao())
+    val tripRemoteDataSource = remember { FirestoreTripRemoteDataSource() }
+    val migrationService = remember { FirestoreMigrationService() }
+    val tripRepository = remember(context, tripRemoteDataSource) {
+        LocalTripRepository(context.applicationContext, app.database.tripDao(), tripRemoteDataSource)
     }
     val prefs = remember { context.getSharedPreferences("maintenance_prefs", Context.MODE_PRIVATE) }
 
@@ -112,7 +115,7 @@ fun MaintenanceScreen(
                 scope.launch {
                     try {
                         val count = withContext(Dispatchers.IO) {
-                            val updated = FirestoreService.migrateStripSeconds()
+                            val updated = migrationService.migrateStripSeconds()
                             tripRepository.syncFromFirestore(fullSync = true)
                             updated
                         }
@@ -138,7 +141,7 @@ fun MaintenanceScreen(
                 scope.launch {
                     try {
                         val (count, total) = withContext(Dispatchers.IO) {
-                            val result = FirestoreService.migrateYolSuresi()
+                            val result = migrationService.migrateYolSuresi()
                             tripRepository.syncFromFirestore(fullSync = true)
                             result
                         }
@@ -164,7 +167,7 @@ fun MaintenanceScreen(
                 scope.launch {
                     try {
                         val (count, total) = withContext(Dispatchers.IO) {
-                            val result = FirestoreService.migrateYearMonth()
+                            val result = migrationService.migrateYearMonth()
                             tripRepository.syncFromFirestore(fullSync = true)
                             result
                         }
@@ -191,7 +194,7 @@ fun MaintenanceScreen(
                 scope.launch {
                     try {
                         val (count, total) = withContext(Dispatchers.IO) {
-                            val result = FirestoreService.migrateSortDate()
+                            val result = migrationService.migrateSortDate()
                             tripRepository.syncFromFirestore(fullSync = true)
                             result
                         }
@@ -217,7 +220,7 @@ fun MaintenanceScreen(
                 scope.launch {
                     try {
                         val (count, total) = withContext(Dispatchers.IO) {
-                            val result = FirestoreService.migrateDistanceFields()
+                            val result = migrationService.migrateDistanceFields()
                             tripRepository.syncFromFirestore(fullSync = true)
                             result
                         }
@@ -243,7 +246,7 @@ fun MaintenanceScreen(
                 scope.launch {
                     try {
                         val (total, updated) = withContext(Dispatchers.IO) {
-                            val result = FirestoreService.migrateSeatmateUuid()
+                            val result = migrationService.migrateSeatmateUuid()
                             tripRepository.syncFromFirestore(fullSync = true)
                             result
                         }
@@ -364,17 +367,17 @@ fun MaintenanceScreen(
                                     scope.launch {
                                         try {
                                             withContext(Dispatchers.IO) {
-                                                FirestoreService.migrateStripSeconds()
-                                                FirestoreService.migrateYolSuresi()
-                                                FirestoreService.migrateYearMonth()
-                                                FirestoreService.migrateSortDate()
-                                                FirestoreService.migrateDistanceFields()
+                                                migrationService.migrateStripSeconds()
+                                                migrationService.migrateYolSuresi()
+                                                migrationService.migrateYearMonth()
+                                                migrationService.migrateSortDate()
+                                                migrationService.migrateDistanceFields()
                                                 tripRepository.syncFromFirestore(fullSync = true)
                                             }
                                             prefs.edit().putBoolean("yearMonthMigrated", true).apply()
                                             // Re-run health check
                                             val trips = withContext(Dispatchers.IO) {
-                                                FirestoreService.fetchTrips()
+                                                tripRemoteDataSource.fetchTrips()
                                             }
                                             healthIssues = com.example.toplutasima.usecase.DataHealthChecker.analyzeTrips(trips)
                                         } catch (e: CancellationException) {
@@ -404,7 +407,7 @@ fun MaintenanceScreen(
                             scope.launch {
                                 try {
                                     val trips = withContext(Dispatchers.IO) {
-                                        FirestoreService.fetchTrips()
+                                        tripRemoteDataSource.fetchTrips()
                                     }
                                     healthIssues = com.example.toplutasima.usecase.DataHealthChecker.analyzeTrips(trips)
                                 } catch (e: CancellationException) {

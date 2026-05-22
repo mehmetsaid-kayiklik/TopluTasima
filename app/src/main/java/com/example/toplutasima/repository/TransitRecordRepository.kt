@@ -6,7 +6,7 @@ import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.repository.toEntity
 import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.model.Segment
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +15,8 @@ import kotlinx.coroutines.withContext
 class TransitRecordRepository(
     private val appContext: Context? = null,
     private val profileLinkRepository: TripProfileLinkRepository = TripProfileLinkRepository(appContext),
-    private val recordMapper: TripRecordMapper = TripRecordMapper
+    private val recordMapper: TripRecordMapper = TripRecordMapper,
+    private val tripRemoteDataSource: FirestoreTripRemoteDataSource = FirestoreTripRemoteDataSource()
 ) {
     private fun getTripDao() = appContext?.let { AppDatabase.getDatabase(it).tripDao() }
 
@@ -47,7 +48,7 @@ class TransitRecordRepository(
         profileLinkRepository.saveInitialLink(id, profileId, seatmateNote)
 
         try {
-            val firestoreDocId = FirestoreService.saveTrip(data)
+            val firestoreDocId = tripRemoteDataSource.saveTrip(data)
             if (firestoreDocId.isNotBlank()) {
                 data["firestoreDocId"] = firestoreDocId
                 tripDao?.upsertAll(listOf(data.toEntity()))
@@ -87,7 +88,7 @@ class TransitRecordRepository(
                 }
             }
             try {
-                FirestoreService.updateActual(id, actualDep, actualArr)
+                tripRemoteDataSource.updateActual(id, actualDep, actualArr)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -122,7 +123,7 @@ class TransitRecordRepository(
                 }
             }
             try {
-                FirestoreService.clearActual(id, clearDep, clearArr)
+                tripRemoteDataSource.clearActual(id, clearDep, clearArr)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -142,7 +143,7 @@ class TransitRecordRepository(
         }
 
     suspend fun fetchRecord(id: String): Map<String, Any>? =
-        withContext(Dispatchers.IO) { FirestoreService.fetchRecord(id) }
+        withContext(Dispatchers.IO) { tripRemoteDataSource.fetchRecord(id) }
 
     suspend fun updateStops(
         id: String,
@@ -159,12 +160,12 @@ class TransitRecordRepository(
             if (existing != null) {
                 if (!binisDuragi.isNullOrBlank()) {
                     existing["binisDuragi"] = binisDuragi
-                    existing[FirestoreService.FIELD_FROM_STOP_ID] = ""
+                    existing[TransitRecordCalculations.FIELD_FROM_STOP_ID] = ""
                 }
                 if (!binisTime.isNullOrBlank()) existing["planlananBinis"] = binisTime
                 if (!inisDuragi.isNullOrBlank()) {
                     existing["inisDuragi"] = inisDuragi
-                    existing[FirestoreService.FIELD_TO_STOP_ID] = ""
+                    existing[TransitRecordCalculations.FIELD_TO_STOP_ID] = ""
                 }
                 if (!inisTime.isNullOrBlank()) existing["planlananInis"] = inisTime
                 if (mesafe != null) {
@@ -184,7 +185,7 @@ class TransitRecordRepository(
                 tripDao.upsertAll(listOf(existing.toEntity()))
             }
         }
-        FirestoreService.updateStops(id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi)
+        tripRemoteDataSource.updateStops(id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi)
     }
 
     suspend fun updateExistingRecord(id: String, fields: Map<String, Any>): Boolean =
@@ -198,7 +199,7 @@ class TransitRecordRepository(
                 }
             }
             try {
-                FirestoreService.updateExistingRecord(id, fields)
+                tripRemoteDataSource.updateExistingRecord(id, fields)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

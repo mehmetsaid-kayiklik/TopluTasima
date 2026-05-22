@@ -3,8 +3,10 @@ package com.example.toplutasima.data.repository
 import android.content.Context
 import com.example.toplutasima.data.local.dao.TripDao
 import com.example.toplutasima.data.local.entity.TripEntity
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.model.SummaryData
+import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
+import com.example.toplutasima.usecase.SummaryCalculator
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +18,11 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 
-class LocalTripRepository(private val context: Context, private val tripDao: TripDao) {
+class LocalTripRepository(
+    private val context: Context,
+    private val tripDao: TripDao,
+    private val tripRemoteDataSource: FirestoreTripRemoteDataSource = FirestoreTripRemoteDataSource()
+) {
 
     private companion object {
         const val SYNC_PREFS = "sync_prefs"
@@ -32,11 +38,11 @@ class LocalTripRepository(private val context: Context, private val tripDao: Tri
         val now = System.currentTimeMillis()
         
         val tripsMap = if (shouldFullSync) {
-            FirestoreService.fetchTrips()
+            tripRemoteDataSource.fetchTrips()
         } else {
             val fallbackSortDate = lastSyncSortDate ?: sortDateFromTimestamp(lastSyncTimestamp)
-            val updatedTrips = FirestoreService.fetchTripsUpdatedAfter(lastSyncTimestamp)
-            val legacyTrips = FirestoreService.fetchTripsAfter(fallbackSortDate)
+            val updatedTrips = tripRemoteDataSource.fetchTripsUpdatedAfter(lastSyncTimestamp)
+            val legacyTrips = tripRemoteDataSource.fetchTripsAfter(fallbackSortDate)
             (updatedTrips + legacyTrips).distinctBy { remoteKey(it) }
         }
         
@@ -121,7 +127,7 @@ class LocalTripRepository(private val context: Context, private val tripDao: Tri
 
     suspend fun saveTrip(trip: TripEntity) = withContext(Dispatchers.IO) {
         tripDao.upsertAll(listOf(trip))
-        val firestoreDocId = FirestoreService.saveTrip(trip.toMap())
+        val firestoreDocId = tripRemoteDataSource.saveTrip(trip.toMap())
         if (trip.firestoreDocId.isNullOrBlank() && firestoreDocId.isNotBlank()) {
             tripDao.upsertAll(listOf(trip.copy(firestoreDocId = firestoreDocId)))
             getTripProfileLinkDao().updateStableKey(trip.id, firestoreDocId, System.currentTimeMillis())
@@ -142,11 +148,10 @@ class LocalTripRepository(private val context: Context, private val tripDao: Tri
         val firestoreDocId = localTrip?.firestoreDocId ?: ""
         getTripProfileLinkDao().deleteLinksForTrip(tripId, firestoreDocId)
         
-        // FirestoreService'ye dokunmamak adına işlemi burada yapıyoruz
         val collection = FirebaseFirestore.getInstance().collection("trips")
         val docId = localTrip?.firestoreDocId?.takeIf { it.isNotBlank() } ?: id
         if (docId.isNotBlank()) {
-            collection.document(docId).delete().await()
+            tripRemoteDataSource.deleteTrip(docId)
         }
 
         val appId = localTrip?.id ?: id
@@ -160,7 +165,7 @@ class LocalTripRepository(private val context: Context, private val tripDao: Tri
         }
     }
 
-    suspend fun getMonthSummaries(): List<FirestoreService.MonthSummary> = withContext(Dispatchers.IO) {
+    suspend fun getMonthSummaries(): List<MonthSummary> = withContext(Dispatchers.IO) {
         val tuples = tripDao.getMonthSummaries()
         val monthNames = mapOf(
             "01" to "Ocak", "02" to "Şubat", "03" to "Mart", "04" to "Nisan",
@@ -172,7 +177,7 @@ class LocalTripRepository(private val context: Context, private val tripDao: Tri
             val year = if (parts.isNotEmpty()) parts[0] else ""
             val monthNum = if (parts.size > 1) parts[1] else ""
             val monthName = monthNames[monthNum] ?: monthNum
-            FirestoreService.MonthSummary(
+            MonthSummary(
                 monthName = monthName,
                 year = year,
                 count = tuple.count,
@@ -185,6 +190,6 @@ class LocalTripRepository(private val context: Context, private val tripDao: Tri
         val entities = tripDao.getAllTrips()
         @Suppress("UNCHECKED_CAST")
         val allDocs = entities.map { it.toMap() } as List<Map<String, Any>>
-        FirestoreService.computeSummary(allDocs, sheetName)
+        SummaryCalculator.computeSummary(allDocs, sheetName)
     }
 }

@@ -39,7 +39,7 @@ import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.VehicleType
-import com.example.toplutasima.network.FirestoreService
+import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.WarningAmber
@@ -60,11 +60,11 @@ import java.time.LocalTime
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MonthListScreen(
-    summaries: List<com.example.toplutasima.network.FirestoreService.MonthSummary>,
+    summaries: List<MonthSummary>,
     isLoading: Boolean,
     errorMsg: String,
     lang: com.example.toplutasima.ui.AppLanguage,
-    onMonthClick: (com.example.toplutasima.network.FirestoreService.MonthSummary) -> Unit,
+    onMonthClick: (MonthSummary) -> Unit,
     onTogglePersonal: () -> Unit = {},
     onRefresh: () -> Unit,
     globalSearchLoading: Boolean = false,

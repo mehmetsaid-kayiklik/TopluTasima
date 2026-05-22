@@ -15,9 +15,10 @@ import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.model.VehicleType
-import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.network.RmvApiService
-import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.repository.RmvTripRepository
+import com.example.toplutasima.repository.TransitRecordRepository
+import com.example.toplutasima.repository.TripProfileLinkRepository
 import com.example.toplutasima.service.JourneyMatchForegroundService
 import com.example.toplutasima.service.TransitNotificationReceiver
 import com.example.toplutasima.service.TransitTripForegroundService
@@ -47,7 +48,9 @@ import java.util.UUID
 
 class RmvLogViewModel(
     application: Application,
-    private val repository: TripRepository,
+    private val rmvTripRepository: RmvTripRepository,
+    private val transitRecordRepository: TransitRecordRepository,
+    private val tripProfileLinkRepository: TripProfileLinkRepository,
     private val tripPlanner: TripPlanningUseCase,
     private val nearbyManager: com.example.toplutasima.location.NearbyStopsManager
 ) : AndroidViewModel(application) {
@@ -120,7 +123,7 @@ class RmvLogViewModel(
                 val current = _uiState.value
                 if (current.fromId != fromId || current.toId != toId || current.date != uiDate) break
                 try {
-                    val freshDepartures = repository.fetchDepartures(fromId, toId, apiDate, searchTime)
+                    val freshDepartures = rmvTripRepository.fetchDepartures(fromId, toId, apiDate, searchTime)
                     val latest = _uiState.value
                     if (latest.fromId != fromId || latest.toId != toId || latest.date != uiDate) break
                     val mergedDepartures = freshDepartures.map { fresh ->
@@ -361,7 +364,7 @@ class RmvLogViewModel(
         val segId = _uiState.value.segmentIds.getOrNull(idx)
         if (segId != null) {
             viewModelScope.launch {
-                repository.updateExistingRecord(segId, mapOf("havaDurumu" to value))
+                transitRecordRepository.updateExistingRecord(segId, mapOf("havaDurumu" to value))
             }
         }
     }
@@ -373,7 +376,7 @@ class RmvLogViewModel(
         val segId = _uiState.value.segmentIds.getOrNull(idx)
         if (segId != null) {
             viewModelScope.launch {
-                repository.updateExistingRecord(segId, mapOf("oturabildimMi" to SeatingStatus.fromBoolean(value).key))
+                transitRecordRepository.updateExistingRecord(segId, mapOf("oturabildimMi" to SeatingStatus.fromBoolean(value).key))
             }
         }
     }
@@ -385,7 +388,7 @@ class RmvLogViewModel(
         val segId = _uiState.value.segmentIds.getOrNull(idx)
         if (segId != null) {
             viewModelScope.launch {
-                repository.updateExistingRecord(segId, mapOf("biletKontrolü" to TicketStatus.fromBoolean(value).key))
+                transitRecordRepository.updateExistingRecord(segId, mapOf("biletKontrolü" to TicketStatus.fromBoolean(value).key))
             }
         }
     }
@@ -490,7 +493,7 @@ class RmvLogViewModel(
                     return@launch
                 }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingFrom(lang()), fromOptions = emptyList())
-                val opts = repository.searchLocations(query, 5).map { it.toStopOption() }
+                val opts = rmvTripRepository.searchLocations(query, 5).map { it.toStopOption() }
                 PrefsManager.saveStopSearch(query, opts)
                 _uiState.value = _uiState.value.copy(
                     fromOptions = opts,
@@ -520,7 +523,7 @@ class RmvLogViewModel(
                     return@launch
                 }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingTo(lang()), toOptions = emptyList())
-                val opts = repository.searchLocations(query, 5).map { it.toStopOption() }
+                val opts = rmvTripRepository.searchLocations(query, 5).map { it.toStopOption() }
                 PrefsManager.saveStopSearch(query, opts)
                 _uiState.value = _uiState.value.copy(
                     toOptions = opts,
@@ -559,7 +562,7 @@ class RmvLogViewModel(
                 val searchTime = if (s.time.isNotBlank()) RmvApiService.formatTimeDigits(s.time)
                     else LocalTime.now().withSecond(0).withNano(0).format(DateTimeFormatter.ofPattern("HH:mm"))
                 val apiDate = RmvApiService.convertToApiDate(s.date)
-                val deps = repository.fetchDepartures(s.fromId, s.toId, apiDate, searchTime)
+                val deps = rmvTripRepository.fetchDepartures(s.fromId, s.toId, apiDate, searchTime)
                 _uiState.value = _uiState.value.copy(
                     departures = deps,
                     status = if (deps.isEmpty()) S.statusNoDepartures(lang()) else S.statusDeparturesReady(deps.size, lang())
@@ -637,7 +640,7 @@ class RmvLogViewModel(
                                     toStopLng = seg.toStopLng
                                 )
                             } else {
-                                runCatching { repository.fetchSegmentDetails(seg) }
+                                runCatching { rmvTripRepository.fetchSegmentDetails(seg) }
                                     .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
                             }
                         }
@@ -674,7 +677,7 @@ class RmvLogViewModel(
                 val searchTime = if (s.time.isNotBlank()) RmvApiService.formatTimeDigits(s.time)
                     else LocalTime.now().withSecond(0).withNano(0).format(DateTimeFormatter.ofPattern("HH:mm"))
                 val apiDate = RmvApiService.convertToApiDate(s.date)
-                val res = repository.fetchTripBasic(s.fromId, s.toId, apiDate, searchTime)
+                val res = rmvTripRepository.fetchTripBasic(s.fromId, s.toId, apiDate, searchTime)
                 _uiState.value = _uiState.value.copy(trip = res, status = S.statusPlanReady(res.segments.size, lang()))
 
                 val expectedSegmentCount = res.segments.size
@@ -682,7 +685,7 @@ class RmvLogViewModel(
                     try {
                         val detailsList = res.segments.map { seg ->
                             ensureActive()
-                            runCatching { repository.fetchSegmentDetails(seg) }
+                            runCatching { rmvTripRepository.fetchSegmentDetails(seg) }
                                 .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
                         }
                         ensureActive()
@@ -708,7 +711,7 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 val apiDate = runCatching { RmvApiService.convertToApiDate(_uiState.value.date) }.getOrDefault("")
-                val alerts = repository.fetchTransitAlerts(line, apiDate)
+                val alerts = rmvTripRepository.fetchTransitAlerts(line, apiDate)
                 _uiState.value = _uiState.value.copy(
                     transitAlerts = alerts,
                     transitAlertsLoading = false
@@ -770,14 +773,14 @@ class RmvLogViewModel(
                         val otur = s.segmentOturabildim[idx] ?: false
                         val bilet = s.segmentBiletKontrolu[idx] ?: false
                         val not = s.segmentNote[idx] ?: ""
-                        val ok = repository.saveSegment(
+                        val ok = transitRecordRepository.saveSegment(
                             id, s.date, seg, hava, otur, bilet, not,
                             profileId = s.segmentProfileId[idx].takeIf { !it.isNullOrBlank() },
                             seatmateNote = s.segmentSeatmateNote[idx].takeIf { !it.isNullOrBlank() }
                         )
                         if (!ok) throw Exception(S.errorSaveFailed(lang()))
                         if (idx == s.selectedSegmentIndex && (s.customBindimTime.isNotBlank() || s.customIndimTime.isNotBlank())) {
-                            repository.updateActual(
+                            transitRecordRepository.updateActual(
                                 id,
                                 s.customBindimTime.takeIf { it.isNotBlank() }?.let { RmvApiService.formatTimeDigits(it) },
                                 s.customIndimTime.takeIf { it.isNotBlank() }?.let { RmvApiService.formatTimeDigits(it) }
@@ -799,7 +802,7 @@ class RmvLogViewModel(
                         val planlananSure = TransitRecordCalculations.computeYolSuresi(
                             seg.dep.ifBlank { null }, seg.arr.ifBlank { null }
                         )
-                        val ok = repository.updateExistingRecord(id, mapOf(
+                        val ok = transitRecordRepository.updateExistingRecord(id, mapOf(
                             "planlananBinis" to seg.dep,
                             "planlananInis" to seg.arr,
                             "planlananYolSuresi" to planlananSure,
@@ -810,7 +813,7 @@ class RmvLogViewModel(
                         ))
                         if (!ok) throw Exception(S.errorSaveFailed(lang()))
 
-                        repository.updateTripProfileLink(
+                        tripProfileLinkRepository.updateTripProfileLink(
                             id,
                             s.segmentProfileId[idx].takeIf { !it.isNullOrBlank() },
                             s.segmentSeatmateNote[idx].takeIf { !it.isNullOrBlank() }
@@ -837,7 +840,7 @@ class RmvLogViewModel(
                 val t = if (s.customBindimTime.isNotBlank()) RmvApiService.formatTimeDigits(s.customBindimTime)
                     else LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                 _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = repository.updateActual(segId, t, null)
+                val ok = transitRecordRepository.updateActual(segId, t, null)
                 _uiState.value = _uiState.value.copy(
                     status = if (ok) S.statusBoarded(t, lang())
                              else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=$segId)"
@@ -859,7 +862,7 @@ class RmvLogViewModel(
                 val t = if (s.customIndimTime.isNotBlank()) RmvApiService.formatTimeDigits(s.customIndimTime)
                     else LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                 _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = repository.updateActual(segId, null, t)
+                val ok = transitRecordRepository.updateActual(segId, null, t)
                 _uiState.value = _uiState.value.copy(
                     status = if (ok) S.statusAlighted(t, lang())
                              else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=$segId)"
@@ -881,7 +884,7 @@ class RmvLogViewModel(
                 val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
                 if (segId.isBlank()) return@launch
                 _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = repository.clearActual(segId, clearDep = true, clearArr = false)
+                val ok = transitRecordRepository.clearActual(segId, clearDep = true, clearArr = false)
                 _uiState.value = _uiState.value.copy(
                     customBindimTime = "",
                     status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=$segId)"
@@ -901,7 +904,7 @@ class RmvLogViewModel(
                 val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
                 if (segId.isBlank()) return@launch
                 _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = repository.clearActual(segId, clearDep = false, clearArr = true)
+                val ok = transitRecordRepository.clearActual(segId, clearDep = false, clearArr = true)
                 _uiState.value = _uiState.value.copy(
                     customIndimTime = "",
                     status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=$segId)"
@@ -944,9 +947,9 @@ class RmvLogViewModel(
             dep = planlananBinis, arr = planlananInis,
             distanceKm = distanceKm,
             stopCount = stopCount,
-            journeyRef = record[FirestoreService.FIELD_JOURNEY_REF]?.toString().orEmpty(),
-            fromStopId = record[FirestoreService.FIELD_FROM_STOP_ID]?.toString().orEmpty(),
-            toStopId = record[FirestoreService.FIELD_TO_STOP_ID]?.toString().orEmpty()
+            journeyRef = record[TransitRecordCalculations.FIELD_JOURNEY_REF]?.toString().orEmpty(),
+            fromStopId = record[TransitRecordCalculations.FIELD_FROM_STOP_ID]?.toString().orEmpty(),
+            toStopId = record[TransitRecordCalculations.FIELD_TO_STOP_ID]?.toString().orEmpty()
         )
 
         val trip = com.example.toplutasima.model.TripResult(
@@ -1088,11 +1091,11 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 // 1. Biniş ve iniş durak ID'lerini ara
-                val fromOpts = repository.searchStops(seg.fromStop.trim(), 3)
+                val fromOpts = rmvTripRepository.searchStops(seg.fromStop.trim(), 3)
                 val fromId = fromOpts.firstOrNull()?.id
                     ?: throw Exception(S.errorStopNotFound(lang()))
 
-                val toOpts = repository.searchStops(seg.toStop.trim(), 3)
+                val toOpts = rmvTripRepository.searchStops(seg.toStop.trim(), 3)
                 val toId = toOpts.firstOrNull()?.id
                     ?: throw Exception(S.errorStopNotFound(lang()))
 
@@ -1101,7 +1104,7 @@ class RmvLogViewModel(
                 val searchTime = seg.dep.take(5).ifBlank {
                     java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
                 }
-                val deps = repository.fetchDepartures(fromId, toId, apiDate, searchTime)
+                val deps = rmvTripRepository.fetchDepartures(fromId, toId, apiDate, searchTime)
 
                 // 3. Hat numarasına göre en uygun kalkışı bul
                 val matchingDep = deps.firstOrNull { dep ->
@@ -1124,7 +1127,7 @@ class RmvLogViewModel(
                     ?: throw Exception("Segment bulunamadı")
 
                 // 5. Durak detaylarını (stopNames, stopTimes, journeyRef) çek
-                val details = runCatching { repository.fetchSegmentDetails(newSeg) }
+                val details = runCatching { rmvTripRepository.fetchSegmentDetails(newSeg) }
                     .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
 
                 val stopNames = details.stopNames.ifEmpty { newSeg.stopNames }
@@ -1234,7 +1237,7 @@ class RmvLogViewModel(
                 val newMesafe = if (newDistanceKm > 0) String.format(Locale.US, "%.2f km", newDistanceKm) else ""
                 val newDurakSayisi = if (newStopCount > 0) newStopCount.toString() else ""
 
-                val ok = repository.updateStops(
+                val ok = transitRecordRepository.updateStops(
                     id = segId,
                     binisDuragi = if (isBinis) newStopName else null,
                     binisTime   = if (isBinis) newTime else null,
@@ -1345,7 +1348,7 @@ class RmvLogViewModel(
         val segId = _uiState.value.segmentIds.getOrNull(index)
         if (segId != null) {
             viewModelScope.launch {
-                repository.updateTripProfileLink(segId, profileId, s.segmentSeatmateNote[index].orEmpty())
+                tripProfileLinkRepository.updateTripProfileLink(segId, profileId, s.segmentSeatmateNote[index].orEmpty())
             }
         }
     }
@@ -1360,7 +1363,7 @@ class RmvLogViewModel(
             val profId = s.segmentProfileId[index].orEmpty()
             if (profId.isNotBlank()) {
                 viewModelScope.launch {
-                    repository.updateTripProfileLink(segId, profId, note)
+                    tripProfileLinkRepository.updateTripProfileLink(segId, profId, note)
                 }
             }
         }
@@ -1397,7 +1400,7 @@ class RmvLogViewModel(
 
                 if (s.segmentIds.isEmpty()) {
                     val newId = UUID.randomUUID().toString()
-                    val ok = repository.saveSegment(
+                    val ok = transitRecordRepository.saveSegment(
                         newId, s.date, segment, m.weather, m.oturabildim, m.biletKontrolu, m.note,
                         profileId = m.profileId.takeIf { it.isNotBlank() },
                         seatmateNote = m.seatmateNote.takeIf { it.isNotBlank() }
@@ -1407,7 +1410,7 @@ class RmvLogViewModel(
                         val actDep = TransitTimeUtils.formatTime(m.actualDep)
                         val actArr = TransitTimeUtils.formatTime(m.actualArr)
                         if (actDep.isNotBlank() || actArr.isNotBlank()) {
-                            repository.updateActual(newId, actDep.ifBlank { null }, actArr.ifBlank { null })
+                            transitRecordRepository.updateActual(newId, actDep.ifBlank { null }, actArr.ifBlank { null })
                         }
                     }
                     if (!ok) throw Exception(S.errorSaveFailed(lang()))
@@ -1453,10 +1456,10 @@ class RmvLogViewModel(
                         "not" to m.note
                     )
                     updateMap.putAll(TransitRecordCalculations.calculatedDistanceFields(distanceKm, resetRmvDistance = true))
-                    val ok = repository.updateExistingRecord(docId, updateMap)
+                    val ok = transitRecordRepository.updateExistingRecord(docId, updateMap)
                     if (!ok) throw Exception(S.errorSaveFailed(lang()))
 
-                    repository.updateTripProfileLink(
+                    tripProfileLinkRepository.updateTripProfileLink(
                         docId,
                         m.profileId.takeIf { it.isNotBlank() },
                         m.seatmateNote.takeIf { it.isNotBlank() }
@@ -1658,7 +1661,7 @@ class RmvLogViewModel(
         actualTimesRefreshJob?.cancel()
         actualTimesRefreshJob = viewModelScope.launch {
             try {
-                val record = repository.fetchRecord(selectedId) ?: return@launch
+                val record = transitRecordRepository.fetchRecord(selectedId) ?: return@launch
                 val latest = _uiState.value
                 val latestSelectedId = latest.segmentIds.getOrNull(latest.selectedSegmentIndex).orEmpty()
                 if (latestSelectedId != selectedId) return@launch

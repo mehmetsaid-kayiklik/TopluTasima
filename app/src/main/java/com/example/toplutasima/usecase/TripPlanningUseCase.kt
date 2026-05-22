@@ -6,7 +6,7 @@ import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.RmvApiService
 import com.example.toplutasima.network.StopNameUtils
-import com.example.toplutasima.repository.TripRepository
+import com.example.toplutasima.repository.RmvTripRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalTime
@@ -15,7 +15,7 @@ import java.time.LocalTime
  * Domain katmanı: Sefer planlama iş mantığını ViewModel'den ayırır.
  * Seçilen bir kalkışı alır ve tam seyahat planını (segmentler + süreler) döner.
  */
-class TripPlanningUseCase(private val repository: TripRepository) {
+class TripPlanningUseCase(private val repository: RmvTripRepository) {
 
     data class PlanInput(
         val dep: Departure,

@@ -265,7 +265,7 @@ class FirestoreMigrationService(
     }
 
     private companion object {
-        private const val TAG = "FirestoreService"
+        private const val TAG = "FirestoreMigrationService"
         private const val FIELD_JOURNEY_REF = "journeyRef"
         private const val FIELD_FROM_STOP_ID = "fromStopId"
         private const val FIELD_TO_STOP_ID = "toStopId"

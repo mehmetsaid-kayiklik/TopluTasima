@@ -39,7 +39,6 @@ import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.VehicleType
-import com.example.toplutasima.network.FirestoreService
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.WarningAmber

@@ -6,7 +6,7 @@ import com.example.toplutasima.network.PersonalFirestoreService
 /**
  * Kişisel araç yolculukları için repository.
  * PersonalFirestoreService üzerinden Firestore ile iletişim kurar.
- * TripRepository'den tamamen bağımsızdır.
+ * Toplu taşıma kayıt repository'lerinden tamamen bağımsızdır.
  */
 class PersonalTripRepository {
 

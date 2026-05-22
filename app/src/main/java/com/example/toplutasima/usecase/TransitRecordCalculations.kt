@@ -17,8 +17,13 @@ object TransitRecordCalculations {
     const val FIELD_RMV_DISTANCE_STATUS = "rmvMesafeDurumu"
     const val FIELD_RMV_DISTANCE_UPDATED_AT = "rmvMesafeGuncellemeTarihi"
     const val FIELD_RMV_API_VERSION = "rmvApiVersion"
+    const val FIELD_JOURNEY_REF = "journeyRef"
+    const val FIELD_FROM_STOP_ID = "fromStopId"
+    const val FIELD_TO_STOP_ID = "toStopId"
 
     const val RMV_DISTANCE_PENDING = "bekliyor"
+    const val RMV_DISTANCE_READY = "hazir"
+    const val RMV_DISTANCE_FAILED = "hata"
 
     private val dayNames = mapOf(
         java.time.DayOfWeek.MONDAY to "Pazartesi",
