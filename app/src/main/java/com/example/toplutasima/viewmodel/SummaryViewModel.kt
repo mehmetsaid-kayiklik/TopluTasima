@@ -16,6 +16,7 @@ import com.example.toplutasima.usecase.MonthDelta
 import com.example.toplutasima.usecase.ReportCardUtils
 import com.example.toplutasima.usecase.TravelReportCards
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +87,13 @@ class SummaryViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMsg = "")
             try {
                 val (data, names) = withContext(Dispatchers.IO) {
+                    try {
+                        repository.syncFromFirestore(fullSync = false)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // Firestore unavailable: keep showing the local cache.
+                    }
                     repository.getSummaryStats(targetSheet)
                 }
                 loadedSheet = targetSheet

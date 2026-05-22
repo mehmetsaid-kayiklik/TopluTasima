@@ -70,6 +70,13 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(isLoading = true, errorMsg = "", saveMsg = "")
             try {
                 val summaries = withContext(Dispatchers.IO) {
+                    try {
+                        tripRepository.syncFromFirestore(fullSync = false)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // Firestore unavailable: keep showing the local cache.
+                    }
                     tripRepository.getMonthSummaries()
                 }
                 _uiState.value = _uiState.value.copy(

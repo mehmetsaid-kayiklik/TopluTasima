@@ -28,13 +28,17 @@ class LocalTripRepository(
         const val SYNC_PREFS = "sync_prefs"
         const val KEY_LAST_SYNC_TIMESTAMP = "last_sync_timestamp"
         const val KEY_LAST_SYNC_SORT_DATE = "last_sync_sortdate"
+        const val KEY_LAST_FULL_SYNC_TIMESTAMP = "last_full_sync_timestamp"
     }
 
     suspend fun syncFromFirestore(fullSync: Boolean = false) = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE)
         val lastSyncTimestamp = prefs.getLong(KEY_LAST_SYNC_TIMESTAMP, 0L)
         val lastSyncSortDate = prefs.getString(KEY_LAST_SYNC_SORT_DATE, null)
-        val shouldFullSync = fullSync || lastSyncTimestamp <= 0L
+        val lastFullSyncTimestamp = prefs.getLong(KEY_LAST_FULL_SYNC_TIMESTAMP, 0L)
+        val localTripCount = tripDao.getTripCount()
+        val shouldFullSync = fullSync || lastSyncTimestamp <= 0L ||
+            lastFullSyncTimestamp <= 0L || localTripCount == 0
         val now = System.currentTimeMillis()
         
         val tripsMap = if (shouldFullSync) {
@@ -65,7 +69,7 @@ class LocalTripRepository(
             }
         }
 
-        if (shouldFullSync) {
+        if (fullSync) {
             deleteLocalTripsMissingFromFirestore(tripsMap)
         }
 
@@ -74,6 +78,7 @@ class LocalTripRepository(
                 ?: TransitRecordCalculations.computeSortDate(row["tarih"]?.toString().orEmpty()).takeIf { it.isNotBlank() }
         }.maxOrNull()
         val editor = prefs.edit().putLong(KEY_LAST_SYNC_TIMESTAMP, now)
+        if (shouldFullSync) editor.putLong(KEY_LAST_FULL_SYNC_TIMESTAMP, now)
         if (maxSortDate != null) editor.putString(KEY_LAST_SYNC_SORT_DATE, maxSortDate)
         editor.apply()
     }
