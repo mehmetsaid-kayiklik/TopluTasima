@@ -7,7 +7,39 @@ import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TimeSlotStats
+import com.example.toplutasima.model.DayTypeStats
+import com.example.toplutasima.model.WeekdayWeekendStats
+import com.example.toplutasima.model.MonthlyTrendData
 import java.util.Locale
+
+data class LineDelayBucket(
+    val key: String,
+    val count: Int
+)
+
+data class LineTimeDelayStats(
+    val key: String,
+    val trips: Int,
+    val avgDelay: Double
+)
+
+data class LineDelayedDayStats(
+    val label: String,
+    val trips: Int,
+    val totalDelay: Int,
+    val avgDelay: Double
+)
+
+data class LineDetailStats(
+    val line: String,
+    val trips: Int,
+    val punctualityRate: Int,
+    val avgDelay: Double,
+    val maxDelay: Int,
+    val delayBuckets: List<LineDelayBucket>,
+    val timeDelayStats: List<LineTimeDelayStats>,
+    val delayedDays: List<LineDelayedDayStats>
+)
 
 object SummaryCalculator {
     fun computeSummary(
@@ -87,9 +119,11 @@ object SummaryCalculator {
         val lineMaxDelays = mutableMapOf<String, Double>()
         val lineTotalDelays = mutableMapOf<String, Double>()
         val timeSlotTotals = mutableMapOf<String, Triple<Int, Double, Int>>()
-        val delayBuckets = linkedMapOf("zero" to 0, "low" to 0, "medium" to 0, "high" to 0)
+        val delayBuckets = linkedMapOf("early" to 0, "zero" to 0, "low" to 0, "medium" to 0, "high" to 0)
         val lineReliabilityAgg = mutableMapOf<String, LineAgg>()
         val routeAgg = mutableMapOf<Pair<String, String>, RouteAgg>()
+        val weekdayAgg = DayTypeAgg()
+        val weekendAgg = DayTypeAgg()
         var shortestTrip: Pair<String, Int>? = null
         var longestTrip: Pair<String, Int>? = null
         var longestDistanceTrip: Pair<String, Double>? = null
@@ -133,6 +167,15 @@ object SummaryCalculator {
             val plannedMin = row["planlananYolSuresi"]?.toString()?.toDoubleOrNull()
             val actualMin = row["gercekYolSuresi"]?.toString()?.toDoubleOrNull()
             val bestDuration = actualMin ?: plannedMin
+            val gecikme = row["gecikme"]?.toString()?.toDoubleOrNull()?.toInt() ?: 0
+
+            val dayTypeAgg = if (isWeekendTrip(row)) weekendAgg else weekdayAgg
+            dayTypeAgg.trips++
+            dayTypeAgg.delay += gecikme.toDouble()
+            if (distanceKm != null) {
+                dayTypeAgg.distance += distanceKm
+                dayTypeAgg.distanceCount++
+            }
 
             if (plannedMin != null) totalPlanned += plannedMin
             if (actualMin != null) {
@@ -162,10 +205,10 @@ object SummaryCalculator {
 
             dailyTrips[tarih] = (dailyTrips[tarih] ?: 0) + 1
 
-            val gecikme = row["gecikme"]?.toString()?.toDoubleOrNull()?.toInt() ?: 0
             val onTime = gecikme <= 3
             when {
-                gecikme <= 0 -> delayBuckets["zero"] = (delayBuckets["zero"] ?: 0) + 1
+                gecikme < 0 -> delayBuckets["early"] = (delayBuckets["early"] ?: 0) + 1
+                gecikme == 0 -> delayBuckets["zero"] = (delayBuckets["zero"] ?: 0) + 1
                 gecikme <= 5 -> delayBuckets["low"] = (delayBuckets["low"] ?: 0) + 1
                 gecikme <= 10 -> delayBuckets["medium"] = (delayBuckets["medium"] ?: 0) + 1
                 else -> delayBuckets["high"] = (delayBuckets["high"] ?: 0) + 1
@@ -289,7 +332,13 @@ object SummaryCalculator {
                 )
             }
 
-        val delayDistribution = delayBuckets.map { (key, count) -> DelayBucketStats(key, count) }
+        val delayDistribution = delayBuckets.map { (key, count) ->
+            DelayBucketStats(
+                key = key,
+                count = count,
+                earlyCount = if (key == "early") count else 0
+            )
+        }
 
         val summaryData = SummaryData(
             totalTrips = totalTrips,
@@ -328,10 +377,215 @@ object SummaryCalculator {
             recordLongestTrip = longestTrip?.first ?: "-",
             recordLongestTripMin = longestTrip?.second ?: 0,
             recordLongestDistanceTrip = longestDistanceTrip?.first ?: "-",
-            recordLongestDistanceKm = Math.round((longestDistanceTrip?.second ?: 0.0) * 100) / 100.0
+            recordLongestDistanceKm = Math.round((longestDistanceTrip?.second ?: 0.0) * 100) / 100.0,
+            weekdayWeekendStats = WeekdayWeekendStats(
+                weekday = weekdayAgg.toStats(),
+                weekend = weekendAgg.toStats()
+            ),
+            monthlyTrend = computeMonthlyTrend(allDocs)
         )
 
         return Pair(summaryData, sortedMonths)
+    }
+
+    fun computeMonthlyTrend(allDocs: List<Map<String, Any>>): List<MonthlyTrendData> {
+        val monthYearSet = mutableSetOf<Pair<Int, Int>>()
+        for (row in allDocs) {
+            val tarih = row["tarih"]?.toString() ?: continue
+            val parts = tarih.split(".")
+            if (parts.size >= 3) {
+                val monthNum = parts[1].toIntOrNull() ?: continue
+                val year = parts[2].toIntOrNull() ?: continue
+                monthYearSet.add(year to monthNum)
+            }
+        }
+
+        val maxYearMonth = monthYearSet.maxWithOrNull(compareBy({ it.first }, { it.second }))
+        val endYearMonth = if (maxYearMonth != null) {
+            java.time.YearMonth.of(maxYearMonth.first, maxYearMonth.second)
+        } else {
+            java.time.YearMonth.now()
+        }
+
+        val targetMonths = (0..5).map { endYearMonth.minusMonths(it.toLong()) }
+
+        val SHORT_MONTH_NAMES = mapOf(
+            1 to "Oca", 2 to "Şub", 3 to "Mar", 4 to "Nis", 5 to "May", 6 to "Haz",
+            7 to "Tem", 8 to "Ağu", 9 to "Eyl", 10 to "Eki", 11 to "Kas", 12 to "Ara"
+        )
+
+        return targetMonths.map { ym ->
+            val monthStr = String.format(Locale.US, "%02d", ym.monthValue)
+            val yearStr = ym.year.toString()
+
+            val filteredRows = allDocs.filter { row ->
+                val tarih = row["tarih"]?.toString() ?: return@filter false
+                val parts = tarih.split(".")
+                parts.size >= 3 && parts[1] == monthStr && parts[2] == yearStr
+            }
+
+            var tripCount = 0
+            var totalDistance = 0.0
+
+            for (row in filteredRows) {
+                val tarih = row["tarih"]?.toString() ?: continue
+                if (tarih.isBlank() || tarih.lowercase() == "tarih") continue
+
+                tripCount++
+                val distanceKm = TransitRecordCalculations.orsDistanceKm(row)
+                if (distanceKm != null) {
+                    totalDistance += distanceKm
+                }
+            }
+
+            MonthlyTrendData(
+                monthName = SHORT_MONTH_NAMES[ym.monthValue] ?: ym.month.name.take(3),
+                trips = tripCount,
+                distanceKm = Math.round(totalDistance * 100) / 100.0
+            )
+        }
+    }
+
+    fun computeLineDetail(
+        allDocs: List<Map<String, Any>>,
+        sheetName: String,
+        lineName: String
+    ): LineDetailStats? {
+        val rows = rowsForSheet(allDocs, sheetName)
+            .filter { row -> row["hat"]?.toString() == lineName }
+        if (rows.isEmpty()) return null
+
+        val delayBuckets = linkedMapOf("early" to 0, "zero" to 0, "low" to 0, "medium" to 0, "high" to 0)
+        val slotAgg = mutableMapOf<String, DelayAgg>()
+        val dayAgg = mutableMapOf<String, DelayAgg>()
+        var delayTotal = 0.0
+        var maxDelay = 0
+        var onTime = 0
+
+        for (row in rows) {
+            val delay = row["gecikme"]?.toString()?.toDoubleOrNull()?.toInt() ?: 0
+            delayTotal += delay.toDouble()
+            if (delay > maxDelay) maxDelay = delay
+            if (delay <= 3) onTime++
+
+            when {
+                delay < 0 -> delayBuckets["early"] = (delayBuckets["early"] ?: 0) + 1
+                delay == 0 -> delayBuckets["zero"] = (delayBuckets["zero"] ?: 0) + 1
+                delay <= 5 -> delayBuckets["low"] = (delayBuckets["low"] ?: 0) + 1
+                delay <= 10 -> delayBuckets["medium"] = (delayBuckets["medium"] ?: 0) + 1
+                else -> delayBuckets["high"] = (delayBuckets["high"] ?: 0) + 1
+            }
+
+            lineDetailSlotKey(row["planlananBinis"]?.toString().orEmpty())?.let { key ->
+                val agg = slotAgg.getOrPut(key) { DelayAgg() }
+                agg.trips++
+                agg.delay += delay.toDouble()
+            }
+
+            val date = row["tarih"]?.toString().orEmpty()
+            if (date.isNotBlank()) {
+                val day = row["gun"]?.toString().orEmpty()
+                val label = if (day.isNotBlank()) "$date - $day" else date
+                val agg = dayAgg.getOrPut(label) { DelayAgg() }
+                agg.trips++
+                agg.delay += delay.toDouble()
+            }
+        }
+
+        val timeDelayStats = listOf("morning", "noon", "evening").map { key ->
+            val agg = slotAgg[key]
+            LineTimeDelayStats(
+                key = key,
+                trips = agg?.trips ?: 0,
+                avgDelay = if (agg != null && agg.trips > 0) agg.delay / agg.trips else 0.0
+            )
+        }
+
+        val delayedDays = dayAgg.entries
+            .filter { it.value.delay > 0.0 }
+            .sortedWith(
+                compareByDescending<Map.Entry<String, DelayAgg>> { it.value.delay }
+                    .thenByDescending { it.value.trips }
+                    .thenBy { it.key }
+            )
+            .take(3)
+            .map { (label, agg) ->
+                LineDelayedDayStats(
+                    label = label,
+                    trips = agg.trips,
+                    totalDelay = Math.round(agg.delay).toInt(),
+                    avgDelay = if (agg.trips > 0) agg.delay / agg.trips else 0.0
+                )
+            }
+
+        return LineDetailStats(
+            line = lineName,
+            trips = rows.size,
+            punctualityRate = Math.round(onTime.toDouble() / rows.size * 100).toInt(),
+            avgDelay = delayTotal / rows.size,
+            maxDelay = maxDelay,
+            delayBuckets = delayBuckets.map { (key, count) -> LineDelayBucket(key, count) },
+            timeDelayStats = timeDelayStats,
+            delayedDays = delayedDays
+        )
+    }
+
+    private data class DelayAgg(
+        var trips: Int = 0,
+        var delay: Double = 0.0
+    )
+
+    private data class DayTypeAgg(
+        var trips: Int = 0,
+        var delay: Double = 0.0,
+        var distance: Double = 0.0,
+        var distanceCount: Int = 0
+    ) {
+        fun toStats(): DayTypeStats =
+            DayTypeStats(
+                trips = trips,
+                avgDelay = if (trips > 0) delay / trips else 0.0,
+                avgDistanceKm =
+                    if (distanceCount > 0) Math.round(distance / distanceCount * 100) / 100.0
+                    else 0.0
+            )
+    }
+
+    private fun rowsForSheet(allDocs: List<Map<String, Any>>, sheetName: String): List<Map<String, Any>> {
+        if (sheetName == ALL_SHEET) return allDocs
+
+        val filterParts = sheetName.split(" ")
+        val filterMonthNum = if (filterParts.size >= 2) MONTH_NUMBERS[filterParts[0]] else null
+        val filterYear = if (filterParts.size >= 2) filterParts[1] else null
+        if (filterMonthNum == null || filterYear == null) return allDocs
+
+        return allDocs.filter { row ->
+            val tarih = row["tarih"]?.toString() ?: return@filter false
+            val parts = tarih.split(".")
+            parts.size >= 3 && parts[1] == filterMonthNum && parts[2] == filterYear
+        }
+    }
+
+    private fun isWeekendTrip(row: Map<String, Any>): Boolean {
+        val day = row["gun"]?.toString().orEmpty()
+        if (day == "Cumartesi" || day == "Pazar") return true
+        if (day in WEEKDAY_NAMES) return false
+
+        val dayType = row["gununTipi"]?.toString().orEmpty()
+        if (dayType.contains("Sonu", ignoreCase = true)) return true
+        if (dayType.contains("İçi", ignoreCase = true) || dayType.contains("Ici", ignoreCase = true)) return false
+
+        return TransitRecordCalculations.computeGununTipi(row["tarih"]?.toString().orEmpty()) == "Hafta Sonu"
+    }
+
+    private fun lineDetailSlotKey(time: String): String? {
+        val hour = (timeToMinutes(time) ?: return null) / 60
+        return when (hour) {
+            in 5..10 -> "morning"
+            in 11..15 -> "noon"
+            in 16..20 -> "evening"
+            else -> null
+        }
     }
 
     private data class LineAgg(
@@ -393,4 +647,5 @@ object SummaryCalculator {
     )
 
     private val MONTH_NUMBERS = MONTH_NAMES.entries.associate { (key, value) -> value to key }
+    private val WEEKDAY_NAMES = setOf("Pazartesi", "Sal\u0131", "\u00c7ar\u015famba", "Per\u015fembe", "Cuma")
 }

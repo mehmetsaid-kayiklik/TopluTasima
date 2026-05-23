@@ -131,7 +131,32 @@ data class RoutePairStats(
 
 data class DelayBucketStats(
     val key: String,
-    val count: Int
+    val count: Int,
+    val earlyCount: Int = 0
+)
+
+data class DayTypeStats(
+    val trips: Int = 0,
+    val avgDelay: Double = 0.0,
+    val avgDistanceKm: Double = 0.0
+)
+
+data class WeekdayWeekendStats(
+    val weekday: DayTypeStats = DayTypeStats(),
+    val weekend: DayTypeStats = DayTypeStats()
+) {
+    val busiestType: String
+        get() = when {
+            weekday.trips > weekend.trips -> "weekday"
+            weekend.trips > weekday.trips -> "weekend"
+            else -> "equal"
+        }
+}
+
+data class MonthlyTrendData(
+    val monthName: String,
+    val trips: Int,
+    val distanceKm: Double
 )
 
 data class SummaryData(
@@ -171,7 +196,9 @@ data class SummaryData(
     val recordLongestTrip: String = "-",
     val recordLongestTripMin: Int = 0,
     val recordLongestDistanceTrip: String = "-",
-    val recordLongestDistanceKm: Double = 0.0
+    val recordLongestDistanceKm: Double = 0.0,
+    val weekdayWeekendStats: WeekdayWeekendStats = WeekdayWeekendStats(),
+    val monthlyTrend: List<MonthlyTrendData> = emptyList()
 )
 
 data class NavItem(

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.ui.AppLanguage
+import com.example.toplutasima.ui.AccentBlue
 import com.example.toplutasima.ui.ErrorRed
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.SuccessGreen
@@ -29,7 +31,8 @@ import com.example.toplutasima.ui.components.formatMin
 
 internal fun LazyListScope.DurationDelaySection(
     s: SummaryData,
-    lang: AppLanguage
+    lang: AppLanguage,
+    onLineClick: (String) -> Unit = {}
 ) {
     val typeEntries = summaryVehicleTypeEntries
 
@@ -72,6 +75,7 @@ internal fun LazyListScope.DurationDelaySection(
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(3.dp)),
                                 color = when (bucket.key) {
+                                    "early" -> AccentBlue
                                     "zero" -> SuccessGreen
                                     "low" -> MaterialTheme.colorScheme.primary
                                     "medium" -> WarningAmber
@@ -152,7 +156,12 @@ internal fun LazyListScope.DurationDelaySection(
                     )
                     Spacer(Modifier.height(12.dp))
                     s.lineReliability.forEach { line ->
-                        Column(modifier = Modifier.padding(vertical = 5.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onLineClick(line.line) }
+                                .padding(vertical = 5.dp)
+                        ) {
                             Row(
                                 Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
