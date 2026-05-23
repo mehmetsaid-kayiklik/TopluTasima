@@ -1,6 +1,9 @@
 package com.example.toplutasima
 
 import com.example.toplutasima.network.StopNameUtils
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
