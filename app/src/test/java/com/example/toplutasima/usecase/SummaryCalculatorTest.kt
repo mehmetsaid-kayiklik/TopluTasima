@@ -1,7 +1,6 @@
 package com.example.toplutasima.usecase
 
 import com.example.toplutasima.model.SeatingStatus
-import com.example.toplutasima.model.MonthlyTrendData
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.VehicleType
 import org.junit.Assert.assertEquals

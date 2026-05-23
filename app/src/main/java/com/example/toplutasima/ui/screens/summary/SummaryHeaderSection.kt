@@ -1,40 +1,32 @@
 package com.example.toplutasima.ui.screens.summary
 
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.toplutasima.model.SummaryData
-import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.ui.AppLanguage
-import com.example.toplutasima.ui.ErrorRed
 import com.example.toplutasima.ui.S
-import com.example.toplutasima.ui.SuccessGreen
-import com.example.toplutasima.ui.WarningAmber
-import com.example.toplutasima.ui.components.HeatmapCalendar
 import com.example.toplutasima.ui.components.RmvFooter
-import com.example.toplutasima.ui.components.SummaryCard
-import com.example.toplutasima.ui.components.formatMin
-import com.example.toplutasima.usecase.HeatmapMetric
-import com.example.toplutasima.usecase.TravelReportCards
 import com.example.toplutasima.viewmodel.SummaryUiState
+
 @Composable
 internal fun SummaryHeaderSection(
     state: SummaryUiState,

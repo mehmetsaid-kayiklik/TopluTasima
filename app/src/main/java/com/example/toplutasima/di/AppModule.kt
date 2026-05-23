@@ -9,8 +9,8 @@ import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.repository.PersonalTripRepository
 import com.example.toplutasima.repository.RmvTripRepository
 import com.example.toplutasima.repository.TransitRecordRepository
-import com.example.toplutasima.repository.TripRecordMapper
 import com.example.toplutasima.repository.TripProfileLinkRepository
+import com.example.toplutasima.repository.TripRecordMapper
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
 import com.example.toplutasima.viewmodel.PersonalTripViewModel

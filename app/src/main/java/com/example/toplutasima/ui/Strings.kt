@@ -14,7 +14,6 @@ object S {
     fun navSummary(l: AppLanguage) = m(l, "Özet", "Übersicht", "Summary")
     fun navSettings(l: AppLanguage) = m(l, "Ayarlar", "Einstellungen", "Settings")
 
-
     // ── RmvLogScreen — Header ──
     fun logHeader(l: AppLanguage) = m(l, "🚌  RMV Kayıt", "🚌  RMV Aufnahme", "🚌  RMV Record")
     fun logSubheader(l: AppLanguage) = m(l, "Yolculuk bilgilerini kaydet", "Reiseinformationen speichern", "Save trip information")
@@ -288,8 +287,6 @@ object S {
     fun enterNewStopManually(l: AppLanguage) = m(l, "Yeni durak adını girin:", "Neuen Haltestellennamen eingeben:", "Enter new stop name:")
     fun loadingStopList(l: AppLanguage) = m(l, "⏳ Durak listesi yükleniyor...", "⏳ Haltestellenliste wird geladen...", "⏳ Loading stop list...")
     fun errorStopNotFound(l: AppLanguage) = m(l, "Durak bulunamadı", "Haltestelle nicht gefunden", "Stop not found")
-
-
 
     // ── Restore Record ──
     fun restoreRecord(l: AppLanguage) = m(l, "🔄 Geri Yükle", "🔄 Wiederherstellen", "🔄 Restore")

@@ -5,6 +5,10 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
+import com.example.toplutasima.TopluTasimaApp
+import com.example.toplutasima.data.repository.LocalTripRepository
+import com.example.toplutasima.data.repository.toEntity
+import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.usecase.RecordFilterUtils
@@ -12,22 +16,17 @@ import com.example.toplutasima.usecase.RecordRowMapper
 import com.example.toplutasima.viewmodel.records.DayGroup
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 import com.example.toplutasima.viewmodel.records.RecordsUiState
-
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import kotlinx.coroutines.flow.firstOrNull
-import com.example.toplutasima.TopluTasimaApp
-import com.example.toplutasima.data.repository.LocalTripRepository
-import com.example.toplutasima.data.repository.toEntity
-import com.example.toplutasima.data.repository.toMap
-import kotlinx.coroutines.CancellationException
 
 class RecordsViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(RecordsUiState())
@@ -80,7 +79,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                     tripRepository.getMonthSummaries()
                 }
                 _uiState.value = _uiState.value.copy(
-                    monthSummaries = summaries,
+                    monthSummaries = summaries.sortedBy { it.sortKey },
                     isLoading = false
                 )
             } catch (e: Exception) {
@@ -110,7 +109,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
                 _uiState.value = _uiState.value.copy(
-                    monthSummaries = updatedSummaries,
+                    monthSummaries = updatedSummaries.sortedBy { it.sortKey },
                     isLoading = false,
                     saveMsg = "✅ Senkronize edildi"
                 )

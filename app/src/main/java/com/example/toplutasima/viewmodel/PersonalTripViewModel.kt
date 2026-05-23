@@ -5,12 +5,10 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.location.PersonalLocationHelper
 import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.repository.PersonalTripRepository
 import com.example.toplutasima.service.PersonalTripForegroundService
-import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,8 +18,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 

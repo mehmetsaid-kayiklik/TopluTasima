@@ -6,11 +6,11 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.example.toplutasima.data.local.dao.TripDao
 import com.example.toplutasima.data.local.dao.ProfileDao
+import com.example.toplutasima.data.local.dao.TripDao
 import com.example.toplutasima.data.local.dao.TripProfileLinkDao
-import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.data.local.entity.ProfileEntity
+import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.data.local.entity.TripProfileLinkEntity
 
 @Database(

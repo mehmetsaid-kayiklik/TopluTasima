@@ -8,18 +8,33 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.view.WindowCompat
-import com.example.toplutasima.ui.*
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.ui.navigation.MainAppScreen
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import com.example.toplutasima.ui.Teal
+import com.example.toplutasima.ui.DarkBlue
+import com.example.toplutasima.ui.TealLight
+import com.example.toplutasima.ui.AccentBlue
+import com.example.toplutasima.ui.SoftWhite
+import com.example.toplutasima.ui.MidBlue
+import com.example.toplutasima.ui.CardDark
+import com.example.toplutasima.ui.ErrorRed
+import com.example.toplutasima.ui.LightBg
+import com.example.toplutasima.ui.DarkText
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -55,6 +55,6 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE sortDate >= :sortDate ORDER BY sortDate ASC")
     suspend fun getTripsAfter(sortDate: String): List<TripEntity>
 
-    @Query("SELECT yearMonth, COUNT(*) as count FROM trips WHERE yearMonth IS NOT NULL AND yearMonth != '' GROUP BY yearMonth ORDER BY yearMonth DESC")
+    @Query("SELECT yearMonth, COUNT(*) as count FROM trips WHERE yearMonth IS NOT NULL AND yearMonth != '' GROUP BY yearMonth ORDER BY yearMonth ASC")
     suspend fun getMonthSummaries(): List<MonthSummaryTuple>
 }

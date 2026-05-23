@@ -9,8 +9,8 @@ import com.example.toplutasima.data.AppEventBus
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.Departure
 import com.example.toplutasima.model.JourneyMatchCandidate
-import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.SeatingStatus
+import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TripResult
@@ -20,7 +20,6 @@ import com.example.toplutasima.repository.RmvTripRepository
 import com.example.toplutasima.repository.TransitRecordRepository
 import com.example.toplutasima.repository.TripProfileLinkRepository
 import com.example.toplutasima.service.JourneyMatchForegroundService
-import com.example.toplutasima.service.TransitNotificationReceiver
 import com.example.toplutasima.service.TransitTripForegroundService
 import com.example.toplutasima.service.transit.TransitServiceStateStore
 import com.example.toplutasima.ui.LocaleManager
@@ -31,15 +30,15 @@ import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.rmvlog.LogMode
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalTime
@@ -172,7 +171,6 @@ class RmvLogViewModel(
         }
         loadActiveProfiles()
     }
-
 
     fun hasLocationPermission(): Boolean = nearbyManager.hasLocationPermission()
 
@@ -1288,7 +1286,6 @@ class RmvLogViewModel(
             }
         }
     }
-
 
     // ── Kayıt Modu Değiştirme ─────────────────────────────────────────────────
 

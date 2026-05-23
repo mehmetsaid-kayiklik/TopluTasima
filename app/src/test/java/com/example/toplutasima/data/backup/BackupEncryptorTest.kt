@@ -1,9 +1,7 @@
 package com.example.toplutasima.data.backup
 
-import org.junit.Assert.*
 import org.junit.Test
 import java.security.GeneralSecurityException
-import java.util.Arrays
 
 class BackupEncryptorTest {
 

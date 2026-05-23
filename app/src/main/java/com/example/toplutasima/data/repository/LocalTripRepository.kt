@@ -12,7 +12,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -188,7 +187,7 @@ class LocalTripRepository(
                 count = tuple.count,
                 sortKey = "${year}${monthNum}"
             )
-        }.sortedByDescending { it.sortKey }
+        }.sortedBy { it.sortKey }
     }
 
     suspend fun getSummaryStats(sheetName: String = "Tümü"): Pair<SummaryData, List<String>> = withContext(Dispatchers.IO) {

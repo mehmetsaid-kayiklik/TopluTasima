@@ -6,23 +6,32 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.outlined.Create
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.List
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.DateRange
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.koin.androidx.compose.koinViewModel
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import com.example.toplutasima.model.NavItem
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
-
 import com.example.toplutasima.ui.screens.RMVLogScreen
 import com.example.toplutasima.ui.screens.RecordsScreen
 import com.example.toplutasima.ui.screens.SettingsScreen
@@ -30,6 +39,7 @@ import com.example.toplutasima.ui.screens.SummaryScreen
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.SettingsViewModel
 import com.example.toplutasima.viewmodel.SummaryViewModel
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun MainAppScreen(isDarkTheme: Boolean) {

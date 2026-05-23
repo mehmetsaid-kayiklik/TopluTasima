@@ -2,7 +2,6 @@ package com.example.toplutasima
 
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
-import org.junit.Assert.*
 import org.junit.Test
 
 /**

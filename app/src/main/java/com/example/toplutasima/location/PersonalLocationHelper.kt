@@ -23,8 +23,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
-import kotlin.coroutines.resume
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
 
 /**
  * Kişisel biniş özelliği için konum yardımcısı.

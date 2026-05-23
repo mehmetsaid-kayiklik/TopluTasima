@@ -1,15 +1,15 @@
 package com.example.toplutasima.usecase
 
+import com.example.toplutasima.model.DayTypeStats
 import com.example.toplutasima.model.DelayBucketStats
 import com.example.toplutasima.model.LineReliabilityStats
+import com.example.toplutasima.model.MonthlyTrendData
 import com.example.toplutasima.model.RoutePairStats
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.TimeSlotStats
-import com.example.toplutasima.model.DayTypeStats
 import com.example.toplutasima.model.WeekdayWeekendStats
-import com.example.toplutasima.model.MonthlyTrendData
 import java.util.Locale
 
 data class LineDelayBucket(

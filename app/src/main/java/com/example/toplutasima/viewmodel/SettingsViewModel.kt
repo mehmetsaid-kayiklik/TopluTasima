@@ -2,17 +2,16 @@ package com.example.toplutasima.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.data.PrefsManager
+import com.example.toplutasima.data.local.AppDatabase
+import com.example.toplutasima.data.local.entity.ProfileEntity
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-
-import androidx.lifecycle.viewModelScope
-import com.example.toplutasima.data.local.AppDatabase
-import com.example.toplutasima.data.local.entity.ProfileEntity
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID

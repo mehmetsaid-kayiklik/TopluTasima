@@ -3,11 +3,11 @@ package com.example.toplutasima.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.toplutasima.model.SummaryData
-import com.example.toplutasima.model.WeekdayWeekendStats
 import com.example.toplutasima.TopluTasimaApp
 import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.data.repository.toMap
+import com.example.toplutasima.model.SummaryData
+import com.example.toplutasima.model.WeekdayWeekendStats
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.HeatmapData
@@ -18,14 +18,14 @@ import com.example.toplutasima.usecase.MonthDelta
 import com.example.toplutasima.usecase.ReportCardUtils
 import com.example.toplutasima.usecase.SummaryCalculator
 import com.example.toplutasima.usecase.TravelReportCards
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.firstOrNull
 
 private const val ALL_SHEET = "Tümü"
 

@@ -8,7 +8,6 @@ import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.TopluTasimaApp
 import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.model.BulkUpdateRow
-import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.RmvApiService
@@ -17,14 +16,12 @@ import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdateMode
 import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdatePhase
 import com.example.toplutasima.viewmodel.bulkupdate.BulkUpdateUiState
-
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
