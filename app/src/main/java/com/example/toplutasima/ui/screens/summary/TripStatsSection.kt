@@ -223,6 +223,15 @@ internal fun LazyListScope.TripStatsSection(
         }
     }
 
+    if (state.weekdayWeekendStats.weekday.trips > 0 || state.weekdayWeekendStats.weekend.trips > 0) {
+        item {
+            WeekdayWeekendCard(
+                stats = state.weekdayWeekendStats,
+                lang = lang
+            )
+        }
+    }
+
     if (s.timeSlotStats.isNotEmpty()) {
         item {
             Card(
@@ -546,6 +555,15 @@ internal fun LazyListScope.TripStatsSection(
             SummaryCard(
                 S.recordLongestDistance(lang),
                 "${s.recordLongestDistanceTrip} (${formatDistanceKm(s.recordLongestDistanceKm)})"
+            )
+        }
+    }
+
+    if (s.monthlyTrend.isNotEmpty()) {
+        item {
+            MonthlyTrendCard(
+                trendData = s.monthlyTrend,
+                lang = lang
             )
         }
     }

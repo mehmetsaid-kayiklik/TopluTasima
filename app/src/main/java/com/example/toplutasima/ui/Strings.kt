@@ -386,6 +386,13 @@ object S {
     fun migrateSeatmateUuidRunning(l: AppLanguage) = m(l, "Alanlar güncelleniyor...", "Felder werden aktualisiert...", "Updating fields...")
     fun migrateSeatmateUuidDone(updated: Int, scanned: Int, l: AppLanguage) = m(l, "✅ $scanned kayıt tarandı, $updated güncellendi", "✅ $scanned Einträge gescannt, $updated aktualisiert", "✅ $scanned records scanned, $updated updated")
 
+    // ── Early Departure Delay Migration ──
+    fun migrateEarlyDeparturesButton(l: AppLanguage) = m(l, "⏰ Erken Biniş Gecikmelerini Düzelt", "⏰ Frühzeitige Abfahrtsverspätungen korrigieren", "⏰ Fix Early Departure Delays")
+    fun migrateEarlyDeparturesConfirmTitle(l: AppLanguage) = m(l, "Erken Biniş Düzeltmesi", "Frühzeitige Abfahrtskorrektur", "Early Departure Fix")
+    fun migrateEarlyDeparturesConfirmText(l: AppLanguage) = m(l, "Bu işlem geçmiş kayıtları güncelleyecek. Devam edilsin mi?", "Diese Aktion aktualisiert historische Einträge. Fortfahren?", "This will update historical records. Continue?")
+    fun migrateEarlyDeparturesRunning(l: AppLanguage) = m(l, "Erken biniş kayıtları düzeltiliyor...", "Frühzeitige Abfahrten werden korrigiert...", "Fixing early departure records...")
+    fun migrateEarlyDeparturesDone(updated: Int, total: Int, l: AppLanguage) = m(l, "✅ $updated/$total kayıt güncellendi", "✅ $updated/$total Einträge aktualisiert", "✅ $updated/$total records updated")
+
     // ── Favorites ──
     fun favoritesTitle(l: AppLanguage) = m(l, "⭐ Favori Duraklar", "⭐ Lieblingshaltestellen", "⭐ Favorite Stops")
     fun favBoardingStops(l: AppLanguage) = m(l, "Biniş Favorileri", "Einstieg-Favoriten", "Boarding Favorites")

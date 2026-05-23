@@ -34,6 +34,7 @@ import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.screens.summary.ComparisonInsightSection
 import com.example.toplutasima.ui.screens.summary.DurationDelaySection
 import com.example.toplutasima.ui.screens.summary.InsightSection
+import com.example.toplutasima.ui.screens.summary.LineDetailSheet
 import com.example.toplutasima.ui.screens.summary.SummaryFooterSection
 import com.example.toplutasima.ui.screens.summary.SummaryHeaderSection
 import com.example.toplutasima.ui.screens.summary.TripStatsSection
@@ -136,7 +137,11 @@ fun SummaryScreen(
                                     )
                                     InsightSection(summary, lang)
                                 }
-                                1 -> DurationDelaySection(summary, lang)
+                                1 -> DurationDelaySection(
+                                    s = summary,
+                                    lang = lang,
+                                    onLineClick = viewModel::showLineDetail
+                                )
                                 2 -> ComparisonInsightSection(state, lang)
                             }
                             SummaryFooterSection(
@@ -149,5 +154,13 @@ fun SummaryScreen(
                 }
             }
         }
+    }
+
+    state.selectedLineDetail?.let { detail ->
+        LineDetailSheet(
+            detail = detail,
+            lang = lang,
+            onDismiss = viewModel::dismissLineDetail
+        )
     }
 }

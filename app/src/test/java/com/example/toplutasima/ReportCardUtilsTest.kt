@@ -33,7 +33,8 @@ class ReportCardUtilsTest {
                 activeDays = 5,
                 totalDays = 31,
                 maxDailyCount = 4,
-                dailyAvgDelay = mapOf(8 to 6, 9 to 3, 10 to 0)
+                dailyAvgDelay = mapOf(8 to 6, 9 to 3, 10 to 0),
+                dailyDistanceKm = mapOf(1 to 6.25, 2 to 3.75, 8 to 12.345, 9 to 8.0)
             )
         )
 
@@ -43,6 +44,7 @@ class ReportCardUtilsTest {
         assertEquals(1, firstWeek.startDay)
         assertEquals(7, firstWeek.endDay)
         assertEquals(3, firstWeek.trips)
+        assertEquals(10.0, firstWeek.totalDistance, 0.0)
 
         val weekly = cards.weeks[1]
         assertEquals(2, weekly.weekNumber)
@@ -53,6 +55,7 @@ class ReportCardUtilsTest {
         assertEquals(8, weekly.busiestDay)
         assertEquals(4, weekly.busiestDayTrips)
         assertEquals(4.125, weekly.avgDelay, 0.001)
+        assertEquals(20.35, weekly.totalDistance, 0.0)
     }
 
     private fun summaryData(): SummaryData = SummaryData(

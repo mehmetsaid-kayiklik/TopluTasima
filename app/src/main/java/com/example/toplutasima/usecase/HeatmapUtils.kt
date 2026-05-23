@@ -21,6 +21,7 @@ data class HeatmapData(
     val totalDays: Int,
     val maxDailyCount: Int,
     val dailyAvgDelay: Map<Int, Int> = emptyMap(),
+    val dailyDistanceKm: Map<Int, Double> = emptyMap(),
     val dailyTicketCounts: Map<Int, Int> = emptyMap(),
     val dailySeatedCounts: Map<Int, Int> = emptyMap(),
     val maxDailyAvgDelay: Int = 0,
@@ -40,6 +41,7 @@ object HeatmapUtils {
         val dailyCounts = mutableMapOf<Int, Int>()
         val dailyDelaySum = mutableMapOf<Int, Int>()
         val dailyDelayCount = mutableMapOf<Int, Int>()
+        val dailyDistanceKm = mutableMapOf<Int, Double>()
         val dailyTicketCounts = mutableMapOf<Int, Int>()
         val dailySeatedCounts = mutableMapOf<Int, Int>()
         val ym = YearMonth.of(year, month)
@@ -55,8 +57,12 @@ object HeatmapUtils {
             if (y == year && m == month) {
                 dailyCounts[d] = (dailyCounts[d] ?: 0) + 1
                 val delay = trip["gecikme"]?.toString()?.toIntOrNull() ?: 0
-                dailyDelaySum[d] = (dailyDelaySum[d] ?: 0) + delay
+                dailyDelaySum[d] = (dailyDelaySum[d] ?: 0) + maxOf(0, delay)
                 dailyDelayCount[d] = (dailyDelayCount[d] ?: 0) + 1
+                val distanceKm = TransitRecordCalculations.orsDistanceKm(trip)
+                if (distanceKm != null) {
+                    dailyDistanceKm[d] = (dailyDistanceKm[d] ?: 0.0) + distanceKm
+                }
 
                 val ticketControl = trip["biletKontrolü"]?.toString()
                     ?: trip["biletKontrolü"]?.toString()
@@ -92,6 +98,7 @@ object HeatmapUtils {
             totalDays = totalDays,
             maxDailyCount = maxDailyCount,
             dailyAvgDelay = dailyAvgDelay,
+            dailyDistanceKm = dailyDistanceKm,
             dailyTicketCounts = dailyTicketCounts,
             dailySeatedCounts = dailySeatedCounts,
             maxDailyAvgDelay = dailyAvgDelay.values.maxOrNull() ?: 0,

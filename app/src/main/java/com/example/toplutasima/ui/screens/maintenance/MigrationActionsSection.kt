@@ -42,7 +42,13 @@ internal fun MigrationActionsSection(
     showSeatmateUuidDialog: Boolean,
     onRequestSeatmateUuid: () -> Unit,
     onConfirmSeatmateUuid: () -> Unit,
-    onDismissSeatmateUuid: () -> Unit
+    onDismissSeatmateUuid: () -> Unit,
+    earlyDeparturesRunning: Boolean,
+    earlyDeparturesResult: String,
+    showEarlyDeparturesDialog: Boolean,
+    onRequestEarlyDepartures: () -> Unit,
+    onConfirmEarlyDepartures: () -> Unit,
+    onDismissEarlyDepartures: () -> Unit
 ) {
     MaintenanceActionCard(
         title = "⏰  Saat Temizleme",
@@ -159,6 +165,26 @@ internal fun MigrationActionsSection(
             dismissText = S.cancel(lang),
             onConfirm = onConfirmSeatmateUuid,
             onDismiss = onDismissSeatmateUuid
+        )
+    }
+
+    MaintenanceActionCard(
+        title = "⏰  Erken Biniş Gecikmelerini Düzelt",
+        description = "Gecikme değeri 0 kaydedilmiş ancak erken biniş olan seferlerin gecikme değerini günceller.",
+        isRunning = earlyDeparturesRunning,
+        runningText = S.migrateEarlyDeparturesRunning(lang),
+        result = earlyDeparturesResult,
+        buttonText = S.migrateEarlyDeparturesButton(lang),
+        onClick = onRequestEarlyDepartures
+    )
+    if (showEarlyDeparturesDialog) {
+        MaintenanceConfirmDialog(
+            title = S.migrateEarlyDeparturesConfirmTitle(lang),
+            text = S.migrateEarlyDeparturesConfirmText(lang),
+            confirmText = S.yes(lang),
+            dismissText = S.cancel(lang),
+            onConfirm = onConfirmEarlyDepartures,
+            onDismiss = onDismissEarlyDepartures
         )
     }
 }

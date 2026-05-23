@@ -74,6 +74,11 @@ fun MaintenanceScreen(
     var seatmateUuidRunning by remember { mutableStateOf(false) }
     var seatmateUuidResult by remember { mutableStateOf("") }
 
+    // Dialog state for early departures migration
+    var showEarlyDeparturesDialog by remember { mutableStateOf(false) }
+    var earlyDeparturesRunning by remember { mutableStateOf(false) }
+    var earlyDeparturesResult by remember { mutableStateOf("") }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
@@ -257,6 +262,32 @@ fun MaintenanceScreen(
                         seatmateUuidResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                     } finally {
                         seatmateUuidRunning = false
+                    }
+                }
+            },
+            earlyDeparturesRunning = earlyDeparturesRunning,
+            earlyDeparturesResult = earlyDeparturesResult,
+            showEarlyDeparturesDialog = showEarlyDeparturesDialog,
+            onRequestEarlyDepartures = { showEarlyDeparturesDialog = true },
+            onDismissEarlyDepartures = { showEarlyDeparturesDialog = false },
+            onConfirmEarlyDepartures = {
+                showEarlyDeparturesDialog = false
+                earlyDeparturesRunning = true
+                earlyDeparturesResult = ""
+                scope.launch {
+                    try {
+                        val (updated, total) = withContext(Dispatchers.IO) {
+                            val result = migrationService.migrateEarlyDepartures()
+                            tripRepository.syncFromFirestore(fullSync = true)
+                            result
+                        }
+                        earlyDeparturesResult = S.migrateEarlyDeparturesDone(updated, total, lang)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        earlyDeparturesResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
+                    } finally {
+                        earlyDeparturesRunning = false
                     }
                 }
             }

@@ -19,7 +19,8 @@ data class WeeklyReportCard(
     val activeDays: Int,
     val avgDelay: Double,
     val busiestDay: Int,
-    val busiestDayTrips: Int
+    val busiestDayTrips: Int,
+    val totalDistance: Double
 )
 
 data class TravelReportCards(
@@ -54,6 +55,7 @@ object ReportCardUtils {
                 val delaySum = days.sumOf { day ->
                     (heatmap.dailyAvgDelay[day] ?: 0) * (heatmap.dailyCounts[day] ?: 0)
                 }
+                val totalDistance = days.sumOf { day -> heatmap.dailyDistanceKm[day] ?: 0.0 }
                 val busiestDay = days.maxByOrNull { day -> heatmap.dailyCounts[day] ?: 0 } ?: startDay
 
                 WeeklyReportCard(
@@ -64,7 +66,8 @@ object ReportCardUtils {
                     activeDays = activeDays,
                     avgDelay = if (delayTripCount > 0) delaySum.toDouble() / delayTripCount else 0.0,
                     busiestDay = busiestDay,
-                    busiestDayTrips = heatmap.dailyCounts[busiestDay] ?: 0
+                    busiestDayTrips = heatmap.dailyCounts[busiestDay] ?: 0,
+                    totalDistance = Math.round(totalDistance * 100) / 100.0
                 )
             }
     }

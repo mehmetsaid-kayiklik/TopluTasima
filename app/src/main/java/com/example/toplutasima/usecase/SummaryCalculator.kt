@@ -230,7 +230,7 @@ object SummaryCalculator {
             if (line.isNotBlank()) {
                 val agg = lineReliabilityAgg.getOrPut(line) { LineAgg() }
                 agg.trips++
-                agg.delay += gecikme.toDouble()
+                agg.delay += maxOf(0, gecikme).toDouble()
                 if (onTime) agg.onTime++
                 if (gecikme > agg.maxDelay) agg.maxDelay = gecikme
             }
@@ -238,7 +238,7 @@ object SummaryCalculator {
             if (from.isNotBlank() && to.isNotBlank()) {
                 val agg = routeAgg.getOrPut(from to to) { RouteAgg() }
                 agg.trips++
-                agg.delay += gecikme.toDouble()
+                agg.delay += maxOf(0, gecikme).toDouble()
                 if (bestDuration != null && bestDuration > 0) {
                     val durationInt = Math.round(bestDuration).toInt()
                     agg.durationSum += bestDuration

@@ -264,6 +264,62 @@ class FirestoreMigrationService(
         return Pair(total, updated)
     }
 
+    /**
+     * Scans all trip records and fixes early-departure delays that were
+     * incorrectly stored as 0. Only updates records where:
+     *   - gecikme == 0
+     *   - gercekBinis < planlananBinis  (actual boarding is earlier)
+     *
+     * Sets gecikme to a negative value (actual − planned) in minutes.
+     */
+    suspend fun migrateEarlyDepartures(): Pair<Int, Int> {
+        val snapshot = db.collection(collectionName).get().await()
+        val total = snapshot.documents.size
+        var updated = 0
+
+        for (doc in snapshot.documents) {
+            val data = doc.data ?: continue
+
+            // Only touch records where gecikme is exactly 0
+            val gecikme = data["gecikme"]?.toString()?.toIntOrNull()
+            if (gecikme == null || gecikme != 0) continue
+
+            val planlananBinis = data["planlananBinis"]?.toString()
+            val gercekBinis = data["gercekBinis"]?.toString()
+            if (planlananBinis.isNullOrBlank() || gercekBinis.isNullOrBlank()) continue
+
+            val plannedMin = parseTimeToMinutes(planlananBinis) ?: continue
+            val actualMin = parseTimeToMinutes(gercekBinis) ?: continue
+
+            // Only fix if actual boarding is strictly before planned
+            if (actualMin >= plannedMin) continue
+
+            val diff = actualMin - plannedMin // negative value (early)
+
+            try {
+                doc.reference.update(
+                    mapOf(
+                        "gecikme" to diff,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                ).await()
+                updated++
+            } catch (e: Exception) {
+                Log.e(TAG, "migrateEarlyDepartures failed for doc: ${doc.id}", e)
+            }
+        }
+        return Pair(updated, total)
+    }
+
+    /** Parses "HH:MM" or "HH:MM:SS" to total minutes, or null on failure. */
+    private fun parseTimeToMinutes(time: String): Int? {
+        val parts = time.trim().split(":")
+        if (parts.size < 2) return null
+        val h = parts[0].toIntOrNull() ?: return null
+        val m = parts[1].toIntOrNull() ?: return null
+        return h * 60 + m
+    }
+
     private companion object {
         private const val TAG = "FirestoreMigrationService"
         private const val FIELD_JOURNEY_REF = "journeyRef"

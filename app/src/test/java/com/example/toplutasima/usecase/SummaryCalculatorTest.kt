@@ -136,6 +136,12 @@ class SummaryCalculatorTest {
         assertEquals("weekday", summary.weekdayWeekendStats.busiestType)
         assertEquals(2, summary.topLines["S5"])
         assertEquals(1, summary.topLines["X26"])
+        
+        assertEquals(2, summary.timeSlotStats.size)
+        assertEquals("morning", summary.timeSlotStats[0].key)
+        assertEquals(2, summary.timeSlotStats[0].trips)
+        assertEquals("evening", summary.timeSlotStats[1].key)
+        assertEquals(1, summary.timeSlotStats[1].trips)
     }
 
     @Test

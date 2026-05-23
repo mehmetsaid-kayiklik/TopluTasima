@@ -39,6 +39,7 @@ import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.ui.AccentBlue
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.WarningAmber
@@ -88,6 +89,14 @@ internal fun TripCard(trip: RecordRowUiModel, onClick: () -> Unit) {
                         "+${delayNum}dk",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                } else if (delayNum < 0) {
+                    Text(
+                        "${delayNum}dk",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = AccentBlue,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(start = 8.dp)
                     )

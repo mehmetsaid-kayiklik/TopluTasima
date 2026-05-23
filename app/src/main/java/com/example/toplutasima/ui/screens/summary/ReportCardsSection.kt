@@ -201,6 +201,13 @@ internal fun ReportCardsSection(
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
+                    if (weekly.totalDistance > 0.0) {
+                        ReportMetric(
+                            label = S.totalDistance(lang),
+                            value = String.format(java.util.Locale.US, "%.2f km", weekly.totalDistance),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
             }
         }

@@ -13,10 +13,10 @@ class HeatmapUtilsTest {
     fun `buildHeatmapData aggregates daily counts and metrics`() {
         val data = HeatmapUtils.buildHeatmapData(
             trips = listOf(
-                trip("22.05.2026", delay = 4, ticket = TicketStatus.HAPPENED.key, seated = SeatingStatus.YES.key),
-                trip("22.05.2026", delay = 8, ticket = TicketStatus.DID_NOT.key, seated = SeatingStatus.NO.key),
-                trip("23.05.2026", delay = 0, ticket = TicketStatus.HAPPENED.key, seated = SeatingStatus.YES.key),
-                trip("01.06.2026", delay = 12, ticket = TicketStatus.HAPPENED.key, seated = SeatingStatus.YES.key)
+                trip("22.05.2026", delay = 4, ticket = TicketStatus.HAPPENED.key, seated = SeatingStatus.YES.key, distanceKm = 14.25),
+                trip("22.05.2026", delay = 8, ticket = TicketStatus.DID_NOT.key, seated = SeatingStatus.NO.key, distanceKm = 4.15),
+                trip("23.05.2026", delay = 0, ticket = TicketStatus.HAPPENED.key, seated = SeatingStatus.YES.key, distanceKm = 7.5),
+                trip("01.06.2026", delay = 12, ticket = TicketStatus.HAPPENED.key, seated = SeatingStatus.YES.key, distanceKm = 99.0)
             ),
             year = 2026,
             month = 5
@@ -30,6 +30,8 @@ class HeatmapUtilsTest {
         assertEquals(2, data.dailyCounts[22])
         assertEquals(1, data.dailyCounts[23])
         assertEquals(6, data.dailyAvgDelay[22])
+        assertEquals(18.4, data.dailyDistanceKm[22] ?: 0.0, 0.0)
+        assertEquals(7.5, data.dailyDistanceKm[23] ?: 0.0, 0.0)
         assertEquals(1, data.dailyTicketCounts[22])
         assertEquals(1, data.dailyTicketCounts[23])
         assertEquals(1, data.dailySeatedCounts[22])
@@ -84,13 +86,17 @@ class HeatmapUtilsTest {
         date: String,
         delay: Int = 0,
         ticket: String = TicketStatus.DID_NOT.key,
-        seated: String = SeatingStatus.NO.key
-    ): Map<String, Any> = mapOf(
-        "tarih" to date,
-        "gecikme" to delay,
-        "biletKontrolü" to ticket,
-        "oturabildimMi" to seated
-    )
+        seated: String = SeatingStatus.NO.key,
+        distanceKm: Double? = null
+    ): Map<String, Any> = buildMap {
+        put("tarih", date)
+        put("gecikme", delay)
+        put("biletKontrolü", ticket)
+        put("oturabildimMi", seated)
+        if (distanceKm != null) {
+            put(TransitRecordCalculations.FIELD_ORS_DISTANCE_KM, distanceKm)
+        }
+    }
 
     private fun LocalDate.toRecordDate(): String =
         String.format(Locale.US, "%02d.%02d.%04d", dayOfMonth, monthValue, year)
