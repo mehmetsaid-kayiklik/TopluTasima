@@ -125,6 +125,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     // Dependency Injection — Koin
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)

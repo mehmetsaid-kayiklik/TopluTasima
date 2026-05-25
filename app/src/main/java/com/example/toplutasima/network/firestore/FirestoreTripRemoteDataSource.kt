@@ -1,6 +1,7 @@
 package com.example.toplutasima.network.firestore
 
 import android.util.Log
+import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.usecase.TransitRecordCalculations
@@ -12,6 +13,11 @@ class FirestoreTripRemoteDataSource(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val collectionName: String = "trips"
 ) {
+    private fun collection() = db
+        .collection("users")
+        .document(AuthService.uid)
+        .collection(collectionName)
+
     suspend fun saveTrip(data: Map<String, Any?>): String {
         val enriched = data.toMutableMap()
         val firestoreDocId = enriched["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
@@ -28,16 +34,16 @@ class FirestoreTripRemoteDataSource(
         enrichNewDistanceFields(enriched)
         val ordered = buildOrderedMap(enriched)
         return if (firestoreDocId != null) {
-            db.collection(collectionName).document(firestoreDocId).set(ordered).await()
+            collection().document(firestoreDocId).set(ordered).await()
             firestoreDocId
         } else {
-            val doc = db.collection(collectionName).add(ordered).await()
+            val doc = collection().add(ordered).await()
             doc.id
         }
     }
 
     suspend fun updateActual(tripId: String, actualDep: String?, actualArr: String?): Boolean {
-        val snapshot = db.collection(collectionName)
+        val snapshot = collection()
             .whereEqualTo("id", tripId)
             .get().await()
         if (snapshot.isEmpty) return false
@@ -67,7 +73,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun clearActual(tripId: String, clearDep: Boolean, clearArr: Boolean): Boolean {
-        val snapshot = db.collection(collectionName)
+        val snapshot = collection()
             .whereEqualTo("id", tripId)
             .get().await()
         if (snapshot.isEmpty) return false
@@ -99,7 +105,7 @@ class FirestoreTripRemoteDataSource(
     suspend fun fetchRecord(tripId: String): Map<String, Any>? {
         if (tripId.isBlank()) return null
         return try {
-            val snapshot = db.collection(collectionName)
+            val snapshot = collection()
                 .whereEqualTo("id", tripId)
                 .limit(1)
                 .get().await()
@@ -113,7 +119,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun fetchTrips(): List<Map<String, Any>> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         return snapshot.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             data + ("firestoreDocId" to doc.id)
@@ -124,7 +130,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun fetchTripsAfter(sortDate: String): List<Map<String, Any>> {
-        val snapshot = db.collection(collectionName)
+        val snapshot = collection()
             .whereGreaterThanOrEqualTo("sortDate", sortDate)
             .get()
             .await()
@@ -135,7 +141,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun fetchTripsUpdatedAfter(updatedAt: Long): List<Map<String, Any>> {
-        val snapshot = db.collection(collectionName)
+        val snapshot = collection()
             .whereGreaterThan("updatedAt", updatedAt)
             .get()
             .await()
@@ -149,7 +155,7 @@ class FirestoreTripRemoteDataSource(
         month: String = "T\u00fcm\u00fc",
         type: String = "T\u00fcm\u00fc"
     ): List<Map<String, Any>> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
 
         val filterMonthNum: String?
         val filterYear: String?
@@ -192,7 +198,7 @@ class FirestoreTripRemoteDataSource(
     suspend fun updateTrip(docId: String, fields: Map<String, Any?>): Boolean {
         logD("FirestoreUpdate", "docId='$docId' isEmpty=${docId.isBlank()}")
         return try {
-            val docRef = db.collection(collectionName).document(docId)
+            val docRef = collection().document(docId)
             val cleanFields = fields.filterValues { it != null }.mapValues { it.value!! }
             val existing = docRef.get().await().data
             val updates = cleanFields.toMutableMap()
@@ -246,7 +252,7 @@ class FirestoreTripRemoteDataSource(
         mesafe: String? = null,
         durakSayisi: String? = null
     ): Boolean {
-        val snapshot = db.collection(collectionName)
+        val snapshot = collection()
             .whereEqualTo("id", tripId)
             .get()
             .await()
@@ -294,7 +300,7 @@ class FirestoreTripRemoteDataSource(
 
     suspend fun deleteTrip(docId: String): Boolean {
         return try {
-            db.collection(collectionName).document(docId).delete().await()
+            collection().document(docId).delete().await()
             true
         } catch (e: CancellationException) {
             throw e
@@ -305,7 +311,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun bulkUpdate(tripId: String, mesafe: String, durakSayisi: Int): Boolean {
-        val snapshot = db.collection(collectionName)
+        val snapshot = collection()
             .whereEqualTo("id", tripId)
             .get()
             .await()
@@ -330,7 +336,7 @@ class FirestoreTripRemoteDataSource(
 
     suspend fun updateExistingRecord(tripId: String, fields: Map<String, Any>): Boolean {
         return try {
-            val snapshot = db.collection(collectionName)
+            val snapshot = collection()
                 .whereEqualTo("id", tripId)
                 .get().await()
             if (snapshot.isEmpty) return false
@@ -359,7 +365,7 @@ class FirestoreTripRemoteDataSource(
             }
             enriched["updatedAt"] = System.currentTimeMillis()
             enrichNewDistanceFields(enriched)
-            db.collection(collectionName).add(buildOrderedMap(enriched)).await()
+            collection().add(buildOrderedMap(enriched)).await()
             true
         } catch (e: CancellationException) {
             throw e
@@ -370,7 +376,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun fetchRowsForBulkUpdate(): List<BulkUpdateRow> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         val results = mutableListOf<BulkUpdateRow>()
         for (doc in snapshot.documents) {
             val data = doc.data ?: continue
@@ -398,7 +404,7 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun fetchAllRowsForStopNameUpdate(): List<BulkUpdateRow> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         return snapshot.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             BulkUpdateRow(

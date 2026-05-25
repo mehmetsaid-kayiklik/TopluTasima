@@ -339,8 +339,15 @@ internal fun ProfileBackupSection(
                 profile = settingsState.editingProfile,
                 lang = lang,
                 onDismiss = { settingsViewModel.cancelEditingProfile() },
-                onSave = { displayName, nameKind, birthHint, memoryNote, infoSource ->
-                    settingsViewModel.saveProfile(displayName, nameKind, birthHint, memoryNote, infoSource)
+                onSave = { displayName, nameKind, birthHint, memoryNote, infoSource, sharedWithTransit ->
+                    settingsViewModel.saveProfile(
+                        displayName,
+                        nameKind,
+                        birthHint,
+                        memoryNote,
+                        infoSource,
+                        sharedWithTransit
+                    )
                 }
             )
         }

@@ -1335,7 +1335,7 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
-                val profiles = db.profileDao().getActiveProfiles()
+                val profiles = db.profileDao().getSharedWithTransitProfiles()
                 _uiState.value = _uiState.value.copy(activeProfiles = profiles)
             } catch (_: Exception) {}
         }

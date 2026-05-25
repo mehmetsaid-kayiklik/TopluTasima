@@ -1,5 +1,6 @@
 package com.example.toplutasima.network
 
+import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.model.PersonalTrip
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
@@ -11,8 +12,10 @@ import kotlinx.coroutines.tasks.await
  */
 object PersonalFirestoreService {
 
-    private val db get() = FirebaseFirestore.getInstance()
-    private const val COLLECTION = "personaltrips"
+    private fun collection() = FirebaseFirestore.getInstance()
+        .collection("users")
+        .document(AuthService.uid)
+        .collection("personaltrips")
 
     // ── Yardımcılar ─────────────────────────────────────────────────────────
 
@@ -84,7 +87,7 @@ object PersonalFirestoreService {
             "yearMonth"   to computeYearMonth(trip.tarih),
             "createdAt"   to now
         )
-        val doc = db.collection(COLLECTION).add(data).await()
+        val doc = collection().add(data).await()
         return doc.id
     }
 
@@ -99,7 +102,7 @@ object PersonalFirestoreService {
                 clean["sortDate"] = computeSortDate(tarih)
                 clean["yearMonth"] = computeYearMonth(tarih)
             }
-            db.collection(COLLECTION).document(docId).update(clean).await()
+            collection().document(docId).update(clean).await()
             true
         } catch (e: CancellationException) {
             throw e
@@ -111,7 +114,7 @@ object PersonalFirestoreService {
      */
     suspend fun deleteTrip(docId: String): Boolean {
         return try {
-            db.collection(COLLECTION).document(docId).delete().await()
+            collection().document(docId).delete().await()
             true
         } catch (e: CancellationException) {
             throw e
@@ -122,7 +125,7 @@ object PersonalFirestoreService {
      * Tüm kişisel binişleri çeker — createdAt'e göre azalan sırayla.
      */
     suspend fun fetchAll(): List<PersonalTrip> {
-        val snap = db.collection(COLLECTION).get().await()
+        val snap = collection().get().await()
         return snap.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             data.toPersonalTrip(doc.id)
@@ -133,7 +136,7 @@ object PersonalFirestoreService {
      * Belirli bir aya ait binişleri çeker ("YYYY-MM" formatında).
      */
     suspend fun fetchForMonth(yearMonth: String): List<PersonalTrip> {
-        val snap = db.collection(COLLECTION)
+        val snap = collection()
             .whereEqualTo("yearMonth", yearMonth)
             .get().await()
         return snap.documents.mapNotNull { doc ->

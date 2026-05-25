@@ -1,6 +1,7 @@
 package com.example.toplutasima.network.firestore
 
 import android.util.Log
+import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.model.FavoriteStop
 import com.example.toplutasima.model.UsageType
 import com.google.firebase.firestore.FirebaseFirestore
@@ -11,9 +12,14 @@ class FirestoreFavoriteDataSource(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val favoriteCollectionName: String = "favorite_stops"
 ) {
+    private fun collection() = db
+        .collection("users")
+        .document(AuthService.uid)
+        .collection(favoriteCollectionName)
+
     suspend fun saveFavorite(fav: FavoriteStop) {
         try {
-            db.collection(favoriteCollectionName).document(fav.id).set(
+            collection().document(fav.id).set(
                 mapOf(
                     "id" to fav.id,
                     "stopId" to fav.stopId,
@@ -32,7 +38,7 @@ class FirestoreFavoriteDataSource(
 
     suspend fun deleteFavorite(favId: String) {
         try {
-            db.collection(favoriteCollectionName).document(favId).delete().await()
+            collection().document(favId).delete().await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -43,7 +49,7 @@ class FirestoreFavoriteDataSource(
 
     suspend fun fetchAllFavorites(): List<FavoriteStop> {
         return try {
-            val snapshot = db.collection(favoriteCollectionName).get().await()
+            val snapshot = collection().get().await()
             snapshot.documents.mapNotNull { doc ->
                 val data = doc.data ?: return@mapNotNull null
                 val id = data["id"]?.toString() ?: return@mapNotNull null

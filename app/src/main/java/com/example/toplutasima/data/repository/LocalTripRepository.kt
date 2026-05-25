@@ -1,6 +1,7 @@
 package com.example.toplutasima.data.repository
 
 import android.content.Context
+import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.data.local.dao.TripDao
 import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.model.MonthSummary
@@ -152,7 +153,10 @@ class LocalTripRepository(
         val firestoreDocId = localTrip?.firestoreDocId ?: ""
         getTripProfileLinkDao().deleteLinksForTrip(tripId, firestoreDocId)
         
-        val collection = FirebaseFirestore.getInstance().collection("trips")
+        val collection = FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(AuthService.uid)
+            .collection("trips")
         val docId = localTrip?.firestoreDocId?.takeIf { it.isNotBlank() } ?: id
         if (docId.isNotBlank()) {
             tripRemoteDataSource.deleteTrip(docId)

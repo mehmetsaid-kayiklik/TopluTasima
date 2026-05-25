@@ -20,6 +20,9 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE archived = 0 ORDER BY displayName ASC")
     suspend fun getActiveProfiles(): List<ProfileEntity>
 
+    @Query("SELECT * FROM profiles WHERE archived = 0 AND sharedWithTransit = 1 ORDER BY displayName ASC")
+    suspend fun getSharedWithTransitProfiles(): List<ProfileEntity>
+
     @Query("SELECT * FROM profiles WHERE id = :id LIMIT 1")
     suspend fun getProfileById(id: String): ProfileEntity?
 

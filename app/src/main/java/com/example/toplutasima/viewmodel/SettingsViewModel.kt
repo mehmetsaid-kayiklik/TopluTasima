@@ -8,6 +8,7 @@ import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.local.entity.ProfileEntity
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
+import com.example.toplutasima.network.firestore.FirestorePersonService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -122,7 +123,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         nameKind: String,
         birthHint: String,
         memoryNote: String,
-        infoSource: String
+        infoSource: String,
+        sharedWithTransit: Boolean
     ) {
         val current = _uiState.value.editingProfile
         viewModelScope.launch {
@@ -135,6 +137,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         birthHint = birthHint.takeIf { it.isNotBlank() },
                         memoryNote = memoryNote.takeIf { it.isNotBlank() },
                         infoSource = infoSource,
+                        sharedWithTransit = sharedWithTransit,
                         updatedAt = System.currentTimeMillis()
                     )
                 } else {
@@ -147,10 +150,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                         infoSource = infoSource,
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis(),
-                        archived = false
+                        archived = false,
+                        sharedWithTransit = sharedWithTransit
                     )
                 }
                 dao.upsert(profile)
+                FirestorePersonService.upsertPerson(profile)
             }
             _uiState.value = _uiState.value.copy(
                 editingProfile = null,
@@ -169,6 +174,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 AppDatabase.getDatabase(getApplication()).profileDao().deleteProfile(id)
+                FirestorePersonService.deletePerson(id)
             }
             _uiState.value = _uiState.value.copy(profileDeleteConfirmId = null)
             loadProfiles()
@@ -178,12 +184,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleArchiveProfile(profile: ProfileEntity) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                AppDatabase.getDatabase(getApplication()).profileDao().upsert(
-                    profile.copy(
-                        archived = !profile.archived,
-                        updatedAt = System.currentTimeMillis()
-                    )
+                val updatedProfile = profile.copy(
+                    archived = !profile.archived,
+                    updatedAt = System.currentTimeMillis()
                 )
+                AppDatabase.getDatabase(getApplication()).profileDao().upsert(updatedProfile)
+                FirestorePersonService.upsertPerson(updatedProfile)
             }
             loadProfiles()
         }

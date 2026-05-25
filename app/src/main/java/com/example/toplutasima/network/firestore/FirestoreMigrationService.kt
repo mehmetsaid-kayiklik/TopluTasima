@@ -1,6 +1,7 @@
 package com.example.toplutasima.network.firestore
 
 import android.util.Log
+import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
 import com.google.firebase.firestore.DocumentSnapshot
@@ -11,9 +12,14 @@ class FirestoreMigrationService(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val collectionName: String = "trips"
 ) {
+    private fun collection() = db
+        .collection("users")
+        .document(AuthService.uid)
+        .collection(collectionName)
+
     suspend fun migrateStripSeconds(): Int {
         val timeFields = listOf("planlananBinis", "gercekBinis", "planlananInis", "gercekInis")
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         var updatedCount = 0
 
         for (doc in snapshot.documents) {
@@ -40,7 +46,7 @@ class FirestoreMigrationService(
     }
 
     suspend fun migrateYolSuresi(): Pair<Int, Int> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         var updatedCount = 0
         val totalCount = snapshot.documents.size
 
@@ -81,7 +87,7 @@ class FirestoreMigrationService(
         val limit = 500L
 
         while (true) {
-            var query = db.collection(collectionName).limit(limit)
+            var query = collection().limit(limit)
             if (lastVisible != null) {
                 query = query.startAfter(lastVisible!!)
             }
@@ -122,7 +128,7 @@ class FirestoreMigrationService(
     }
 
     suspend fun migrateSortDate(): Pair<Int, Int> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         val total = snapshot.documents.size
         var updated = 0
 
@@ -150,7 +156,7 @@ class FirestoreMigrationService(
     }
 
     suspend fun migrateDistanceFields(): Pair<Int, Int> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         val total = snapshot.documents.size
         var updated = 0
 
@@ -228,7 +234,7 @@ class FirestoreMigrationService(
         val limit = 500L
 
         while (true) {
-            var query = db.collection(collectionName).limit(limit)
+            var query = collection().limit(limit)
             if (lastVisible != null) {
                 query = query.startAfter(lastVisible!!)
             }
@@ -273,7 +279,7 @@ class FirestoreMigrationService(
      * Sets gecikme to a negative value (actual − planned) in minutes.
      */
     suspend fun migrateEarlyDepartures(): Pair<Int, Int> {
-        val snapshot = db.collection(collectionName).get().await()
+        val snapshot = collection().get().await()
         val total = snapshot.documents.size
         var updated = 0
 

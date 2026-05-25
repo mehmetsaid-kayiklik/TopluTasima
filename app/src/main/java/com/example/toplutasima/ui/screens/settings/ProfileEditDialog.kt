@@ -28,6 +28,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -42,13 +43,21 @@ internal fun ProfileEditDialog(
     profile: com.example.toplutasima.data.local.entity.ProfileEntity?,
     lang: com.example.toplutasima.ui.AppLanguage,
     onDismiss: () -> Unit,
-    onSave: (displayName: String, nameKind: String, birthHint: String, memoryNote: String, infoSource: String) -> Unit
+    onSave: (
+        displayName: String,
+        nameKind: String,
+        birthHint: String,
+        memoryNote: String,
+        infoSource: String,
+        sharedWithTransit: Boolean
+    ) -> Unit
 ) {
     var displayName by remember { mutableStateOf(profile?.displayName ?: "") }
     var nameKind by remember { mutableStateOf(profile?.nameKind ?: "NICKNAME") }
     var birthHint by remember { mutableStateOf(profile?.birthHint ?: "") }
     var memoryNote by remember { mutableStateOf(profile?.memoryNote ?: "") }
     var infoSource by remember { mutableStateOf(profile?.infoSource ?: "UNKNOWN") }
+    var sharedWithTransit by remember { mutableStateOf(profile?.sharedWithTransit ?: false) }
 
     var nameKindMenuOpen by remember { mutableStateOf(false) }
     var infoSourceMenuOpen by remember { mutableStateOf(false) }
@@ -221,13 +230,42 @@ internal fun ProfileEditDialog(
                         )
                     }
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Toplu Taşıma ile paylaş",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = "Bu kişiyi yolculuklarda seçebilirsin",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = sharedWithTransit,
+                        onCheckedChange = { sharedWithTransit = it }
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     if (displayName.isNotBlank()) {
-                        onSave(displayName.trim(), nameKind, birthHint.trim(), memoryNote.trim(), infoSource)
+                        onSave(
+                            displayName.trim(),
+                            nameKind,
+                            birthHint.trim(),
+                            memoryNote.trim(),
+                            infoSource,
+                            sharedWithTransit
+                        )
                     }
                 },
                 enabled = displayName.isNotBlank(),

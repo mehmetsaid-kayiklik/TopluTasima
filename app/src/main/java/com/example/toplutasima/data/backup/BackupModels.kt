@@ -14,7 +14,8 @@ data class ProfileBackupModel(
     val infoSource: String,
     val createdAt: Long,
     val updatedAt: Long,
-    val archived: Boolean = false
+    val archived: Boolean = false,
+    val sharedWithTransit: Boolean = false
 )
 
 @Serializable
@@ -45,7 +46,8 @@ fun ProfileEntity.toBackupModel() = ProfileBackupModel(
     infoSource = infoSource,
     createdAt = createdAt,
     updatedAt = updatedAt,
-    archived = archived
+    archived = archived,
+    sharedWithTransit = sharedWithTransit
 )
 
 fun ProfileBackupModel.toEntity() = ProfileEntity(
@@ -57,7 +59,8 @@ fun ProfileBackupModel.toEntity() = ProfileEntity(
     infoSource = infoSource,
     createdAt = createdAt,
     updatedAt = updatedAt,
-    archived = archived
+    archived = archived,
+    sharedWithTransit = sharedWithTransit
 )
 
 fun TripProfileLinkEntity.toBackupModel() = TripProfileLinkBackupModel(

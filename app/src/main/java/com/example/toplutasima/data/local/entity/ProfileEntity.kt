@@ -1,5 +1,6 @@
 package com.example.toplutasima.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -14,5 +15,7 @@ data class ProfileEntity(
     val infoSource: String, // "ASKED", "OBSERVED", "UNKNOWN"
     val createdAt: Long,
     val updatedAt: Long,
-    val archived: Boolean = false
+    val archived: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val sharedWithTransit: Boolean = false  // Bellek uygulamasından paylaşılmış mı?
 )

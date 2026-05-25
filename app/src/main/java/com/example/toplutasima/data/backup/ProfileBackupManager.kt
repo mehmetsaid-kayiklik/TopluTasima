@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.local.entity.ProfileEntity
 import com.example.toplutasima.data.local.entity.TripProfileLinkEntity
+import com.example.toplutasima.network.firestore.FirestorePersonService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -115,6 +116,9 @@ class ProfileBackupManager(
 
         if (profilesToUpsert.isNotEmpty()) {
             profileDao.upsertAll(profilesToUpsert)
+            profilesToUpsert.forEach { profile ->
+                FirestorePersonService.upsertPerson(profile)
+            }
         }
 
         // We need an updated set of all profile IDs currently present (local + newly imported)
