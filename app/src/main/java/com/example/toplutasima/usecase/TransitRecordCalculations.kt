@@ -82,9 +82,19 @@ object TransitRecordCalculations {
     fun computeGecikme(planlananBinis: String?, gercekBinis: String?): Int {
         if (planlananBinis.isNullOrBlank() || gercekBinis.isNullOrBlank()) return 0
         return try {
-            var diff = toMinutes(gercekBinis) - toMinutes(planlananBinis)
-            if (diff < 0) diff += 24 * 60
-            if (diff > 120) 0 else diff
+            val diff = toMinutes(gercekBinis) - toMinutes(planlananBinis)
+            when {
+                diff < 0 -> {
+                    val overnightDelay = diff + 24 * 60
+                    when {
+                        -diff <= 120 -> diff
+                        overnightDelay <= 120 -> overnightDelay
+                        else -> 0
+                    }
+                }
+                diff > 120 -> 0
+                else -> diff
+            }
         } catch (_: Exception) {
             0
         }

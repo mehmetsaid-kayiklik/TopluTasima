@@ -108,6 +108,7 @@ fun MainAppScreen(isDarkTheme: Boolean) {
                     onTogglePersonal = { showPersonal = it },
                     isActive = (tab == 2),
                     onRestoreRecord = { record ->
+                        showPersonal = false
                         rmvLogViewModel.restoreRecord(record)
                         selectedTab = 0
                     }

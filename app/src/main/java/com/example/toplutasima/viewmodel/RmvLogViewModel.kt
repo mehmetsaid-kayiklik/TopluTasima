@@ -28,6 +28,7 @@ import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.rmvlog.LogMode
+import com.example.toplutasima.viewmodel.rmvlog.ManualEntryState
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -942,6 +943,16 @@ class RmvLogViewModel(
 
         val distanceKm = TransitRecordCalculations.orsDistanceKm(record) ?: TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
         val stopCount = durakSayisi.toIntOrNull() ?: 0
+        val manualDistance = run {
+            val orsRaw = record[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM]?.toString()?.trim().orEmpty()
+            val orsValue = orsRaw.replace(",", ".").toDoubleOrNull()
+            if (orsValue != null && orsValue > 0.0) {
+                orsRaw
+            } else {
+                mesafe.filter { it.isDigit() || it == '.' || it == ',' }
+            }
+        }
+        val manualStopCount = durakSayisi.trim().takeIf { it.toIntOrNull() != null }.orEmpty()
 
         val segment = com.example.toplutasima.model.Segment(
             typeTr = tur, line = hat, direction = yon,
@@ -982,6 +993,24 @@ class RmvLogViewModel(
             segmentOturabildim = mapOf(0 to oturabildim),
             segmentBiletKontrolu = mapOf(0 to biletKontrolu),
             segmentNote = mapOf(0 to not),
+            mode = LogMode.MANUAL,
+            manual = ManualEntryState(
+                typeTr = tur,
+                line = hat,
+                direction = yon,
+                boardingStop = binisDuragi,
+                alightingStop = inisDuragi,
+                plannedDep = toRaw(planlananBinis),
+                actualDep = toRaw(gercekBinis),
+                plannedArr = toRaw(planlananInis),
+                actualArr = toRaw(gercekInis),
+                distance = manualDistance,
+                stopCount = manualStopCount,
+                weather = record["havaDurumu"]?.toString().orEmpty(),
+                oturabildim = oturabildim,
+                biletKontrolu = biletKontrolu,
+                note = not
+            ),
             status = S.statusReady(lang())
         )
         prefs.edit().putString("first_id", customId).putString("last_id", customId).apply()
@@ -1820,6 +1849,9 @@ class RmvLogViewModel(
             } catch (_: Exception) { /* ağ hatası — sessizce geç */ }
         }
     }
+
+    private fun toRaw(formatted: String?): String =
+        formatted.orEmpty().replace(":", "").filter { it.isDigit() }.take(4)
 
     override fun onCleared() {
         stopDepartureRefresh()

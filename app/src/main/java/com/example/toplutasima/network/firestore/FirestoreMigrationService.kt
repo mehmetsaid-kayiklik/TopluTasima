@@ -80,6 +80,71 @@ class FirestoreMigrationService(
         return Pair(updatedCount, totalCount)
     }
 
+    suspend fun migrateDerivedFields(): Pair<Int, Int> {
+        val snapshot = collection().get().await()
+        val total = snapshot.documents.size
+        var updated = 0
+
+        for (doc in snapshot.documents) {
+            val data = doc.data ?: continue
+            val updates = linkedMapOf<String, Any>()
+
+            val tarih = data["tarih"]?.toString().orEmpty()
+            if (tarih.isNotBlank()) {
+                putIfChanged(updates, data, "gun", TransitRecordCalculations.computeGun(tarih))
+                putIfChanged(updates, data, "gununTipi", TransitRecordCalculations.computeGununTipi(tarih))
+                putIfChanged(updates, data, "sortDate", TransitRecordCalculations.computeSortDate(tarih))
+                putIfChanged(updates, data, "yearMonth", TransitRecordCalculations.computeYearMonth(tarih))
+            }
+
+            val planlananBinis = data["planlananBinis"]?.toString()
+            val planlananInis = data["planlananInis"]?.toString()
+            val gercekBinis = data["gercekBinis"]?.toString()
+            val gercekInis = data["gercekInis"]?.toString()
+
+            putIfChanged(
+                updates,
+                data,
+                "gecikme",
+                TransitRecordCalculations.computeGecikme(planlananBinis, gercekBinis)
+            )
+            putIfChanged(
+                updates,
+                data,
+                "planlananYolSuresi",
+                TransitRecordCalculations.computeYolSuresi(planlananBinis, planlananInis)
+            )
+            putIfChanged(
+                updates,
+                data,
+                "gercekYolSuresi",
+                TransitRecordCalculations.computeYolSuresi(gercekBinis, gercekInis)
+            )
+
+            if (data.containsKey("mesafe")) {
+                val distanceKm = TransitRecordCalculations.parseDistanceKm(data["mesafe"]) ?: 0.0
+                TransitRecordCalculations.calculatedDistanceFields(
+                    distanceKm,
+                    resetRmvDistance = true
+                ).forEach { (key, value) ->
+                    putIfChanged(updates, data, key, value)
+                }
+            }
+
+            if (updates.isNotEmpty()) {
+                updates["updatedAt"] = System.currentTimeMillis()
+                try {
+                    doc.reference.update(updates).await()
+                    updated++
+                } catch (e: Exception) {
+                    Log.e(TAG, "migrateDerivedFields failed for doc: ${doc.id}", e)
+                }
+            }
+        }
+
+        return Pair(updated, total)
+    }
+
     suspend fun migrateYearMonth(): Pair<Int, Int> {
         var updated = 0
         var total = 0
@@ -324,6 +389,17 @@ class FirestoreMigrationService(
         val h = parts[0].toIntOrNull() ?: return null
         val m = parts[1].toIntOrNull() ?: return null
         return h * 60 + m
+    }
+
+    private fun putIfChanged(
+        updates: MutableMap<String, Any>,
+        data: Map<String, Any>,
+        key: String,
+        value: Any
+    ) {
+        if (data[key]?.toString() != value.toString()) {
+            updates[key] = value
+        }
     }
 
     private companion object {

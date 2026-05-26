@@ -355,6 +355,13 @@ object S {
     fun migrateYolSuresiRunning(l: AppLanguage) = m(l, "Süreler hesaplanıyor...", "Dauer wird berechnet...", "Calculating durations...")
     fun migrateYolSuresiDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
 
+    // ── Derived Fields Migration ──
+    fun migrateDerivedFieldsButton(l: AppLanguage) = m(l, "Turetilmis Alanlari Yeniden Hesapla", "Abgeleitete Felder neu berechnen", "Recalculate Derived Fields")
+    fun migrateDerivedFieldsConfirmTitle(l: AppLanguage) = m(l, "Hesaplamalari Yenile", "Berechnungen erneuern", "Refresh Calculations")
+    fun migrateDerivedFieldsConfirmText(l: AppLanguage) = m(l, "Tum eski seyahatlerde gun, ay/siralama, gecikme, sure ve mesafe alanlari yeniden hesaplanacak. Devam etmek istiyor musunuz?", "Tag, Monat/Sortierung, Verspaetung, Dauer und Distanz werden fuer alle alten Fahrten neu berechnet. Fortfahren?", "Day, month/sort, delay, duration, and distance fields will be recalculated for all old trips. Continue?")
+    fun migrateDerivedFieldsRunning(l: AppLanguage) = m(l, "Hesaplamalar yenileniyor...", "Berechnungen werden erneuert...", "Refreshing calculations...")
+    fun migrateDerivedFieldsDone(count: Int, total: Int, l: AppLanguage) = m(l, "✅ $count/$total kayıt güncellendi", "✅ $count/$total Einträge aktualisiert", "✅ $count/$total records updated")
+
     // ── YearMonth Migration ──
     fun migrateYearMonthButton(l: AppLanguage) = m(l, "📅 Eski Kayıtları Ay Alanıyla Güncelle", "📅 Alte Einträge mit Monatsfeld aktualisieren", "📅 Backfill Month Field on Old Records")
     fun migrateYearMonthConfirmTitle(l: AppLanguage) = m(l, "Ay Alanını Ekle", "Monatsfeld hinzufügen", "Add Month Field")

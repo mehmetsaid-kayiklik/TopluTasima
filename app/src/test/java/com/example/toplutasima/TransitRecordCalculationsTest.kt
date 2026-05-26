@@ -24,6 +24,11 @@ class TransitRecordCalculationsTest {
     }
 
     @Test
+    fun `computeGecikme early departure`() {
+        assertEquals(-10, TransitRecordCalculations.computeGecikme("08:00", "07:50"))
+    }
+
+    @Test
     fun `computeGecikme midnight crossing`() {
         // Planned 23:50, actual 00:05 -> 15 min delay (not 0 or negative)
         assertEquals(15, TransitRecordCalculations.computeGecikme("23:50", "00:05"))

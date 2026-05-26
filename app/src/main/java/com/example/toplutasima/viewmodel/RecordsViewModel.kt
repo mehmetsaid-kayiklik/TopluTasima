@@ -13,6 +13,7 @@ import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.usecase.RecordFilterUtils
 import com.example.toplutasima.usecase.RecordRowMapper
+import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.viewmodel.records.DayGroup
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 import com.example.toplutasima.viewmodel.records.RecordsUiState
@@ -326,6 +327,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                     if (existingEntity != null) {
                         val mergedMap = existingEntity.toMap().toMutableMap()
                         mergedMap.putAll(fields)
+                        recalculateDerivedFields(mergedMap)
                         mergedMap["firestoreDocId"] = existingEntity.firestoreDocId?.takeIf { it.isNotBlank() } ?: docId
                         tripRepository.saveTrip(mergedMap.toEntity())
 
@@ -386,6 +388,35 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                     saveMsg = "❌ ${e.message}"
                 )
             }
+        }
+    }
+
+    private fun recalculateDerivedFields(record: MutableMap<String, Any?>) {
+        val tarih = record["tarih"]?.toString().orEmpty()
+        if (tarih.isNotBlank()) {
+            record["gun"] = TransitRecordCalculations.computeGun(tarih)
+            record["gununTipi"] = TransitRecordCalculations.computeGununTipi(tarih)
+            record["sortDate"] = TransitRecordCalculations.computeSortDate(tarih)
+            record["yearMonth"] = TransitRecordCalculations.computeYearMonth(tarih)
+        }
+
+        val planlananBinis = record["planlananBinis"]?.toString()
+        val planlananInis = record["planlananInis"]?.toString()
+        val gercekBinis = record["gercekBinis"]?.toString()
+        val gercekInis = record["gercekInis"]?.toString()
+
+        record["gecikme"] = TransitRecordCalculations.computeGecikme(planlananBinis, gercekBinis)
+        record["planlananYolSuresi"] = TransitRecordCalculations.computeYolSuresi(planlananBinis, planlananInis)
+        record["gercekYolSuresi"] = TransitRecordCalculations.computeYolSuresi(gercekBinis, gercekInis)
+
+        if (record.containsKey("mesafe")) {
+            val distanceKm = TransitRecordCalculations.parseDistanceKm(record["mesafe"]) ?: 0.0
+            record.putAll(
+                TransitRecordCalculations.calculatedDistanceFields(
+                    distanceKm,
+                    resetRmvDistance = true
+                )
+            )
         }
     }
 

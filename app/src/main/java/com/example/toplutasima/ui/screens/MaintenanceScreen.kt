@@ -76,6 +76,11 @@ fun MaintenanceScreen(
     var yolSuresiRunning by remember { mutableStateOf(false) }
     var yolSuresiResult by remember { mutableStateOf("") }
 
+    // Dialog state for derived fields migration
+    var showDerivedFieldsDialog by remember { mutableStateOf(false) }
+    var derivedFieldsRunning by remember { mutableStateOf(false) }
+    var derivedFieldsResult by remember { mutableStateOf("") }
+
     // Dialog state for yearMonth migration
     var showYearMonthDialog by remember { mutableStateOf(false) }
     var yearMonthRunning by remember { mutableStateOf(false) }
@@ -179,6 +184,32 @@ fun MaintenanceScreen(
                         yolSuresiResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
                     } finally {
                         yolSuresiRunning = false
+                    }
+                }
+            },
+            derivedFieldsRunning = derivedFieldsRunning,
+            derivedFieldsResult = derivedFieldsResult,
+            showDerivedFieldsDialog = showDerivedFieldsDialog,
+            onRequestDerivedFields = { showDerivedFieldsDialog = true },
+            onDismissDerivedFields = { showDerivedFieldsDialog = false },
+            onConfirmDerivedFields = {
+                showDerivedFieldsDialog = false
+                derivedFieldsRunning = true
+                derivedFieldsResult = ""
+                scope.launch {
+                    try {
+                        val (count, total) = withContext(Dispatchers.IO) {
+                            val result = migrationService.migrateDerivedFields()
+                            tripRepository.syncFromFirestore(fullSync = true)
+                            result
+                        }
+                        derivedFieldsResult = S.migrateDerivedFieldsDone(count, total, lang)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        derivedFieldsResult = "${S.stripSecondsFailed(lang)}: ${e.message}"
+                    } finally {
+                        derivedFieldsRunning = false
                     }
                 }
             },

@@ -19,6 +19,12 @@ internal fun MigrationActionsSection(
     onRequestYolSuresi: () -> Unit,
     onConfirmYolSuresi: () -> Unit,
     onDismissYolSuresi: () -> Unit,
+    derivedFieldsRunning: Boolean,
+    derivedFieldsResult: String,
+    showDerivedFieldsDialog: Boolean,
+    onRequestDerivedFields: () -> Unit,
+    onConfirmDerivedFields: () -> Unit,
+    onDismissDerivedFields: () -> Unit,
     yearMonthRunning: Boolean,
     yearMonthResult: String,
     showYearMonthDialog: Boolean,
@@ -85,6 +91,26 @@ internal fun MigrationActionsSection(
             dismissText = S.cancel(lang),
             onConfirm = onConfirmYolSuresi,
             onDismiss = onDismissYolSuresi
+        )
+    }
+
+    MaintenanceActionCard(
+        title = S.migrateDerivedFieldsButton(lang),
+        description = "Kayit duzenlemede hesaplanan gun, ay/siralama, gecikme, sure ve mesafe alanlarini tum eski seyahatler icin yeniler.",
+        isRunning = derivedFieldsRunning,
+        runningText = S.migrateDerivedFieldsRunning(lang),
+        result = derivedFieldsResult,
+        buttonText = S.migrateDerivedFieldsButton(lang),
+        onClick = onRequestDerivedFields
+    )
+    if (showDerivedFieldsDialog) {
+        MaintenanceConfirmDialog(
+            title = S.migrateDerivedFieldsConfirmTitle(lang),
+            text = S.migrateDerivedFieldsConfirmText(lang),
+            confirmText = S.yes(lang),
+            dismissText = S.cancel(lang),
+            onConfirm = onConfirmDerivedFields,
+            onDismiss = onDismissDerivedFields
         )
     }
 

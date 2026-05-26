@@ -61,8 +61,8 @@ class TransitRecordCalculationsTest {
     }
 
     @Test
-    fun `computeGecikme handles negative same-day difference as invalid`() {
-        assertEquals(0, TransitRecordCalculations.computeGecikme("08:00", "07:50"))
+    fun `computeGecikme returns negative delay for early departure`() {
+        assertEquals(-10, TransitRecordCalculations.computeGecikme("08:00", "07:50"))
     }
 
     @Test
