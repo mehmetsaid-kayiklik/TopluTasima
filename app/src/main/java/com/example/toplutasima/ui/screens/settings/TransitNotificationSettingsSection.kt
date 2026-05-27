@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.toplutasima.data.PrefsManager
@@ -107,7 +108,15 @@ internal fun TransitNotificationSettingsSection(
                                 FilterChip(
                                     selected = selected,
                                     onClick = { PrefsManager.changeReminderOffset(minutes) },
-                                    label = { Text(S.transitReminderOption(minutes, lang), fontSize = 11.sp) },
+                                    label = {
+                                        Text(
+                                            S.transitReminderOption(minutes, lang),
+                                            fontSize = 11.sp,
+                                            lineHeight = 14.sp,
+                                            maxLines = 2,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    },
                                     modifier = Modifier.weight(1f)
                                 )
                             }

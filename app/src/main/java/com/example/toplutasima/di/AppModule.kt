@@ -2,6 +2,7 @@ package com.example.toplutasima.di
 
 import com.example.toplutasima.TopluTasimaApp
 import com.example.toplutasima.data.repository.LocalTripRepository
+import com.example.toplutasima.data.repository.ProfileSyncRepository
 import com.example.toplutasima.location.NearbyStopsManager
 import com.example.toplutasima.network.firestore.FirestoreFavoriteDataSource
 import com.example.toplutasima.network.firestore.FirestoreMigrationService
@@ -52,6 +53,7 @@ val appModule = module {
         )
     }
     single { PersonalTripRepository() }       // Kişisel Araç — "personaltrips"
+    single { ProfileSyncRepository(androidContext()) }
 
     // ── Use Case ────────────────────────────────────────────────────────────
     single { TripPlanningUseCase(get()) }
@@ -60,7 +62,7 @@ val appModule = module {
     single { NearbyStopsManager(androidContext(), get()) }
 
     // ── ViewModels ──────────────────────────────────────────────────────────
-    viewModel { RmvLogViewModel(androidApplication(), get(), get(), get(), get(), get()) }
+    viewModel { RmvLogViewModel(androidApplication(), get(), get(), get(), get(), get(), get()) }
     viewModel { SummaryViewModel(androidApplication()) }
     viewModel { RecordsViewModel(androidApplication()) }
     viewModel { BulkUpdateViewModel(androidApplication(), get()) }

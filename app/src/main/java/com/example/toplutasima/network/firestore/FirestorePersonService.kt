@@ -7,6 +7,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 
 object FirestorePersonService {
+    data class PersonShareState(
+        val id: String,
+        val sharedWithTransit: Boolean,
+        val archived: Boolean
+    )
 
     private fun collection() = FirebaseFirestore.getInstance()
         .collection("users")
@@ -61,12 +66,24 @@ object FirestorePersonService {
                 displayName       = d["displayName"]?.toString() ?: "",
                 nameKind          = d["nameKind"]?.toString() ?: "UNKNOWN",
                 memoryNote        = d["memoryNote"]?.toString(),
-                birthHint         = d["birthHint"]?.toString(),
+                birthHint         = d["birthHint"]?.toString() ?: d["birthday"]?.toString(),
                 infoSource        = d["infoSource"]?.toString() ?: "UNKNOWN",
                 createdAt         = (d["createdAt"] as? Number)?.toLong() ?: 0L,
                 updatedAt         = (d["updatedAt"] as? Number)?.toLong() ?: 0L,
                 archived          = d["archived"] as? Boolean ?: false,
                 sharedWithTransit = true
+            )
+        }
+    }
+
+    suspend fun fetchShareStates(): List<PersonShareState> {
+        val snap = collection().get().await()
+        return snap.documents.map { doc ->
+            val d = doc.data.orEmpty()
+            PersonShareState(
+                id = d["id"]?.toString() ?: doc.id,
+                sharedWithTransit = d["sharedWithTransit"] as? Boolean ?: false,
+                archived = d["archived"] as? Boolean ?: false
             )
         }
     }

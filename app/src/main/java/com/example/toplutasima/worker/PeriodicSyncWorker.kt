@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.repository.LocalTripRepository
+import com.example.toplutasima.data.repository.ProfileSyncRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -31,6 +32,7 @@ class PeriodicSyncWorker(
             val shouldRunFullSync = lastFullSync <= 0L || now - lastFullSync >= FULL_SYNC_INTERVAL_MS
 
             repository.syncFromFirestore(fullSync = shouldRunFullSync)
+            ProfileSyncRepository(applicationContext).refreshSharedProfiles()
             if (shouldRunFullSync) {
                 prefs.edit().putLong(KEY_LAST_FULL_SYNC_TIMESTAMP, now).apply()
             }

@@ -588,7 +588,7 @@ object S {
     fun transitReminderOption(minutes: Int, l: AppLanguage): String = when (minutes) {
         -2 -> m(l, "2 dk önce", "2 Min. vorher", "2 min before")
         -1 -> m(l, "1 dk önce", "1 Min. vorher", "1 min before")
-        0 -> m(l, "Tam iniş saatinde", "Zur Ankunftszeit", "At arrival time")
+        0 -> m(l, "Saatinde", "Ankunft", "Arrival")
         1 -> m(l, "1 dk sonra", "1 Min. danach", "1 min after")
         2 -> m(l, "2 dk sonra", "2 Min. danach", "2 min after")
         else -> "$minutes ${m(l, "dk", "Min.", "min")}"

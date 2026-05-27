@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.data.AppEventBus
 import com.example.toplutasima.data.PrefsManager
+import com.example.toplutasima.data.repository.ProfileSyncRepository
 import com.example.toplutasima.model.Departure
 import com.example.toplutasima.model.JourneyMatchCandidate
 import com.example.toplutasima.model.SeatingStatus
@@ -53,7 +54,8 @@ class RmvLogViewModel(
     private val transitRecordRepository: TransitRecordRepository,
     private val tripProfileLinkRepository: TripProfileLinkRepository,
     private val tripPlanner: TripPlanningUseCase,
-    private val nearbyManager: com.example.toplutasima.location.NearbyStopsManager
+    private val nearbyManager: com.example.toplutasima.location.NearbyStopsManager,
+    private val profileSyncRepository: ProfileSyncRepository
 ) : AndroidViewModel(application) {
     private companion object {
         const val DEPARTURE_REFRESH_INTERVAL_MS = 30_000L
@@ -1363,8 +1365,7 @@ class RmvLogViewModel(
     fun loadActiveProfiles() {
         viewModelScope.launch {
             try {
-                val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
-                val profiles = db.profileDao().getSharedWithTransitProfiles()
+                val profiles = profileSyncRepository.refreshSharedProfiles()
                 _uiState.value = _uiState.value.copy(activeProfiles = profiles)
             } catch (_: Exception) {}
         }
