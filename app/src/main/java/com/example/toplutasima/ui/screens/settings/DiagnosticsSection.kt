@@ -36,6 +36,12 @@ import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.RmvFooter
 import com.example.toplutasima.ui.screens.MaintenanceScreen
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.example.toplutasima.diagnostics.TransitTrackerLogger
+import java.io.File
 
 @Composable
 internal fun DiagnosticsSection(
@@ -136,6 +142,144 @@ internal fun DiagnosticsSection(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text(S.clearCrashReport(lang), fontSize = 12.sp) }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                val trackingLogsTitle = when (lang) {
+                    AppLanguage.TR -> "GPS Takip Günlükleri (Son 2 Gün)"
+                    AppLanguage.DE -> "GPS-Tracking-Logs (Letzte 2 Tage)"
+                    else -> "GPS Tracking Logs (Last 2 Days)"
+                }
+                Text(
+                    trackingLogsTitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                var logFiles by remember { mutableStateOf(TransitTrackerLogger.getLogFiles(context)) }
+                var selectedLogFile by remember { mutableStateOf<File?>(null) }
+                var selectedLogContent by remember { mutableStateOf("") }
+
+                if (logFiles.isEmpty()) {
+                    val noLogsText = when (lang) {
+                        AppLanguage.TR -> "Kayıtlı takip günlüğü bulunamadı."
+                        AppLanguage.DE -> "Keine Tracking-Logs gefunden."
+                        else -> "No tracking logs found."
+                    }
+                    Text(
+                        noLogsText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    logFiles.forEach { file ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            val displayName = file.name.removePrefix("tracker_log_").removeSuffix(".txt")
+                            Text(
+                                displayName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            val viewBtnText = when (lang) {
+                                AppLanguage.TR -> "Görüntüle"
+                                AppLanguage.DE -> "Ansehen"
+                                else -> "View"
+                            }
+                            TextButton(onClick = {
+                                selectedLogFile = file
+                                selectedLogContent = TransitTrackerLogger.readLogFile(file)
+                            }) {
+                                Text(viewBtnText, fontSize = 12.sp)
+                            }
+                            
+                            val deleteBtnText = when (lang) {
+                                AppLanguage.TR -> "Sil"
+                                AppLanguage.DE -> "Löschen"
+                                else -> "Delete"
+                            }
+                            TextButton(onClick = {
+                                if (TransitTrackerLogger.deleteLogFile(file)) {
+                                    logFiles = TransitTrackerLogger.getLogFiles(context)
+                                }
+                            }) {
+                                Text(deleteBtnText, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+
+                if (selectedLogFile != null) {
+                    Dialog(
+                        onDismissRequest = { selectedLogFile = null },
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp).fillMaxSize()
+                            ) {
+                                val titleText = selectedLogFile?.name?.removePrefix("tracker_log_")?.removeSuffix(".txt").orEmpty()
+                                val header = when (lang) {
+                                    AppLanguage.TR -> "Takip Günlüğü: $titleText"
+                                    AppLanguage.DE -> "Tracking-Log: $titleText"
+                                    else -> "Tracking Log: $titleText"
+                                }
+                                Text(
+                                    header,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp))
+                                        .padding(8.dp)
+                                ) {
+                                    val scrollState = rememberScrollState()
+                                    Text(
+                                        text = selectedLogContent.ifBlank {
+                                            when (lang) {
+                                                AppLanguage.TR -> "Dosya boş."
+                                                AppLanguage.DE -> "Datei ist leer."
+                                                else -> "File is empty."
+                                            }
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(scrollState)
+                                    )
+                                }
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    val closeText = when (lang) {
+                                        AppLanguage.TR -> "Kapat"
+                                        AppLanguage.DE -> "Schließen"
+                                        else -> "Close"
+                                    }
+                                    OutlinedButton(onClick = { selectedLogFile = null }) {
+                                        Text(closeText)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

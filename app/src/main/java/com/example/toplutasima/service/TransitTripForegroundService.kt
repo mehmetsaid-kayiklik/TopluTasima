@@ -13,6 +13,7 @@ import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.toplutasima.BuildConfig
+import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.TransitAutoActualTimeMode
 import com.example.toplutasima.data.TransitReminderType
@@ -126,6 +127,7 @@ class TransitTripForegroundService : Service() {
 
     private fun logD(message: String) {
         if (BuildConfig.DEBUG) Log.d(TAG, message)
+        TransitTrackerLogger.log(this, TAG, message)
     }
 
     override fun onCreate() {
@@ -155,6 +157,7 @@ class TransitTripForegroundService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
+                TransitTrackerLogger.cleanOldLogs(this, maxDaysToKeep = 2)
                 logD("Bildirim başladı")
             }
             ACTION_UPDATE_BOARDING -> {
