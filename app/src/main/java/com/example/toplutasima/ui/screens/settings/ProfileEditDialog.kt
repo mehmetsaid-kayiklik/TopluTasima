@@ -238,11 +238,11 @@ internal fun ProfileEditDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Toplu Taşıma ile paylaş",
+                            text = S.profileShareWithTransitTitle(lang),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
-                            text = "Bu kişiyi yolculuklarda seçebilirsin",
+                            text = S.profileShareWithTransitDesc(lang),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
