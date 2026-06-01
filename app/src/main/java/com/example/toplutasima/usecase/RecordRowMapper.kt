@@ -1,5 +1,6 @@
 package com.example.toplutasima.usecase
 
+import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 import java.util.UUID
 
@@ -13,7 +14,7 @@ object RecordRowMapper {
         val date = rec["tarih"]?.toString() ?: ""
         val dayName = rec["gun"]?.toString() ?: ""
         val turValue = rec["tur"]?.toString() ?: ""
-        val typeDisplay = turValue
+        val typeDisplay = "${vehicleIcon(turValue)} $turValue"
 
         return RecordRowUiModel(
             id = rec["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
