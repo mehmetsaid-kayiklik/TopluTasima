@@ -338,7 +338,10 @@ private fun shareLogFile(context: android.content.Context, file: File, lang: App
             else -> "Share Log File"
         }
         
-        context.startActivity(android.content.Intent.createChooser(shareIntent, chooserTitle))
+        val chooser = android.content.Intent.createChooser(shareIntent, chooserTitle).apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
     } catch (e: Exception) {
         android.util.Log.e("DiagnosticsSection", "Log dosyası paylaşılamadı: ${e.message}", e)
     }
