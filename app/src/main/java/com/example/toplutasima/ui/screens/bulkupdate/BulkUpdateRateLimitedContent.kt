@@ -48,7 +48,7 @@ internal fun RateLimitedContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                "⏳ Bekleniyor... ${state.rateLimitCountdown}s",
+                "Bekleniyor... ${state.rateLimitCountdown}s",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -62,8 +62,8 @@ internal fun RateLimitedContent(
     }
 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("✅ ${state.successCount}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-        Text("❌ ${state.failCount}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        BulkUpdateSuccessCount(state.successCount)
+        BulkUpdateFailureCount(state.failCount)
     }
 
     OutlinedButton(
@@ -72,6 +72,6 @@ internal fun RateLimitedContent(
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
     ) {
-        Text("⏹ İptal")
+        Text("İptal")
     }
 }

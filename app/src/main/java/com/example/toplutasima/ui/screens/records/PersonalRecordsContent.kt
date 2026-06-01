@@ -73,7 +73,7 @@ internal fun PersonalRecordsContent(
             when {
                 uiState.isLoading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 trips.isEmpty() -> Text(
-                    "🚗  ${S.noRecords(lang)}",
+                    S.noRecords(lang),
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyLarge,

@@ -76,7 +76,7 @@ fun AddPersonalTripDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                if (isEditing) S.editEdit(lang) else "🚗  ${S.personalAdd(lang)}",
+                if (isEditing) S.editEdit(lang) else S.personalAdd(lang),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -89,18 +89,17 @@ fun AddPersonalTripDialog(
                 // ── Araç Türü ───────────────────────────────────────────
                 Text(S.personalVehicleType(lang), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 Box {
-                    val selectedEmoji = S.personalVehicleOptions.find { it.first == aracTuru }?.second ?: "🚗"
                     OutlinedButton(
                         onClick = { aracMenuOpen = true },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("$selectedEmoji  $aracTuru", fontWeight = FontWeight.SemiBold)
+                        Text(aracTuru, fontWeight = FontWeight.SemiBold)
                     }
                     DropdownMenu(expanded = aracMenuOpen, onDismissRequest = { aracMenuOpen = false }) {
-                        S.personalVehicleOptions.forEach { (name, emoji) ->
+                        S.personalVehicleOptions.forEach { (name, _) ->
                             DropdownMenuItem(
-                                text = { Text("$emoji  $name", fontSize = 15.sp) },
+                                text = { Text(name, fontSize = 15.sp) },
                                 onClick = { aracTuru = name; aracMenuOpen = false }
                             )
                         }
@@ -172,14 +171,14 @@ fun AddPersonalTripDialog(
                     // Kalkış / Varış yeri (sadece göster, read-only)
                     if (editingTrip?.kaldigiYer?.isNotBlank() == true) {
                         Text(
-                            "📍 ${editingTrip.kaldigiYer}",
+                            editingTrip.kaldigiYer,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     if (editingTrip?.varisYeri?.isNotBlank() == true) {
                         Text(
-                            "🏁 ${editingTrip.varisYeri}",
+                            editingTrip.varisYeri,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -190,18 +189,17 @@ fun AddPersonalTripDialog(
                 // ── Hava Durumu ─────────────────────────────────────────
                 Text(S.weatherLabel(lang), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 Box {
-                    val havaEmoji = S.weatherOptions.find { it.first == havaDurumu }?.second ?: "❓"
                     FilledTonalButton(
                         onClick = { havaMenuOpen = true },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("$havaEmoji  ${S.weatherName(havaDurumu, lang)}")
+                        Text(S.weatherName(havaDurumu, lang))
                     }
                     DropdownMenu(expanded = havaMenuOpen, onDismissRequest = { havaMenuOpen = false }) {
-                        S.weatherOptions.forEach { (key, emoji) ->
+                        S.weatherOptions.forEach { (key, _) ->
                             DropdownMenuItem(
-                                text = { Text("$emoji  ${S.weatherName(key, lang)}") },
+                                text = { Text(S.weatherName(key, lang)) },
                                 onClick = { havaDurumu = key; havaMenuOpen = false }
                             )
                         }

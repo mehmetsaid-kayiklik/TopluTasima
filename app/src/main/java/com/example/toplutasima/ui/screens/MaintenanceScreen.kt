@@ -414,7 +414,7 @@ fun MaintenanceScreen(
                                 val grouped = com.example.toplutasima.usecase.DataHealthChecker.groupByType(issues)
                                 for ((type, typeIssues) in grouped) {
                                     Text(
-                                        "${com.example.toplutasima.usecase.DataHealthChecker.typeEmoji(type)} ${com.example.toplutasima.usecase.DataHealthChecker.typeLabel(type)} (${typeIssues.size})",
+                                        "${com.example.toplutasima.usecase.DataHealthChecker.typeLabel(type)} (${typeIssues.size})",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(top = 4.dp)

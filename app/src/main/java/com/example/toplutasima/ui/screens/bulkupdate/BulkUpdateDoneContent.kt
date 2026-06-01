@@ -47,14 +47,14 @@ internal fun DoneContent(
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("✅ ${state.successCount} başarılı", style = MaterialTheme.typography.bodyMedium)
-                Text("❌ ${state.failCount} başarısız", style = MaterialTheme.typography.bodyMedium)
+                BulkUpdateSuccessCount(state.successCount, label = "başarılı", large = true)
+                BulkUpdateFailureCount(state.failCount, label = "başarısız", large = true)
             }
             if (state.skipCount > 0) {
-                Text("⏭ ${state.skipCount} atlandı", style = MaterialTheme.typography.bodyMedium)
+                Text("${state.skipCount} atlandı", style = MaterialTheme.typography.bodyMedium)
             }
             Text(
-                "⏱ Süre: ${elapsedMin}dk ${elapsedSec}s",
+                "Süre: ${elapsedMin}dk ${elapsedSec}s",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -67,6 +67,6 @@ internal fun DoneContent(
         shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(vertical = 14.dp)
     ) {
-        Text("🔄 Yeniden Başlat", fontWeight = FontWeight.SemiBold)
+        Text("Yeniden Başlat", fontWeight = FontWeight.SemiBold)
     }
 }

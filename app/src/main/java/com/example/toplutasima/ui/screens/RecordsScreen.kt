@@ -19,11 +19,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.ui.LocaleManager
+import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.screens.records.DayListScreen
 import com.example.toplutasima.ui.screens.records.DeleteRecordConfirmDialog
 import com.example.toplutasima.ui.screens.records.EditRecordDialog
 import com.example.toplutasima.ui.screens.records.MonthListScreen
 import com.example.toplutasima.ui.screens.records.PersonalRecordsContent
+import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import com.example.toplutasima.viewmodel.RecordsViewModel
 import org.koin.androidx.compose.koinViewModel
@@ -117,12 +119,17 @@ fun RecordsScreen(
 
         // ── Status bar (only in transit mode) ──
         if (!showPersonal && state.saveMsg.isNotBlank()) {
+            val cleanSaveMsg = state.saveMsg.withoutEmojiCharacters().ifBlank { S.editDone(lang) }
+            val isError = cleanSaveMsg.contains("hata", ignoreCase = true) ||
+                cleanSaveMsg.contains("error", ignoreCase = true) ||
+                cleanSaveMsg.contains("başarısız", ignoreCase = true) ||
+                cleanSaveMsg.contains("bulunamadı", ignoreCase = true)
             Text(
-                state.saveMsg,
+                cleanSaveMsg,
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
+                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
         }
     }

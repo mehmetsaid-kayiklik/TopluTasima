@@ -43,7 +43,7 @@ import com.example.toplutasima.ui.ErrorRed
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.WarningAmber
-import com.example.toplutasima.ui.util.vehicleIcon
+import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -93,9 +93,8 @@ internal fun AdditionalInfoSection(
                     if (ekTrip != null && ekTrip.segments.size > 1) {
                         val ekSeg = ekTrip.segments.getOrNull(state.selectedSegmentIndex)
                         if (ekSeg != null) {
-                            val ekEmoji = vehicleIcon(ekSeg.typeTr)
                             Text(
-                                "$ekEmoji ${ekSeg.line} → ${ekSeg.toStop}",
+                                "${ekSeg.line} → ${ekSeg.toStop}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -103,7 +102,7 @@ internal fun AdditionalInfoSection(
                             val nextSeg = ekTrip.segments.getOrNull(state.selectedSegmentIndex + 1)
                             if (nextSeg != null) {
                                 Text(
-                                    "🔄 ${ekSeg.toStop} (${ekSeg.arr} → ${nextSeg.dep})",
+                                    "${ekSeg.toStop} (${ekSeg.arr} → ${nextSeg.dep})",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.tertiary
@@ -125,13 +124,12 @@ internal fun AdditionalInfoSection(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            val havaEmoji = S.weatherOptions.find { it.first == curHava }?.second ?: "❓"
-                            Text("$havaEmoji  ${S.weatherLabel(lang)}: ${S.weatherName(curHava, lang)}", fontWeight = FontWeight.SemiBold)
+                            Text("${S.weatherLabel(lang)}: ${S.weatherName(curHava, lang)}", fontWeight = FontWeight.SemiBold)
                         }
                         DropdownMenu(expanded = state.havaMenuOpen, onDismissRequest = { viewModel.setHavaMenuOpen(false) }) {
-                            S.weatherOptions.forEach { (key, emoji) ->
+                            S.weatherOptions.forEach { (key, _) ->
                                 DropdownMenuItem(
-                                    text = { Text("$emoji  ${S.weatherName(key, lang)}") },
+                                    text = { Text(S.weatherName(key, lang)) },
                                     onClick = {
                                         viewModel.updateHavaDurumu(key)
                                         viewModel.setHavaMenuOpen(false)
@@ -189,7 +187,7 @@ internal fun AdditionalInfoSection(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("👤 ${S.profileSelectionLabel(lang)}: $profileLabel", style = MaterialTheme.typography.bodyMedium)
+                                Text("${S.profileSelectionLabel(lang)}: $profileLabel", style = MaterialTheme.typography.bodyMedium)
                                 Icon(
                                     imageVector = Icons.Default.ArrowDropDown,
                                     contentDescription = null
@@ -224,7 +222,7 @@ internal fun AdditionalInfoSection(
                         OutlinedTextField(
                             value = curSeatmateNote,
                             onValueChange = { viewModel.updateSegmentSeatmateNote(state.selectedSegmentIndex, it) },
-                            label = { Text("📝 ${S.profileSeatmateNoteLabel(lang)}") },
+                            label = { Text(S.profileSeatmateNoteLabel(lang)) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
                         )
@@ -279,9 +277,12 @@ internal fun RmvStatusCard(
     lang: AppLanguage
 ) {
             // --- DURUM KARTI ---
+            val cleanStatus = state.status.withoutEmojiCharacters().ifBlank { S.statusReady(lang) }
             val statusColor = when {
-                state.status.contains("✅") -> SuccessGreen
                 state.status.contains("Hata") || state.status.contains("Fehler") || state.status.contains("Error") -> ErrorRed
+                state.status.contains("edilemedi", ignoreCase = true) -> ErrorRed
+                state.status.contains("kayded", ignoreCase = true) -> SuccessGreen
+                state.status.contains("başar", ignoreCase = true) -> SuccessGreen
                 state.status.contains("...") -> WarningAmber
                 else -> MaterialTheme.colorScheme.secondary
             }
@@ -303,7 +304,7 @@ internal fun RmvStatusCard(
                     )
                     Column {
                         Text(S.statusLabel(lang), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                        Text(state.status, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(cleanStatus, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

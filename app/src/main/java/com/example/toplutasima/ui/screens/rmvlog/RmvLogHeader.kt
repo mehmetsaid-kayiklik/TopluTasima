@@ -87,7 +87,7 @@ internal fun RmvLogHeader(
                         contentColor = Color.White,
                         containerColor = if (showPersonal) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.15f)
                     )
-                ) { Text("🚗 ${S.modePersonal(lang)}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge) }
+                ) { Text(S.modePersonal(lang), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge) }
             }
         }
     }

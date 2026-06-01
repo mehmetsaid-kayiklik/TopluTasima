@@ -5,6 +5,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -36,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.WarningAmber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +68,7 @@ internal fun ProfileEditDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (profile == null) "➕ " + S.profileAddNewTitle(lang) else "✏️ " + S.profileEditTitle(lang),
+                text = if (profile == null) S.profileAddNewTitle(lang) else S.profileEditTitle(lang),
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleLarge
             )
@@ -219,9 +221,10 @@ internal fun ProfileEditDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.Top
                     ) {
-                        Text(
-                            text = "⚠️",
-                            style = MaterialTheme.typography.bodyMedium
+                        Icon(
+                            imageVector = Icons.Outlined.Warning,
+                            contentDescription = null,
+                            tint = WarningAmber
                         )
                         Text(
                             text = S.profileWarningMemoryNote(lang),

@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.sp
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.TimeVisualTransformation
-import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -79,9 +78,8 @@ internal fun ActualTimesSection(
                     if (tripForSelector != null && tripForSelector.segments.size > 1) {
                         val seg = tripForSelector.segments.getOrNull(state.selectedSegmentIndex)
                         if (seg != null) {
-                            val emoji = vehicleIcon(seg.typeTr)
                             Text(
-                                "$emoji ${seg.line} → ${seg.toStop}",
+                                "${seg.line} → ${seg.toStop}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

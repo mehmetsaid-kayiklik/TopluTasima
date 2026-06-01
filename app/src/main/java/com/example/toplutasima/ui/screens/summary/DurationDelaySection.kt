@@ -1,6 +1,7 @@
 package com.example.toplutasima.ui.screens.summary
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,19 +16,29 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.toplutasima.model.SummaryData
-import com.example.toplutasima.ui.AccentBlue
 import com.example.toplutasima.ui.AppLanguage
-import com.example.toplutasima.ui.ErrorRed
 import com.example.toplutasima.ui.S
-import com.example.toplutasima.ui.SuccessGreen
-import com.example.toplutasima.ui.WarningAmber
 import com.example.toplutasima.ui.components.SummaryCard
 import com.example.toplutasima.ui.components.formatMin
+import com.example.toplutasima.ui.theme.AccentDark
+import com.example.toplutasima.ui.theme.AccentLight
+import com.example.toplutasima.ui.theme.AmberDark
+import com.example.toplutasima.ui.theme.AmberLight
+import com.example.toplutasima.ui.theme.GreenDark
+import com.example.toplutasima.ui.theme.GreenLight
+import com.example.toplutasima.ui.theme.RedDark
+import com.example.toplutasima.ui.theme.RedLight
+import com.example.toplutasima.ui.theme.SurfaceD2
+import com.example.toplutasima.ui.theme.SurfaceL2
+
+@Composable
+private fun isDark() = isSystemInDarkTheme()
 
 internal fun LazyListScope.DurationDelaySection(
     s: SummaryData,
@@ -38,10 +49,16 @@ internal fun LazyListScope.DurationDelaySection(
 
     if (s.delayDistribution.isNotEmpty()) {
         item {
+            val dark = isDark()
+            val cardBg = if (dark) SurfaceD2 else SurfaceL2
+            val accent = if (dark) AccentDark else AccentLight
+            val success = if (dark) GreenDark else GreenLight
+            val warning = if (dark) AmberDark else AmberLight
+            val error = if (dark) RedDark else RedLight
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = cardBg)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -75,11 +92,11 @@ internal fun LazyListScope.DurationDelaySection(
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(3.dp)),
                                 color = when (bucket.key) {
-                                    "early" -> AccentBlue
-                                    "zero" -> SuccessGreen
-                                    "low" -> MaterialTheme.colorScheme.primary
-                                    "medium" -> WarningAmber
-                                    else -> ErrorRed
+                                    "early" -> accent
+                                    "zero" -> success
+                                    "low" -> accent
+                                    "medium" -> warning
+                                    else -> error
                                 },
                                 trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                             )
@@ -98,16 +115,21 @@ internal fun LazyListScope.DurationDelaySection(
         )
     }
     item {
+        val dark = isDark()
+        val cardBg = if (dark) SurfaceD2 else SurfaceL2
+        val success = if (dark) GreenDark else GreenLight
+        val warning = if (dark) AmberDark else AmberLight
+        val error = if (dark) RedDark else RedLight
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = cardBg)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                typeEntries.forEach { (typeKey, emoji) ->
+                typeEntries.forEach { (typeKey, _) ->
                     val rate = s.punctualityRates[typeKey] ?: 0
                     Column {
                         Row(
@@ -115,14 +137,14 @@ internal fun LazyListScope.DurationDelaySection(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                "$emoji  ${S.vehicleTypeName(typeKey, lang)}",
+                                S.vehicleTypeName(typeKey, lang),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
                                 "%$rate",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (rate > 80) SuccessGreen else if (rate > 50) WarningAmber else ErrorRed
+                                color = if (rate > 80) success else if (rate > 50) warning else error
                             )
                         }
                         Spacer(Modifier.height(4.dp))
@@ -132,7 +154,7 @@ internal fun LazyListScope.DurationDelaySection(
                                 .fillMaxWidth()
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp)),
-                            color = if (rate > 80) SuccessGreen else if (rate > 50) WarningAmber else ErrorRed,
+                            color = if (rate > 80) success else if (rate > 50) warning else error,
                             trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                         )
                     }
@@ -143,10 +165,15 @@ internal fun LazyListScope.DurationDelaySection(
 
     if (s.lineReliability.isNotEmpty()) {
         item {
+            val dark = isDark()
+            val cardBg = if (dark) SurfaceD2 else SurfaceL2
+            val success = if (dark) GreenDark else GreenLight
+            val warning = if (dark) AmberDark else AmberLight
+            val error = if (dark) RedDark else RedLight
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = cardBg)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -175,11 +202,11 @@ internal fun LazyListScope.DurationDelaySection(
                                     "%${line.punctualityRate}",
                                     fontWeight = FontWeight.Bold,
                                     color = if (line.punctualityRate > 80) {
-                                        SuccessGreen
+                                        success
                                     } else if (line.punctualityRate > 50) {
-                                        WarningAmber
+                                        warning
                                     } else {
-                                        ErrorRed
+                                        error
                                     }
                                 )
                             }
@@ -191,11 +218,11 @@ internal fun LazyListScope.DurationDelaySection(
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(3.dp)),
                                 color = if (line.punctualityRate > 80) {
-                                    SuccessGreen
+                                    success
                                 } else if (line.punctualityRate > 50) {
-                                    WarningAmber
+                                    warning
                                 } else {
-                                    ErrorRed
+                                    error
                                 },
                                 trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
                             )

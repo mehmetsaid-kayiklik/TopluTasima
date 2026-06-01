@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -24,6 +27,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -41,7 +45,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.ui.S
@@ -117,7 +120,12 @@ internal fun EditRecordDialog(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("📅", style = MaterialTheme.typography.titleMedium)
+                    Icon(
+                        imageVector = Icons.Outlined.DateRange,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
                 if (gun.isNotBlank()) {
                     Text(
@@ -206,8 +214,9 @@ internal fun EditRecordDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     val currentDisplay = if (havaDurumu.isNotBlank()) {
-                        val emoji = S.weatherOptions.find { it.first == havaDurumu }?.second ?: "❓"
-                        "$emoji ${S.weatherName(havaDurumu, lang)}"
+                        val weatherPrefix = S.weatherOptions.find { it.first == havaDurumu }?.second?.takeIf { it.isNotBlank() }
+                        if (weatherPrefix != null) "$weatherPrefix ${S.weatherName(havaDurumu, lang)}"
+                        else S.weatherName(havaDurumu, lang)
                     } else ""
 
                     OutlinedTextField(
@@ -223,9 +232,9 @@ internal fun EditRecordDialog(
                         expanded = weatherExpanded,
                         onDismissRequest = { weatherExpanded = false }
                     ) {
-                        S.weatherOptions.forEach { (optionKey, optionEmoji) ->
+                        S.weatherOptions.forEach { (optionKey, _) ->
                             DropdownMenuItem(
-                                text = { Text("$optionEmoji ${S.weatherName(optionKey, lang)}") },
+                                text = { Text(S.weatherName(optionKey, lang)) },
                                 onClick = {
                                     havaDurumu = optionKey
                                     weatherExpanded = false
@@ -270,7 +279,7 @@ internal fun EditRecordDialog(
                         value = currentDisplay,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("👤 " + S.profileSelectionLabel(lang)) },
+                        label = { Text(S.profileSelectionLabel(lang)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
@@ -302,7 +311,7 @@ internal fun EditRecordDialog(
                     OutlinedTextField(
                         value = seatmateNote,
                         onValueChange = { seatmateNote = it },
-                        label = { Text("📝 " + S.profileSeatmateNoteLabel(lang)) },
+                        label = { Text(S.profileSeatmateNoteLabel(lang)) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     )
@@ -339,7 +348,12 @@ internal fun EditRecordDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 // Restore button (icon only to save space)
                 if (onRestore != null) {
-                    IconButton(onClick = onRestore) { Text("🔄", fontSize = 18.sp) }
+                    IconButton(onClick = onRestore) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = S.restoreRecord(lang)
+                        )
+                    }
                 }
 
                 // Delete button

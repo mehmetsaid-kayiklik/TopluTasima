@@ -46,7 +46,7 @@ import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.WarningAmber
 import com.example.toplutasima.ui.components.TimeVisualTransformation
-import com.example.toplutasima.ui.util.vehicleIcon
+import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
 // ── Manual Log Form Composable ──
@@ -63,7 +63,7 @@ internal fun ManualLogForm(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(S.dateTime(lang).replace("🕐  ", "") + " & " + S.vehicleTypes(lang).replace("🚏  ", ""), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(S.dateTime(lang) + " & " + S.vehicleTypes(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             
             OutlinedTextField(
                 value = state.date,
@@ -79,16 +79,12 @@ internal fun ManualLogForm(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    val emoji = vehicleIcon(state.manualTypeTr)
-                    Text("$emoji  ${S.vehicleTypeName(state.manualTypeTr, lang)}", fontWeight = FontWeight.SemiBold)
+                    Text(S.vehicleTypeName(state.manualTypeTr, lang), fontWeight = FontWeight.SemiBold)
                 }
                 DropdownMenu(expanded = state.manualTypeMenuOpen, onDismissRequest = { viewModel.setManualTypeMenuOpen(false) }) {
                     VehicleType.allKeys.forEach { type ->
                         DropdownMenuItem(
-                            text = { 
-                                val emoji = vehicleIcon(type)
-                                Text("$emoji  ${S.vehicleTypeName(type, lang)}") 
-                            },
+                            text = { Text(S.vehicleTypeName(type, lang)) },
                             onClick = { viewModel.updateManualField("type", type) }
                         )
                     }
@@ -115,7 +111,7 @@ internal fun ManualLogForm(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(S.stopSelection(lang).replace("📍  ", ""), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(S.stopSelection(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             
             OutlinedTextField(
                 value = state.manualBoardingStop, onValueChange = { viewModel.updateManualField("boardingStop", it) },
@@ -183,13 +179,12 @@ internal fun ManualLogForm(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    val havaEmoji = S.weatherOptions.find { it.first == state.manualWeather }?.second ?: "❓"
-                    Text("$havaEmoji  ${S.weatherLabel(lang)}: ${S.weatherName(state.manualWeather, lang)}", fontWeight = FontWeight.SemiBold)
+                    Text("${S.weatherLabel(lang)}: ${S.weatherName(state.manualWeather, lang)}", fontWeight = FontWeight.SemiBold)
                 }
                 DropdownMenu(expanded = state.manualWeatherMenuOpen, onDismissRequest = { viewModel.setManualWeatherMenuOpen(false) }) {
-                    S.weatherOptions.forEach { (key, emoji) ->
+                    S.weatherOptions.forEach { (key, _) ->
                         DropdownMenuItem(
-                            text = { Text("$emoji  ${S.weatherName(key, lang)}") },
+                            text = { Text(S.weatherName(key, lang)) },
                             onClick = { viewModel.updateManualField("weather", key) }
                         )
                     }
@@ -221,7 +216,7 @@ internal fun ManualLogForm(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("👤 ${S.profileSelectionLabel(lang)}: $profileLabel", style = MaterialTheme.typography.bodyMedium)
+                        Text("${S.profileSelectionLabel(lang)}: $profileLabel", style = MaterialTheme.typography.bodyMedium)
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = null
@@ -255,7 +250,7 @@ internal fun ManualLogForm(
                 OutlinedTextField(
                     value = state.manual.seatmateNote,
                     onValueChange = { viewModel.updateManualField("seatmateNote", it) },
-                    label = { Text("📝 ${S.profileSeatmateNoteLabel(lang)}") },
+                    label = { Text(S.profileSeatmateNoteLabel(lang)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -291,9 +286,12 @@ internal fun ManualLogForm(
     }
 
     // Status
+    val cleanStatus = state.status.withoutEmojiCharacters().ifBlank { S.statusReady(lang) }
     val statusColor = when {
-        state.status.contains("✅") -> SuccessGreen
         state.status.contains("Hata") || state.status.contains("Fehler") || state.status.contains("Error") -> ErrorRed
+        state.status.contains("edilemedi", ignoreCase = true) -> ErrorRed
+        state.status.contains("kayded", ignoreCase = true) -> SuccessGreen
+        state.status.contains("başar", ignoreCase = true) -> SuccessGreen
         state.status.contains("...") -> WarningAmber
         else -> MaterialTheme.colorScheme.secondary
     }
@@ -310,7 +308,7 @@ internal fun ManualLogForm(
             Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(statusColor))
             Column {
                 Text(S.statusLabel(lang), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-                Text(state.status, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(cleanStatus, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             }
         }
     }

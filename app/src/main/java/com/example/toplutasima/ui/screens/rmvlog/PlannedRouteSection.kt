@@ -3,16 +3,18 @@ package com.example.toplutasima.ui.screens.rmvlog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,7 +34,6 @@ import androidx.compose.foundation.layout.Box
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.WarningAmber
-import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -154,7 +155,6 @@ internal fun PlannedRouteSection(
                             }
                         } else {
                             t.segments.forEachIndexed { idx, s ->
-                                val emoji = vehicleIcon(s.typeTr)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -164,14 +164,13 @@ internal fun PlannedRouteSection(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(emoji, fontSize = 22.sp)
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("${S.vehicleTypeName(s.typeTr, lang)} • ${s.line}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                         Text("${s.fromStop} ${s.dep} → ${s.toStop} ${s.arr}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         if (s.distanceKm > 0 || s.stopCount > 0) {
                                             Text(
                                                 buildString {
-                                                    if (s.stopCount > 0) append("📍 ${s.stopCount} ${S.stops(lang)}")
+                                                    if (s.stopCount > 0) append("${s.stopCount} ${S.stops(lang)}")
                                                     if (s.distanceKm > 0) {
                                                         if (s.stopCount > 0) append("  •  ")
                                                         append("${String.format(java.util.Locale.US, "%.2f", s.distanceKm)} km")
@@ -199,7 +198,11 @@ internal fun PlannedRouteSection(
                                                     strokeWidth = 2.dp
                                                 )
                                             } else {
-                                                Text("✏️", fontSize = 16.sp)
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Edit,
+                                                    contentDescription = S.editEdit(lang),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
                                             }
                                         }
                                     }

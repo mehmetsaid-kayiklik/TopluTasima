@@ -47,6 +47,7 @@ import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.WarningAmber
 import com.example.toplutasima.ui.components.AddPersonalTripDialog
 import com.example.toplutasima.ui.components.PersonalTripCard
+import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
 
@@ -76,7 +77,7 @@ fun PersonalTripsContent(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "🚗  ${S.personalAdd(lang)}",
+                    S.personalAdd(lang),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -84,19 +85,18 @@ fun PersonalTripsContent(
                 // Araç Türü + Plaka
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(modifier = Modifier.weight(1f)) {
-                        val emoji = S.personalVehicleOptions.find { it.first == uiState.formAracTuru }?.second ?: "🚗"
                         OutlinedButton(
                             onClick = { viewModel.updateFormField("aracMenu", "true") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
-                        ) { Text("$emoji  ${uiState.formAracTuru}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
+                        ) { Text(uiState.formAracTuru, fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
                         DropdownMenu(
                             expanded = uiState.formAracMenuOpen,
                             onDismissRequest = { viewModel.updateFormField("aracMenu", "false") }
                         ) {
-                            S.personalVehicleOptions.forEach { (name, em) ->
+                            S.personalVehicleOptions.forEach { (name, _) ->
                                 DropdownMenuItem(
-                                    text = { Text("$em  $name") },
+                                    text = { Text(name) },
                                     onClick = { viewModel.updateFormField("aracTuru", name) }
                                 )
                             }
@@ -132,19 +132,18 @@ fun PersonalTripsContent(
                 // Hava + Tarih
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(modifier = Modifier.weight(1f)) {
-                        val havaEmoji = S.weatherOptions.find { it.first == uiState.formHavaDurumu }?.second ?: "❓"
                         FilledTonalButton(
                             onClick = { viewModel.updateFormField("havaMenu", "true") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
-                        ) { Text("$havaEmoji  ${S.weatherName(uiState.formHavaDurumu, lang)}", fontSize = 13.sp) }
+                        ) { Text(S.weatherName(uiState.formHavaDurumu, lang), fontSize = 13.sp) }
                         DropdownMenu(
                             expanded = uiState.formHavaMenuOpen,
                             onDismissRequest = { viewModel.updateFormField("havaMenu", "false") }
                         ) {
-                            S.weatherOptions.forEach { (key, em) ->
+                            S.weatherOptions.forEach { (key, _) ->
                                 DropdownMenuItem(
-                                    text = { Text("$em  ${S.weatherName(key, lang)}") },
+                                    text = { Text(S.weatherName(key, lang)) },
                                     onClick = { viewModel.updateFormField("hava", key) }
                                 )
                             }
@@ -185,13 +184,17 @@ fun PersonalTripsContent(
         }
 
         // ── Durum Kartı — her zaman görünür ──────────────────────────────────
-        val displayMsg = uiState.statusMessage.ifBlank { "Hazır" }
+        val displayMsg = uiState.statusMessage.withoutEmojiCharacters().ifBlank { "Hazır" }
         val dotColor = when {
             uiState.statusMessage.isBlank()                          -> SuccessGreen
-            uiState.statusMessage.contains("✅")                     -> SuccessGreen
+            uiState.statusMessage.contains("eklendi", ignoreCase = true) -> SuccessGreen
+            uiState.statusMessage.contains("kaydedildi", ignoreCase = true) -> SuccessGreen
+            uiState.statusMessage.contains("tamamlandı", ignoreCase = true) -> SuccessGreen
             uiState.statusMessage.contains("...")                    -> WarningAmber
-            uiState.statusMessage.contains("aydedil", ignoreCase = true)
-                && !uiState.statusMessage.contains("✅")             -> MaterialTheme.colorScheme.error
+            uiState.statusMessage.contains("edilemedi", ignoreCase = true) -> MaterialTheme.colorScheme.error
+            uiState.statusMessage.contains("gerekli", ignoreCase = true) -> MaterialTheme.colorScheme.error
+            uiState.statusMessage.contains("zorunlu", ignoreCase = true) -> MaterialTheme.colorScheme.error
+            uiState.statusMessage.contains("alınamadı", ignoreCase = true) -> MaterialTheme.colorScheme.error
             else                                                      -> MaterialTheme.colorScheme.primary
         }
         Card(

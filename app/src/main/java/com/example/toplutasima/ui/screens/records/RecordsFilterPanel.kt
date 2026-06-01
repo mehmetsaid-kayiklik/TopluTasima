@@ -38,13 +38,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.ui.S
-import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.usecase.RecordFilterState
 
 // ── Filter Panel ──────────────────────────────────────────────────────────
@@ -133,7 +132,7 @@ internal fun FilterPanel(
                     )
                     VehicleType.allKeys.forEach { key ->
                         DropdownMenuItem(
-                            text = { Text("${vehicleIcon(key)} ${S.vehicleTypeName(key, lang)}") },
+                            text = { Text(S.vehicleTypeName(key, lang)) },
                             onClick = {
                                 onUpdateFilter(filterState.copy(vehicleType = key))
                                 vehicleTypeExpanded = false
@@ -151,8 +150,7 @@ internal fun FilterPanel(
             ) {
                 val weatherDisplay = if (filterState.weather.isBlank()) S.filterAll(lang)
                     else {
-                        val emoji = S.weatherOptions.find { it.first == filterState.weather }?.second ?: ""
-                        "$emoji ${S.weatherName(filterState.weather, lang)}"
+                        S.weatherName(filterState.weather, lang)
                     }
                 OutlinedTextField(
                     value = weatherDisplay,
@@ -175,9 +173,9 @@ internal fun FilterPanel(
                             weatherExpanded = false
                         }
                     )
-                    S.weatherOptions.forEach { (key, emoji) ->
+                    S.weatherOptions.forEach { (key, _) ->
                         DropdownMenuItem(
-                            text = { Text("$emoji ${S.weatherName(key, lang)}") },
+                            text = { Text(S.weatherName(key, lang)) },
                             onClick = {
                                 onUpdateFilter(filterState.copy(weather = key))
                                 weatherExpanded = false
@@ -281,14 +279,19 @@ internal fun FilterPanel(
 
 // ── Export Format Button ──────────────────────────────────────────────────
 @Composable
-internal fun ExportFormatButton(emoji: String, label: String, onClick: () -> Unit) {
+internal fun ExportFormatButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Text(emoji, fontSize = 20.sp)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
         Spacer(Modifier.width(12.dp))
         Text(
             label,
@@ -355,7 +358,7 @@ internal fun ActiveFilterBar(
                 }
             }
             if (filterState.stopName.isNotBlank()) {
-                ChipItem("📍 ${filterState.stopName}") {
+                ChipItem(filterState.stopName) {
                     onUpdateFilter(filterState.copy(stopName = ""))
                 }
             }
@@ -364,7 +367,12 @@ internal fun ActiveFilterBar(
                 onClick = onClearAll,
                 contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
-                Text("✕", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = S.clear(lang),
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }

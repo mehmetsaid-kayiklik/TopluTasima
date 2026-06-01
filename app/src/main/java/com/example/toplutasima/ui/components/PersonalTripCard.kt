@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -48,8 +47,8 @@ import com.example.toplutasima.viewmodel.PersonalTripViewModel
 /**
  * Kişisel araç yolculuğu kartı.
  * Duruma göre üç görsel hal sunar:
- *  - beklemede: sarı kenar + [🚗 Bindim] butonu
- *  - aktif:     yeşil nabız + canlı km sayacı + [🏁 İndim] butonu
+ *  - beklemede: sarı kenar + [Bindim] butonu
+ *  - aktif:     yeşil nabız + canlı km sayacı + [İndim] butonu
  *  - tamamlandi: normal kart, 3-nokta menü
  */
 @Composable
@@ -73,10 +72,6 @@ fun PersonalTripCard(
             viewModel.recordBindim(context, trip.firestoreDocId)
         }
     }
-
-    // Araç türü emojisi
-    val vehicleEmoji = S.personalVehicleOptions.find { it.first == trip.aracTuru }?.second ?: "🚗"
-    val havaEmoji    = S.weatherOptions.find { it.first == trip.havaDurumu }?.second ?: "❓"
 
     // Nabız animasyonu (aktif durum için)
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -124,10 +119,9 @@ fun PersonalTripCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(vehicleEmoji, fontSize = 22.sp)
                     Column {
                         Text(
-                            "${trip.tarih}  $havaEmoji",
+                            trip.tarih,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

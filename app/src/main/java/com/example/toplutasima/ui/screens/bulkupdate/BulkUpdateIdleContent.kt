@@ -45,8 +45,8 @@ internal fun IdleContent(
 
     if (state.totalRows > 0) {
         val modeLabel = when (state.mode) {
-            BulkUpdateMode.DISTANCE_STOPS -> "📍 Mesafe & Durak"
-            BulkUpdateMode.STOP_NAMES -> "🚏 Durak Adı & Yön"
+            BulkUpdateMode.DISTANCE_STOPS -> "Mesafe & Durak"
+            BulkUpdateMode.STOP_NAMES -> "Durak Adı & Yön"
         }
         Card(
             colors = CardDefaults.cardColors(
@@ -60,7 +60,7 @@ internal fun IdleContent(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    "📋 ${state.totalRows} satır güncelleme bekliyor ($modeLabel)",
+                    "${state.totalRows} satır güncelleme bekliyor ($modeLabel)",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium
                 )
@@ -76,7 +76,7 @@ internal fun IdleContent(
                 containerColor = MaterialTheme.colorScheme.primary
             )
         ) {
-            Text("▶ Güncellemeyi Başlat", fontWeight = FontWeight.SemiBold)
+            Text("Güncellemeyi Başlat", fontWeight = FontWeight.SemiBold)
         }
 
         OutlinedButton(
@@ -84,7 +84,7 @@ internal fun IdleContent(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("↩ Sıfırla")
+            Text("Sıfırla")
         }
     } else {
         var showDistanceDialog by remember { mutableStateOf(false) }
@@ -97,7 +97,7 @@ internal fun IdleContent(
             shape = RoundedCornerShape(12.dp),
             contentPadding = PaddingValues(vertical = 14.dp)
         ) {
-            Text("📍 Mesafe & Durak Güncelle", fontWeight = FontWeight.SemiBold)
+            Text("Mesafe & Durak Güncelle", fontWeight = FontWeight.SemiBold)
         }
         Text(
             "Sadece boş mesafe/durak satırlarını doldurur",
@@ -116,7 +116,7 @@ internal fun IdleContent(
                 containerColor = MaterialTheme.colorScheme.secondary
             )
         ) {
-            Text("🚏 Durak Adı & Yön Güncelle", fontWeight = FontWeight.SemiBold)
+            Text("Durak Adı & Yön Güncelle", fontWeight = FontWeight.SemiBold)
         }
         Text(
             "Tüm satırlarda Biniş Durağı, İniş Durağı ve Yön bilgisini günceller",
@@ -137,7 +137,7 @@ internal fun IdleContent(
                 containerColor = MaterialTheme.colorScheme.error
             )
         ) {
-            Text("🗑️ Sıfırla (Sil)", fontWeight = FontWeight.SemiBold)
+            Text("Sıfırla (Sil)", fontWeight = FontWeight.SemiBold)
         }
         Text(
             "Tüm kayıtlardaki mesafe ve durak sayısı tamamen silinir (sıfırlanır).",

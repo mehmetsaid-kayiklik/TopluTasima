@@ -57,7 +57,7 @@ internal fun MigrationActionsSection(
     onDismissEarlyDepartures: () -> Unit
 ) {
     MaintenanceActionCard(
-        title = "⏰  Saat Temizleme",
+        title = "Saat Temizleme",
         isRunning = stripSecondsRunning,
         runningText = S.stripSecondsRunning(lang),
         result = stripSecondsResult,
@@ -76,7 +76,7 @@ internal fun MigrationActionsSection(
     }
 
     MaintenanceActionCard(
-        title = "⏱️  " + S.migrateYolSuresiButton(lang).substring(3).trim(),
+        title = S.migrateYolSuresiButton(lang),
         isRunning = yolSuresiRunning,
         runningText = S.migrateYolSuresiRunning(lang),
         result = yolSuresiResult,
@@ -115,7 +115,7 @@ internal fun MigrationActionsSection(
     }
 
     MaintenanceActionCard(
-        title = "📅  Ay Alanı Güncelleme",
+        title = "Ay Alanı Güncelleme",
         description = "Eski kayıtlara yearMonth (YYYY-MM) alanı ekler. Migration bir kez yapılması yeterlidir; bundan sonra ay bazlı sorgular çok daha hızlı çalışır.",
         isRunning = yearMonthRunning,
         runningText = S.migrateYearMonthRunning(lang),
@@ -135,7 +135,7 @@ internal fun MigrationActionsSection(
     }
 
     MaintenanceActionCard(
-        title = "📆  Sıralama Alanı Güncelleme",
+        title = "Sıralama Alanı Güncelleme",
         description = "Eski kayıtlara sortDate (YYYY-MM-DD) alanı ekler. Bu alan kronolojik sıralamayı düzeltir; ay/yıl geçişlerindeki sıra hatalarını giderir.",
         isRunning = sortDateRunning,
         runningText = S.migrateSortDateRunning(lang),
@@ -155,7 +155,7 @@ internal fun MigrationActionsSection(
     }
 
     MaintenanceActionCard(
-        title = "📏  Mesafe Alanları Güncelleme",
+        title = "Mesafe Alanları Güncelleme",
         description = "Eski kayıtlardaki mevcut mesafeyi ORS alanlarına kopyalar ve RMV mesafe alanlarını bekliyor olarak hazırlar. API çağrısı yapmaz.",
         isRunning = distanceFieldsRunning,
         runningText = S.migrateDistanceFieldsRunning(lang),
@@ -175,7 +175,7 @@ internal fun MigrationActionsSection(
     }
 
     MaintenanceActionCard(
-        title = "👥  Yanıma Oturan Kişi UUID Güncelleme",
+        title = "Yanıma Oturan Kişi UUID Güncelleme",
         description = "Eski kayıtlara seatmateUuid alanı ekler. Bu alan sayesinde yeni profil ve oturma ilişkileri sorunsuz çalışacaktır. Migration bir kez yapılması yeterlidir.",
         isRunning = seatmateUuidRunning,
         runningText = S.migrateSeatmateUuidRunning(lang),
@@ -195,7 +195,7 @@ internal fun MigrationActionsSection(
     }
 
     MaintenanceActionCard(
-        title = "⏰  Erken Biniş Gecikmelerini Düzelt",
+        title = "Erken Biniş Gecikmelerini Düzelt",
         description = "Gecikme değeri 0 kaydedilmiş ancak erken biniş olan seferlerin gecikme değerini günceller.",
         isRunning = earlyDeparturesRunning,
         runningText = S.migrateEarlyDeparturesRunning(lang),

@@ -1,6 +1,6 @@
 package com.example.toplutasima.ui.screens
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,12 +10,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,19 +30,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.theme.AccentDark
+import com.example.toplutasima.ui.theme.AccentLight
+import com.example.toplutasima.ui.theme.SurfaceD2
+import com.example.toplutasima.ui.theme.SurfaceL2
+import com.example.toplutasima.ui.theme.TextHighDark
+import com.example.toplutasima.ui.theme.TextHighLight
+import com.example.toplutasima.ui.theme.TextMidDark
+import com.example.toplutasima.ui.theme.TextMidLight
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import org.koin.androidx.compose.koinViewModel
 import java.util.Locale
+
+@Composable
+private fun isDark() = isSystemInDarkTheme()
 
 @Composable
 fun PersonalSummaryContent(lang: AppLanguage) {
@@ -46,6 +60,11 @@ fun PersonalSummaryContent(lang: AppLanguage) {
     val trips = remember(uiState.trips) {
         uiState.trips.filter { it.durum == PersonalTrip.DURUM_TAMAMLANDI }
     }
+    val dark = isDark()
+    val cardSurface = if (dark) SurfaceD2 else SurfaceL2
+    val accent = if (dark) AccentDark else AccentLight
+    val textHigh = if (dark) TextHighDark else TextHighLight
+    val textMid = if (dark) TextMidDark else TextMidLight
 
     if (uiState.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -53,7 +72,12 @@ fun PersonalSummaryContent(lang: AppLanguage) {
     }
     if (trips.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("🚗  ${S.noRecords(lang)}", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                S.noRecords(lang),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge,
+                color = textMid
+            )
         }
         return
     }
@@ -75,38 +99,37 @@ fun PersonalSummaryContent(lang: AppLanguage) {
         // ── Hero Card ──
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(4.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(2.dp),
+            colors = CardDefaults.cardColors(containerColor = cardSurface)
         ) {
             Box(
                 modifier = Modifier.fillMaxWidth()
-                    .background(brush = Brush.linearGradient(listOf(Color(0xFF0D9488), Color(0xFF0284C7))))
-                    .padding(24.dp),
+                    .padding(20.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(S.personalSummaryTotal(lang), style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.85f))
+                    Text(S.personalSummaryTotal(lang), style = MaterialTheme.typography.labelLarge, color = textMid)
                     Spacer(Modifier.height(4.dp))
-                    Text("$totalTrips", style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Black, color = Color.White)
+                    Text("$totalTrips", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = textHigh)
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("📏", fontSize = 20.sp)
-                            Text(
-                                if (totalDist > 0) String.format(Locale.US, "%.1f km", totalDist) else "—",
-                                fontWeight = FontWeight.Bold, color = Color.White
-                            )
-                            Text(S.personalSummaryTotalDist(lang), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("⏱️", fontSize = 20.sp)
-                            Text(
-                                if (avgDuration > 0) String.format(Locale.US, "%.0f dk", avgDuration) else "—",
-                                fontWeight = FontWeight.Bold, color = Color.White
-                            )
-                            Text(S.personalSummaryAvgDuration(lang), style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.7f))
-                        }
+                        PersonalSummaryMetric(
+                            icon = Icons.Outlined.Straighten,
+                            value = if (totalDist > 0) String.format(Locale.US, "%.1f km", totalDist) else "—",
+                            label = S.personalSummaryTotalDist(lang),
+                            accent = accent,
+                            textHigh = textHigh,
+                            textMid = textMid
+                        )
+                        PersonalSummaryMetric(
+                            icon = Icons.Outlined.AccessTime,
+                            value = if (avgDuration > 0) String.format(Locale.US, "%.0f dk", avgDuration) else "—",
+                            label = S.personalSummaryAvgDuration(lang),
+                            accent = accent,
+                            textHigh = textHigh,
+                            textMid = textMid
+                        )
                     }
                 }
             }
@@ -114,16 +137,15 @@ fun PersonalSummaryContent(lang: AppLanguage) {
 
         // ── Araç Türleri ──
         if (vehicleCounts.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardSurface)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(S.personalVehicleType(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
                     val maxC = vehicleCounts.maxOfOrNull { it.second }?.toFloat() ?: 1f
                     vehicleCounts.forEach { (type, count) ->
-                        val emoji = S.personalVehicleOptions.find { it.first == type }?.second ?: "🚗"
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("$emoji  $type", style = MaterialTheme.typography.bodyMedium)
+                                Text(type, style = MaterialTheme.typography.bodyMedium)
                                 Text("$count", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             }
                             Spacer(Modifier.height(4.dp))
@@ -141,16 +163,18 @@ fun PersonalSummaryContent(lang: AppLanguage) {
 
         // ── Hava Durumu ──
         if (weatherCounts.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardSurface)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(S.weatherStats(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
                     val wMax = weatherCounts.maxOfOrNull { it.second }?.toFloat() ?: 1f
                     weatherCounts.forEach { (key, count) ->
-                        val emoji = S.weatherOptions.find { it.first == key }?.second ?: "❓"
+                        val weatherLabel = S.weatherOptions.find { it.first == key }?.second
+                            ?.let { "$it  ${S.weatherName(key, lang)}" }
+                            ?: S.weatherName(key, lang)
                         Column(modifier = Modifier.padding(vertical = 4.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("$emoji  ${S.weatherName(key, lang)}", style = MaterialTheme.typography.bodyMedium)
+                                Text(weatherLabel, style = MaterialTheme.typography.bodyMedium)
                                 Text("$count", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
                             }
                             Spacer(Modifier.height(4.dp))
@@ -168,7 +192,7 @@ fun PersonalSummaryContent(lang: AppLanguage) {
 
         // ── Aylık Kırılım ──
         if (monthlyCounts.isNotEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = cardSurface)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(S.personalSummaryMonthly(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
@@ -193,5 +217,27 @@ fun PersonalSummaryContent(lang: AppLanguage) {
         }
 
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun PersonalSummaryMetric(
+    icon: ImageVector,
+    value: String,
+    label: String,
+    accent: androidx.compose.ui.graphics.Color,
+    textHigh: androidx.compose.ui.graphics.Color,
+    textMid: androidx.compose.ui.graphics.Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(value, fontWeight = FontWeight.Bold, color = textHigh)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = textMid)
     }
 }

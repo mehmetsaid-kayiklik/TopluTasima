@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,7 +47,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.theme.AccentDark
+import com.example.toplutasima.ui.theme.AccentLight
+import com.example.toplutasima.ui.theme.AccentSoftD
+import com.example.toplutasima.ui.theme.AccentSoftL
+import com.example.toplutasima.ui.theme.SurfaceD1
+import com.example.toplutasima.ui.theme.SurfaceD2
+import com.example.toplutasima.ui.theme.SurfaceL1
+import com.example.toplutasima.ui.theme.SurfaceL2
+import com.example.toplutasima.ui.theme.TextMidDark
+import com.example.toplutasima.ui.theme.TextMidLight
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
+
+@Composable
+private fun isDark() = isSystemInDarkTheme()
 
 // ── LEVEL 1: Month List ──
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,6 +82,12 @@ internal fun MonthListScreen(
     onOpenLatestTransitRecord: () -> Unit = {}
 ) {
     var searchField by remember { mutableStateOf("") }
+    val dark = isDark()
+    val accent = if (dark) AccentDark else AccentLight
+    val accentSoft = if (dark) AccentSoftD else AccentSoftL
+    val listSurface = if (dark) SurfaceD1 else SurfaceL1
+    val cardSurface = if (dark) SurfaceD2 else SurfaceL2
+    val textMid = if (dark) TextMidDark else TextMidLight
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -81,12 +103,16 @@ internal fun MonthListScreen(
             TextButton(
                 onClick = onTogglePersonal,
                 colors = ButtonDefaults.textButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = accentSoft,
+                    contentColor = accent
                 ),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("🚗", fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.Outlined.DirectionsCar,
+                    contentDescription = S.personalTitle(lang),
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
@@ -155,7 +181,7 @@ internal fun MonthListScreen(
                         .fillMaxWidth()
                         .heightIn(max = 280.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(containerColor = cardSurface)
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -167,7 +193,7 @@ internal fun MonthListScreen(
                             Card(
                                 onClick = { onGlobalResultClick(row) },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                colors = CardDefaults.cardColors(containerColor = listSurface),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -211,10 +237,10 @@ internal fun MonthListScreen(
                         Card(
                             modifier = Modifier.align(Alignment.Center).padding(32.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Text(
-                            "⚠️ ${errorMsg}",
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            errorMsg,
                                 modifier = Modifier.padding(20.dp),
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 textAlign = TextAlign.Center
@@ -228,7 +254,7 @@ internal fun MonthListScreen(
                             S.noRecords(lang),
                             modifier = Modifier.align(Alignment.Center),
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = textMid
                         )
                     }
                 }
@@ -243,7 +269,7 @@ internal fun MonthListScreen(
                             Card(
                                 onClick = { onMonthClick(s) },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                colors = CardDefaults.cardColors(containerColor = cardSurface),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -260,7 +286,7 @@ internal fun MonthListScreen(
                                     Text(
                                         "${s.count} ${S.tripsCount(lang)}",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = textMid
                                     )
                                 }
                             }

@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.core.app.NotificationCompat
 import com.example.toplutasima.service.TransitNotificationReceiver
 import com.example.toplutasima.service.TransitTripForegroundService
-import com.example.toplutasima.ui.util.vehicleIcon
 
 class TransitNotificationBuilder(private val context: Context) {
     data class TrackingState(
@@ -25,12 +24,11 @@ class TransitNotificationBuilder(private val context: Context) {
     }
 
     fun buildTrackingNotification(state: TrackingState): Notification {
-        val emoji = vehicleIcon(state.vehicleType)
         val prefix = segmentPrefix(state)
         val title = if (state.hasBoarded) {
-            "$emoji $prefix${state.line} — Yolculuk aktif"
+            "$prefix${state.line} — Yolculuk aktif"
         } else {
-            "$emoji $prefix${state.line}"
+            "$prefix${state.line}"
         }
         val arrText = if (state.plannedArr.isNotBlank()) " (${state.plannedArr})" else ""
         val fallbackSuffix = if (state.usingTimeFallback) " · ⏰ Saat bazlı hatırlatma aktif" else ""
@@ -91,10 +89,9 @@ class TransitNotificationBuilder(private val context: Context) {
         vehicleType: String,
         tripId: String
     ): Notification {
-        val emoji = vehicleIcon(vehicleType)
         return NotificationCompat.Builder(context, TransitTripForegroundService.CHANNEL_REMINDER)
             .setContentTitle("⏰ İnmeniz gereken durak!")
-            .setContentText("$emoji $line → 📍 $alightingStop ($plannedArr)")
+            .setContentText("$line → 📍 $alightingStop ($plannedArr)")
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setAutoCancel(false)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

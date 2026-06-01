@@ -5,6 +5,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -117,7 +119,13 @@ internal fun StopSelectionSection(
                                         Text(S.nearbyMeters(stop.distanceMeters, lang), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 },
-                                leadingIcon = { Text("📍", fontSize = 14.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.LocationOn,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                },
                                 shape = RoundedCornerShape(10.dp)
                             )
                         }
@@ -170,7 +178,13 @@ internal fun StopSelectionSection(
                         AssistChip(
                             onClick = { viewModel.selectFavoriteFrom(fav.stopId, fav.stopName) },
                             label = { Text(fav.label, fontSize = 12.sp, maxLines = 1) },
-                            leadingIcon = { Text("⭐", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            },
                             shape = RoundedCornerShape(8.dp)
                         )
                     }
@@ -217,7 +231,11 @@ internal fun StopSelectionSection(
                         onClick = { viewModel.showAddFavoriteDialog(state.fromId, state.from) },
                         modifier = Modifier.size(28.dp)
                     ) {
-                        Text("⭐", fontSize = 16.sp)
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = S.addToFavorites(lang),
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
@@ -235,7 +253,13 @@ internal fun StopSelectionSection(
                         AssistChip(
                             onClick = { viewModel.selectFavoriteTo(fav.stopId, fav.stopName) },
                             label = { Text(fav.label, fontSize = 12.sp, maxLines = 1) },
-                            leadingIcon = { Text("⭐", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            },
                             shape = RoundedCornerShape(8.dp)
                         )
                     }
@@ -282,7 +306,11 @@ internal fun StopSelectionSection(
                         onClick = { viewModel.showAddFavoriteDialog(state.toId, state.to) },
                         modifier = Modifier.size(28.dp)
                     ) {
-                        Text("⭐", fontSize = 16.sp)
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = S.addToFavorites(lang),
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }

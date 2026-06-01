@@ -107,7 +107,7 @@ fun SummaryScreen(
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Text(
-                            "⚠️ ${state.errorMsg}",
+                            state.errorMsg,
                             modifier = Modifier.padding(20.dp),
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             textAlign = TextAlign.Center

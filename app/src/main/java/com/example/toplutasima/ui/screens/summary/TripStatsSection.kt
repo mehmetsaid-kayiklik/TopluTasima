@@ -1,8 +1,8 @@
 package com.example.toplutasima.ui.screens.summary
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,33 +13,50 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.EventSeat
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.HeatmapCalendar
 import com.example.toplutasima.ui.components.SummaryCard
 import com.example.toplutasima.ui.components.formatMin
+import com.example.toplutasima.ui.theme.AccentDark
+import com.example.toplutasima.ui.theme.AccentLight
+import com.example.toplutasima.ui.theme.SurfaceD2
+import com.example.toplutasima.ui.theme.SurfaceL2
+import com.example.toplutasima.ui.theme.TextHighDark
+import com.example.toplutasima.ui.theme.TextHighLight
+import com.example.toplutasima.ui.theme.TextMidDark
+import com.example.toplutasima.ui.theme.TextMidLight
 import com.example.toplutasima.usecase.HeatmapMetric
 import com.example.toplutasima.viewmodel.SummaryUiState
+
+@Composable
+private fun isDark() = isSystemInDarkTheme()
+
+@Composable
+private fun summarySurface() = if (isDark()) SurfaceD2 else SurfaceL2
 
 internal fun LazyListScope.TripStatsSection(
     state: SummaryUiState,
@@ -52,67 +69,55 @@ internal fun LazyListScope.TripStatsSection(
     val typeEntries = summaryVehicleTypeEntries
 
     item {
+        val dark = isDark()
+        val surface = if (dark) SurfaceD2 else SurfaceL2
+        val textHigh = if (dark) TextHighDark else TextHighLight
+        val textMid = if (dark) TextMidDark else TextMidLight
+        val accent = if (dark) AccentDark else AccentLight
+
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = surface)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.secondary
-                            )
-                        )
-                    )
-                    .padding(24.dp),
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         S.totalTrips(lang),
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.85f)
+                        color = textMid
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "${s.totalTrips}",
-                        style = MaterialTheme.typography.displayLarge,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textHigh
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("\uD83D\uDCBA", fontSize = 20.sp)
-                            Text(
-                                "${s.seatedCount}",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                S.seated(lang),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("\uD83C\uDFAB", fontSize = 20.sp)
-                            Text(
-                                "${s.ticketControlCount}",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                S.control(lang),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                        }
+                        SummaryIndicator(
+                            icon = Icons.Outlined.EventSeat,
+                            value = "${s.seatedCount}",
+                            label = S.seated(lang),
+                            accent = accent,
+                            textHigh = textHigh,
+                            textMid = textMid
+                        )
+                        SummaryIndicator(
+                            icon = Icons.Outlined.ConfirmationNumber,
+                            value = "${s.ticketControlCount}",
+                            label = S.control(lang),
+                            accent = accent,
+                            textHigh = textHigh,
+                            textMid = textMid
+                        )
                     }
                 }
             }
@@ -123,7 +128,7 @@ internal fun LazyListScope.TripStatsSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = summarySurface())
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -133,7 +138,7 @@ internal fun LazyListScope.TripStatsSection(
                 )
                 Spacer(Modifier.height(12.dp))
                 val maxCount = s.types.values.maxOrNull()?.toFloat() ?: 1f
-                typeEntries.forEach { (typeKey, emoji) ->
+                typeEntries.forEach { (typeKey, _) ->
                     val count = s.types[typeKey] ?: 0
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Row(
@@ -141,7 +146,7 @@ internal fun LazyListScope.TripStatsSection(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                "$emoji  ${S.vehicleTypeName(typeKey, lang)}",
+                                S.vehicleTypeName(typeKey, lang),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
@@ -171,7 +176,7 @@ internal fun LazyListScope.TripStatsSection(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = summarySurface())
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -237,7 +242,7 @@ internal fun LazyListScope.TripStatsSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = summarySurface())
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -291,7 +296,7 @@ internal fun LazyListScope.TripStatsSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = summarySurface())
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -338,7 +343,7 @@ internal fun LazyListScope.TripStatsSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = summarySurface())
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -426,7 +431,7 @@ internal fun LazyListScope.TripStatsSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = summarySurface())
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -436,7 +441,7 @@ internal fun LazyListScope.TripStatsSection(
                     )
                     Spacer(Modifier.height(12.dp))
                     val weatherMax = s.weatherCounts.values.maxOrNull()?.toFloat() ?: 1f
-                    S.weatherOptions.forEach { (key, emoji) ->
+                    S.weatherOptions.forEach { (key, _) ->
                         val count = s.weatherCounts[key] ?: 0
                         if (count > 0) {
                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
@@ -445,7 +450,7 @@ internal fun LazyListScope.TripStatsSection(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        "$emoji  ${S.weatherName(key, lang)}",
+                                        S.weatherName(key, lang),
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                     Text(
@@ -585,7 +590,7 @@ internal fun LazyListScope.TripStatsSection(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = summarySurface())
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -715,5 +720,35 @@ internal fun LazyListScope.TripStatsSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SummaryIndicator(
+    icon: ImageVector,
+    value: String,
+    label: String,
+    accent: androidx.compose.ui.graphics.Color,
+    textHigh: androidx.compose.ui.graphics.Color,
+    textMid: androidx.compose.ui.graphics.Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.height(18.dp)
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            value,
+            fontWeight = FontWeight.Bold,
+            color = textHigh
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = textMid
+        )
     }
 }

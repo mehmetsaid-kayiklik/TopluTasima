@@ -31,7 +31,6 @@ import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.components.TimeVisualTransformation
-import com.example.toplutasima.ui.util.vehicleIcon
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -108,7 +107,6 @@ internal fun DepartureSection(
                                 MaterialTheme.colorScheme.primaryContainer
                             else
                                 MaterialTheme.colorScheme.surface
-                            val emoji = vehicleIcon(dep.typeTr)
                             Surface(
                                 onClick = { viewModel.selectDeparture(dep) },
                                 shape = RoundedCornerShape(10.dp),
@@ -122,7 +120,6 @@ internal fun DepartureSection(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(emoji, fontSize = 22.sp)
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             "${S.vehicleTypeName(dep.typeTr, lang)} • ${dep.line}",

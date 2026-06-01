@@ -18,12 +18,12 @@ internal data class ReportMetricModel(
 )
 
 internal val summaryVehicleTypeEntries = listOf(
-    VehicleType.BUS.key to "🚌",
-    VehicleType.SBAHN.key to "🚆",
-    VehicleType.UBAHN.key to "🚇",
-    VehicleType.RERB.key to "🚂",
-    VehicleType.FERNZUG.key to "🚄",
-    VehicleType.STRASSENBAHN.key to "🚋"
+    VehicleType.BUS.key to "",
+    VehicleType.SBAHN.key to "",
+    VehicleType.UBAHN.key to "",
+    VehicleType.RERB.key to "",
+    VehicleType.FERNZUG.key to "",
+    VehicleType.STRASSENBAHN.key to ""
 )
 
 internal fun displaySummarySheet(name: String, lang: AppLanguage): String {

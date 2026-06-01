@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Create
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.DirectionsBus
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
@@ -50,14 +58,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.ui.S
-import com.example.toplutasima.ui.WarningAmber
+import com.example.toplutasima.ui.theme.AmberDark
+import com.example.toplutasima.ui.theme.AmberLight
+import com.example.toplutasima.ui.theme.BorderDark
+import com.example.toplutasima.ui.theme.BorderLight
+import com.example.toplutasima.ui.theme.SurfaceD1
+import com.example.toplutasima.ui.theme.SurfaceD2
+import com.example.toplutasima.ui.theme.SurfaceL1
+import com.example.toplutasima.ui.theme.SurfaceL2
+import com.example.toplutasima.ui.theme.TextHighDark
+import com.example.toplutasima.ui.theme.TextHighLight
+import com.example.toplutasima.ui.theme.TextLowDark
+import com.example.toplutasima.ui.theme.TextLowLight
+import com.example.toplutasima.ui.theme.TextMidDark
+import com.example.toplutasima.ui.theme.TextMidLight
 import com.example.toplutasima.usecase.ExportFormat
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.viewmodel.records.DayGroup
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
+
+@Composable
+private fun isDark() = isSystemInDarkTheme()
 
 // ── LEVEL 2: Day List ──
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -90,10 +113,18 @@ internal fun DayListScreen(
     onExport: (ExportFormat) -> Unit = {},
     onRefresh: () -> Unit
 ) {
+    val dark = isDark()
+    val borderColor = if (dark) BorderDark else BorderLight
+    val textHigh = if (dark) TextHighDark else TextHighLight
+    val textMid = if (dark) TextMidDark else TextMidLight
+    val textLow = if (dark) TextLowDark else TextLowLight
+    val appBarBg = if (dark) SurfaceD1 else SurfaceL1
+    val stickyBg = if (dark) SurfaceD2 else SurfaceL2
+
     Column(modifier = Modifier.fillMaxSize()) {
         // App Bar equivalent
         Row(
-            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(8.dp),
+            modifier = Modifier.fillMaxWidth().background(appBarBg).padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
@@ -117,7 +148,12 @@ internal fun DayListScreen(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("📤", fontSize = 20.sp)
+                    Icon(
+                        imageVector = Icons.Outlined.FileDownload,
+                        contentDescription = S.exportTitle(lang),
+                        modifier = Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
             Spacer(modifier = Modifier.width(4.dp))
@@ -143,7 +179,7 @@ internal fun DayListScreen(
                 }
             }
         }
-        Divider()
+        Divider(color = borderColor, thickness = 0.5.dp)
 
         // ── Export Format Dialog ──
         if (showExportDialog) {
@@ -152,9 +188,9 @@ internal fun DayListScreen(
                 title = { Text(S.exportChooseFormat(lang), fontWeight = FontWeight.Bold) },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ExportFormatButton("📊", S.exportCsv(lang)) { onExport(ExportFormat.CSV) }
-                        ExportFormatButton("{ }", S.exportJson(lang)) { onExport(ExportFormat.JSON) }
-                        ExportFormatButton("📄", S.exportPdf(lang)) { onExport(ExportFormat.PDF) }
+                        ExportFormatButton(Icons.Outlined.List, S.exportCsv(lang)) { onExport(ExportFormat.CSV) }
+                        ExportFormatButton(Icons.Outlined.Create, S.exportJson(lang)) { onExport(ExportFormat.JSON) }
+                        ExportFormatButton(Icons.Outlined.DateRange, S.exportPdf(lang)) { onExport(ExportFormat.PDF) }
                     }
                 },
                 confirmButton = {},
@@ -215,39 +251,60 @@ internal fun DayListScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(
-                            "⚠️ ${errorMsg}",
+                        Row(
                             modifier = Modifier.padding(20.dp),
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            textAlign = TextAlign.Center
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                errorMsg,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
                 dayGroups.isEmpty() -> {
-                    // Empty state — different message if filters are active
+                    // Empty state - different message if filters are active
                     Column(
                         modifier = Modifier.align(Alignment.Center).padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            if (filterState.hasActiveFilters) "🔍" else "📋",
-                            fontSize = 48.sp
+                        Icon(
+                            imageVector = if (filterState.hasActiveFilters) {
+                                Icons.Outlined.Search
+                            } else {
+                                Icons.Outlined.DirectionsBus
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(56.dp),
+                            tint = textLow
                         )
                         Spacer(Modifier.height(12.dp))
                         Text(
-                            if (filterState.hasActiveFilters) S.filterNoResults(lang) else S.noRecords(lang),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            if (filterState.hasActiveFilters) S.filterNoResults(lang) else "Yolculuk yok",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = textHigh,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (filterState.hasActiveFilters) {
+                                S.filterNoResultsHint(lang)
+                            } else {
+                                "Bu güne ait kayıt bulunmuyor"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = textMid,
                             textAlign = TextAlign.Center
                         )
                         if (filterState.hasActiveFilters) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                S.filterNoResultsHint(lang),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center
-                            )
                             Spacer(Modifier.height(16.dp))
                             OutlinedButton(
                                 onClick = onClearFilters,
@@ -273,14 +330,14 @@ internal fun DayListScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f))
+                                        .background(stickyBg)
                                         .padding(horizontal = 16.dp, vertical = 6.dp)
                                 ) {
                                     Text(
                                         "${group.dayName}, ${group.date}",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        color = textHigh
                                     )
                                 }
                             }
@@ -306,11 +363,14 @@ internal fun IncompleteRecordsBanner(
     onRecordClick: (Map<String, Any>) -> Unit,
     lang: com.example.toplutasima.ui.AppLanguage
 ) {
+    val dark = isDark()
+    val warning = if (dark) AmberDark else AmberLight
+    val recordBg = if (dark) SurfaceD1 else SurfaceL1
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = WarningAmber.copy(alpha = 0.12f)
+            containerColor = warning.copy(alpha = 0.12f)
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -323,7 +383,7 @@ internal fun IncompleteRecordsBanner(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(WarningAmber),
+                        .background(warning),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -375,7 +435,7 @@ internal fun IncompleteRecordsBanner(
                                 .fillMaxWidth()
                                 .clickable { onRecordClick(record.originalRecord) },
                             shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            colors = CardDefaults.cardColors(containerColor = recordBg)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -399,7 +459,7 @@ internal fun IncompleteRecordsBanner(
                                 Text(
                                     missingLabel,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = WarningAmber,
+                                    color = warning,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }

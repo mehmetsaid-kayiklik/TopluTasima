@@ -40,7 +40,7 @@ internal fun PersonalTripStatusBadge(
     val durumText = when (trip.durum) {
         PersonalTrip.DURUM_BEKLEMEDE -> S.personalStatusPending(lang)
         PersonalTrip.DURUM_AKTIF -> S.personalStatusActive(lang)
-        else -> "✅ Tamamlandı"
+        else -> S.personalStatusDone(lang)
     }
 
     Card(

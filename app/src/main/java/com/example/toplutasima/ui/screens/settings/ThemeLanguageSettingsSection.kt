@@ -13,10 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -70,17 +73,16 @@ internal fun ThemeLanguageSettingsSection(
                 Text(S.themeTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                 val themeModes = listOf(
-                    ThemeMode.SYSTEM to ("🔄" to S.themeModeSystem(lang)),
-                    ThemeMode.LIGHT to ("☀️" to S.themeModeLight(lang)),
-                    ThemeMode.DARK to ("🌙" to S.themeModeDark(lang))
+                    ThemeMode.SYSTEM to S.themeModeSystem(lang),
+                    ThemeMode.LIGHT to S.themeModeLight(lang),
+                    ThemeMode.DARK to S.themeModeDark(lang)
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    themeModes.forEach { (mode, emojiAndName) ->
-                        val (emoji, name) = emojiAndName
+                    themeModes.forEach { (mode, name) ->
                         val isSelected = PrefsManager.themeMode == mode
                         Surface(
                             onClick = { settingsViewModel.setThemeMode(mode) },
@@ -95,7 +97,6 @@ internal fun ThemeLanguageSettingsSection(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text(emoji, fontSize = 20.sp)
                                 Text(
                                     name,
                                     style = MaterialTheme.typography.bodySmall,
@@ -104,7 +105,12 @@ internal fun ThemeLanguageSettingsSection(
                                            else MaterialTheme.colorScheme.onSurface
                                 )
                                 if (isSelected) {
-                                    Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Icon(
+                                        imageVector = Icons.Outlined.CheckCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 }
                             }
                         }
@@ -149,13 +155,12 @@ internal fun ThemeLanguageSettingsSection(
                 Text(S.languageTitle(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                 val languages = listOf(
-                    AppLanguage.TR to ("\uD83C\uDDF9\uD83C\uDDF7" to "Türkçe"),
-                    AppLanguage.DE to ("\uD83C\uDDE9\uD83C\uDDEA" to "Deutsch"),
-                    AppLanguage.EN to ("\uD83C\uDDEC\uD83C\uDDE7" to "English")
+                    AppLanguage.TR to "Türkçe",
+                    AppLanguage.DE to "Deutsch",
+                    AppLanguage.EN to "English"
                 )
 
-                languages.forEach { (langOption, flagAndName) ->
-                    val (flag, name) = flagAndName
+                languages.forEach { (langOption, name) ->
                     val isSelected = lang == langOption
                     Surface(
                         onClick = { LocaleManager.setLanguage(langOption, prefs) },
@@ -171,7 +176,6 @@ internal fun ThemeLanguageSettingsSection(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(flag, fontSize = 24.sp)
                             Text(
                                 name,
                                 style = MaterialTheme.typography.bodyLarge,
@@ -181,7 +185,12 @@ internal fun ThemeLanguageSettingsSection(
                             )
                             if (isSelected) {
                                 Spacer(Modifier.weight(1f))
-                                Text("✓", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Icon(
+                                    imageVector = Icons.Outlined.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }

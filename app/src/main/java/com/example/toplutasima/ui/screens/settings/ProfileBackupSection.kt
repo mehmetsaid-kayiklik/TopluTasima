@@ -84,7 +84,7 @@ internal fun ProfileBackupSection(
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "👤 " + S.profileManagementTitle(lang),
+                    text = S.profileManagementTitle(lang),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )

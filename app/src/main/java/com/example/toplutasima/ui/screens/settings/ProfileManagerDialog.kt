@@ -57,7 +57,7 @@ internal fun ProfileManagerDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("👤 " + S.profileManagementTitle(lang), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                Text(S.profileManagementTitle(lang), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                 IconButton(onClick = onDismiss) {
                     Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
                 }
@@ -147,9 +147,9 @@ internal fun ProfileManagerDialog(
 
                                     // Details
                                     val kindText = when (profile.nameKind) {
-                                        "NICKNAME" -> "🏷️ " + S.profileNameKindNickname(lang)
-                                        "FIRST_NAME" -> "👤 " + S.profileNameKindFirstName(lang)
-                                        else -> "❓ " + S.profileNameKindUnknown(lang)
+                                        "NICKNAME" -> S.profileNameKindNickname(lang)
+                                        "FIRST_NAME" -> S.profileNameKindFirstName(lang)
+                                        else -> S.profileNameKindUnknown(lang)
                                     }
                                     Text(
                                         text = kindText,
@@ -159,7 +159,7 @@ internal fun ProfileManagerDialog(
 
                                     if (!profile.birthHint.isNullOrBlank()) {
                                         Text(
-                                            text = "🎂 " + S.profileBirthHintPrefix(lang) + ": ${profile.birthHint}",
+                                            text = S.profileBirthHintPrefix(lang) + ": ${profile.birthHint}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                         )
@@ -168,7 +168,7 @@ internal fun ProfileManagerDialog(
                                     if (!profile.memoryNote.isNullOrBlank()) {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            text = "📝 ${profile.memoryNote}",
+                                            text = profile.memoryNote,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
                                         )

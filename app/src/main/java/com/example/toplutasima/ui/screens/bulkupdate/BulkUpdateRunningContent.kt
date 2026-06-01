@@ -52,7 +52,7 @@ internal fun RunningContent(
         )
         if (etaMs > 0) {
             Text(
-                "⏱ ~${etaMin}dk ${etaSec}s kaldı",
+                "~${etaMin}dk ${etaSec}s kaldı",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -62,7 +62,7 @@ internal fun RunningContent(
     // Current row
     AnimatedVisibility(visible = state.currentRowInfo.isNotBlank(), enter = fadeIn(), exit = fadeOut()) {
         Text(
-            "🚌 ${state.currentRowInfo}",
+            state.currentRowInfo,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -71,10 +71,10 @@ internal fun RunningContent(
 
     // Counters
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("✅ ${state.successCount}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-        Text("❌ ${state.failCount}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        BulkUpdateSuccessCount(state.successCount)
+        BulkUpdateFailureCount(state.failCount)
         if (state.skipCount > 0) {
-            Text("⏭ ${state.skipCount}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${state.skipCount} atlandı", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
@@ -88,7 +88,7 @@ internal fun RunningContent(
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("⏸ Duraklat")
+            Text("Duraklat")
         }
         OutlinedButton(
             onClick = { viewModel.cancelUpdate() },
@@ -96,7 +96,7 @@ internal fun RunningContent(
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
         ) {
-            Text("⏹ İptal")
+            Text("İptal")
         }
     }
 }

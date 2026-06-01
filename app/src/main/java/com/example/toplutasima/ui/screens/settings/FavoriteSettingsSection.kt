@@ -1,6 +1,9 @@
 package com.example.toplutasima.ui.screens.settings
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -23,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,7 +84,11 @@ internal fun FavoriteSettingsSection(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text("⭐", fontSize = 18.sp)
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(fav.label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                     Text(fav.stopName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -100,7 +108,11 @@ internal fun FavoriteSettingsSection(
                                     onClick = { settingsViewModel.showDeleteConfirm(fav.id) },
                                     modifier = Modifier.size(28.dp)
                                 ) {
-                                    Text("🗑️", fontSize = 16.sp)
+                                    Icon(
+                                        imageVector = Icons.Filled.Delete,
+                                        contentDescription = S.favDelete(lang),
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 }
                             }
                         }
@@ -123,8 +135,8 @@ internal fun FavoriteSettingsSection(
                             restoreResult,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (restoreResult.contains("✅")) MaterialTheme.colorScheme.primary
-                                   else if (restoreResult.contains("❌")) MaterialTheme.colorScheme.error
+                            color = if (restoreResult.contains("başar", ignoreCase = true)) MaterialTheme.colorScheme.primary
+                                   else if (restoreResult.contains("fehl", ignoreCase = true) || restoreResult.contains("failed", ignoreCase = true)) MaterialTheme.colorScheme.error
                                    else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
