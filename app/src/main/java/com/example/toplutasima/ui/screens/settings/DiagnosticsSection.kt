@@ -197,6 +197,17 @@ internal fun DiagnosticsSection(
                             }) {
                                 Text(viewBtnText, fontSize = 12.sp)
                             }
+
+                            val shareBtnText = when (lang) {
+                                AppLanguage.TR -> "Paylaş"
+                                AppLanguage.DE -> "Teilen"
+                                else -> "Share"
+                            }
+                            TextButton(onClick = {
+                                shareLogFile(context, file, lang)
+                            }) {
+                                Text(shareBtnText, fontSize = 12.sp)
+                            }
                             
                             val deleteBtnText = when (lang) {
                                 AppLanguage.TR -> "Sil"
@@ -305,4 +316,30 @@ internal fun DiagnosticsSection(
             }
         }
 
+}
+
+private fun shareLogFile(context: android.content.Context, file: File, lang: AppLanguage) {
+    try {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "GPS Proximity Log: ${file.name}")
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        
+        val chooserTitle = when (lang) {
+            AppLanguage.TR -> "Log Dosyasını Paylaş"
+            AppLanguage.DE -> "Log-Datei teilen"
+            else -> "Share Log File"
+        }
+        
+        context.startActivity(android.content.Intent.createChooser(shareIntent, chooserTitle))
+    } catch (e: Exception) {
+        android.util.Log.e("DiagnosticsSection", "Log dosyası paylaşılamadı: ${e.message}", e)
+    }
 }
