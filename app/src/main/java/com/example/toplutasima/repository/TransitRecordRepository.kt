@@ -70,7 +70,11 @@ class TransitRecordRepository(
         withContext(Dispatchers.IO) {
             val tripDao = getTripDao()
             if (tripDao != null) {
-                val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+                var existingEntity = tripDao.getTripById(id)
+                if (existingEntity == null) {
+                    existingEntity = tripDao.getTripByFirestoreDocId(id)
+                }
+                val existing = existingEntity?.toMap()?.toMutableMap()
                 if (existing != null) {
                     if (!actualDep.isNullOrBlank()) existing["gercekBinis"] = actualDep
                     if (!actualArr.isNullOrBlank()) existing["gercekInis"] = actualArr

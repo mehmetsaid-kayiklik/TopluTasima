@@ -277,7 +277,7 @@ class TransitProximityTracker(
         private const val ALIGHTING_PROXIMITY_METERS = 100.0
         private const val CLOSE_ALIGHTING_PROXIMITY_METERS = 50.0
         private const val VALID_WALKING_CONFIDENCE = 70
-        private const val CLOSE_AUTO_ALIGHTING_MAX_SPEED_MPS = 1.0
+        private const val CLOSE_AUTO_ALIGHTING_MAX_SPEED_MPS = 2.0
         private const val AUTO_ALIGHTING_MAX_SPEED_MPS = 2.0
         private val WALKING_ACTIVITY_TYPES = setOf(
             DetectedActivity.WALKING,
