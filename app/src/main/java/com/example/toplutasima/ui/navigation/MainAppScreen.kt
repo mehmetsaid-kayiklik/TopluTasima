@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,26 +46,18 @@ import com.example.toplutasima.ui.screens.RMVLogScreen
 import com.example.toplutasima.ui.screens.RecordsScreen
 import com.example.toplutasima.ui.screens.SettingsScreen
 import com.example.toplutasima.ui.screens.SummaryScreen
-import com.example.toplutasima.ui.theme.AccentDark
-import com.example.toplutasima.ui.theme.AccentLight
-import com.example.toplutasima.ui.theme.TextLowDark
-import com.example.toplutasima.ui.theme.TextLowLight
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.SettingsViewModel
 import com.example.toplutasima.viewmodel.SummaryViewModel
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
-
-@Composable
-fun MainAppScreen(isDarkTheme: Boolean) {
+fun MainAppScreen() {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showPersonal by remember { mutableStateOf(false) }
     val lang = LocaleManager.currentLanguage
-    val dark = isDark()
-    val accent = if (dark) AccentDark else AccentLight
-    val unselectedTint = if (dark) TextLowDark else TextLowLight
+    val accent = MaterialTheme.colorScheme.primary
+    val unselectedTint = MaterialTheme.colorScheme.onSurfaceVariant
     val rmvLogViewModel: RmvLogViewModel = koinViewModel()
     val summaryViewModel: SummaryViewModel = koinViewModel()
     val settingsViewModel: SettingsViewModel = koinViewModel()
@@ -133,7 +124,6 @@ fun MainAppScreen(isDarkTheme: Boolean) {
                 3 -> {
                     SettingsScreen(
                         modifier = Modifier.padding(innerPadding),
-                        isDarkTheme = isDarkTheme,
                         settingsViewModel = settingsViewModel
                     )
                 }

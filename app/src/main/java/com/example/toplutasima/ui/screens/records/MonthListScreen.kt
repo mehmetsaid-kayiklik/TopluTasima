@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -57,10 +56,11 @@ import com.example.toplutasima.ui.theme.SurfaceL1
 import com.example.toplutasima.ui.theme.SurfaceL2
 import com.example.toplutasima.ui.theme.TextMidDark
 import com.example.toplutasima.ui.theme.TextMidLight
+import com.example.toplutasima.ui.theme.isAppInDarkTheme
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
+private fun isDark() = isAppInDarkTheme()
 
 // ── LEVEL 1: Month List ──
 @OptIn(ExperimentalMaterial3Api::class)

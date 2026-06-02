@@ -28,7 +28,6 @@ import com.example.toplutasima.viewmodel.SettingsViewModel
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean,
     settingsViewModel: SettingsViewModel
 ) {
     val lang = LocaleManager.currentLanguage

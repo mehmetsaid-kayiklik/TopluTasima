@@ -7,7 +7,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,13 +73,14 @@ import com.example.toplutasima.ui.theme.TextLowDark
 import com.example.toplutasima.ui.theme.TextLowLight
 import com.example.toplutasima.ui.theme.TextMidDark
 import com.example.toplutasima.ui.theme.TextMidLight
+import com.example.toplutasima.ui.theme.isAppInDarkTheme
 import com.example.toplutasima.usecase.ExportFormat
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.viewmodel.records.DayGroup
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
+private fun isDark() = isAppInDarkTheme()
 
 // ── LEVEL 2: Day List ──
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)

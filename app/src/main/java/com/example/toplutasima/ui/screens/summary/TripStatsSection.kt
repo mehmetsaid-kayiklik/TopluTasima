@@ -2,7 +2,6 @@ package com.example.toplutasima.ui.screens.summary
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,11 +48,12 @@ import com.example.toplutasima.ui.theme.TextHighDark
 import com.example.toplutasima.ui.theme.TextHighLight
 import com.example.toplutasima.ui.theme.TextMidDark
 import com.example.toplutasima.ui.theme.TextMidLight
+import com.example.toplutasima.ui.theme.isAppInDarkTheme
 import com.example.toplutasima.usecase.HeatmapMetric
 import com.example.toplutasima.viewmodel.SummaryUiState
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
+private fun isDark() = isAppInDarkTheme()
 
 @Composable
 private fun summarySurface() = if (isDark()) SurfaceD2 else SurfaceL2

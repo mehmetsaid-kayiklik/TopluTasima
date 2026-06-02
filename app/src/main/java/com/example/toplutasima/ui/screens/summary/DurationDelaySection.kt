@@ -1,7 +1,6 @@
 package com.example.toplutasima.ui.screens.summary
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,9 +35,10 @@ import com.example.toplutasima.ui.theme.RedDark
 import com.example.toplutasima.ui.theme.RedLight
 import com.example.toplutasima.ui.theme.SurfaceD2
 import com.example.toplutasima.ui.theme.SurfaceL2
+import com.example.toplutasima.ui.theme.isAppInDarkTheme
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
+private fun isDark() = isAppInDarkTheme()
 
 internal fun LazyListScope.DurationDelaySection(
     s: SummaryData,

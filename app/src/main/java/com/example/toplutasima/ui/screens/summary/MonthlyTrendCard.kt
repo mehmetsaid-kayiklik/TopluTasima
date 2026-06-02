@@ -27,9 +27,6 @@ import androidx.compose.ui.unit.sp
 import com.example.toplutasima.model.MonthlyTrendData
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
-import com.example.toplutasima.ui.SubtleGray
-import com.example.toplutasima.ui.Teal
-import com.example.toplutasima.ui.TealLight
 
 @Composable
 fun MonthlyTrendCard(
@@ -69,7 +66,11 @@ fun MonthlyTrendCard(
             ) {
                 trendData.forEach { data ->
                     val isBusiest = data.trips == maxTrips && maxTrips > 0
-                    val barColor = if (isBusiest) TealLight else Teal
+                    val barColor = if (isBusiest) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                    }
 
                     Column(
                         modifier = Modifier
@@ -84,7 +85,11 @@ fun MonthlyTrendCard(
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
-                            color = if (isBusiest) TealLight else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isBusiest) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                         Spacer(modifier = Modifier.height(4.dp))
 
@@ -117,7 +122,7 @@ fun MonthlyTrendCard(
                             text = data.monthName,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = SubtleGray,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1
                         )
                         Spacer(modifier = Modifier.height(2.dp))
@@ -127,7 +132,7 @@ fun MonthlyTrendCard(
                             text = "${Math.round(data.distanceKm)} km",
                             style = MaterialTheme.typography.bodySmall,
                             fontSize = 9.sp,
-                            color = SubtleGray.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                             maxLines = 1
                         )
                     }

@@ -135,8 +135,18 @@ fun PersonalTripsContent(
                         FilledTonalButton(
                             onClick = { viewModel.updateFormField("havaMenu", "true") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) { Text(S.weatherName(uiState.formHavaDurumu, lang), fontSize = 13.sp) }
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ) {
+                            Text(
+                                S.weatherName(uiState.formHavaDurumu, lang),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                         DropdownMenu(
                             expanded = uiState.formHavaMenuOpen,
                             onDismissRequest = { viewModel.updateFormField("havaMenu", "false") }

@@ -1,6 +1,5 @@
 package com.example.toplutasima.ui.screens
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,12 +45,13 @@ import com.example.toplutasima.ui.theme.TextHighDark
 import com.example.toplutasima.ui.theme.TextHighLight
 import com.example.toplutasima.ui.theme.TextMidDark
 import com.example.toplutasima.ui.theme.TextMidLight
+import com.example.toplutasima.ui.theme.isAppInDarkTheme
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import org.koin.androidx.compose.koinViewModel
 import java.util.Locale
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
+private fun isDark() = isAppInDarkTheme()
 
 @Composable
 fun PersonalSummaryContent(lang: AppLanguage) {

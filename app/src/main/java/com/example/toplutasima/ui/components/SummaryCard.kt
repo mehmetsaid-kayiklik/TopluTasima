@@ -1,6 +1,5 @@
 package com.example.toplutasima.ui.components
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,9 +22,10 @@ import com.example.toplutasima.ui.theme.TextHighDark
 import com.example.toplutasima.ui.theme.TextHighLight
 import com.example.toplutasima.ui.theme.TextMidDark
 import com.example.toplutasima.ui.theme.TextMidLight
+import com.example.toplutasima.ui.theme.isAppInDarkTheme
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
+private fun isDark() = isAppInDarkTheme()
 
 @Composable
 fun SummaryCard(title: String, value: String) {

@@ -1,6 +1,5 @@
 package com.example.toplutasima.ui.screens.summary
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,10 +39,11 @@ import com.example.toplutasima.ui.theme.SurfaceD2
 import com.example.toplutasima.ui.theme.SurfaceL2
 import com.example.toplutasima.ui.theme.TextHighDark
 import com.example.toplutasima.ui.theme.TextHighLight
+import com.example.toplutasima.ui.theme.isAppInDarkTheme
 import com.example.toplutasima.viewmodel.SummaryUiState
 
 @Composable
-private fun isDark() = isSystemInDarkTheme()
+private fun isDark() = isAppInDarkTheme()
 
 @Composable
 internal fun SummaryHeaderSection(

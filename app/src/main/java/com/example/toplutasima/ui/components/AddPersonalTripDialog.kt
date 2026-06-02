@@ -192,9 +192,13 @@ fun AddPersonalTripDialog(
                     FilledTonalButton(
                         onClick = { havaMenuOpen = true },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     ) {
-                        Text(S.weatherName(havaDurumu, lang))
+                        Text(S.weatherName(havaDurumu, lang), fontWeight = FontWeight.SemiBold)
                     }
                     DropdownMenu(expanded = havaMenuOpen, onDismissRequest = { havaMenuOpen = false }) {
                         S.weatherOptions.forEach { (key, _) ->
