@@ -35,7 +35,7 @@ class TransitActionWorker(
                 repository.updateActual(tripId, null, timestamp)
             }
             if (!updated) {
-                Log.w(TAG, "Firestore kaydi bulunamadi: trip=$tripId isBoarding=$isBoarding")
+                Log.w(TAG, "updateActual basarisiz: trip=$tripId isBoarding=$isBoarding time=$timestamp — Result.failure()")
                 return Result.failure()
             }
             Log.d(TAG, "Yolculuk zamani islendi: trip=$tripId isBoarding=$isBoarding time=$timestamp")

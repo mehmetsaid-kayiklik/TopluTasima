@@ -14,6 +14,11 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+val signingProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 // Priority 2: Fail-fast helper — throws a Gradle build error if a required key is absent.
 // Resolution order: local.properties → environment variable → build error.
 // This allows CI pipelines to inject secrets as env vars without a local.properties file,
@@ -29,6 +34,41 @@ fun requiredLocalProperty(key: String): String =
 
 fun optionalLocalProperty(key: String): String? =
     localProperties.getProperty(key) ?: System.getenv(key)
+
+fun requiredReleaseSigningProperty(key: String): String =
+    signingProperties.getProperty(key)
+        ?: System.getenv(key)
+        ?: error(
+            "\nMissing release signing key \"$key\".\n" +
+                "Provide it in keystore.properties OR as an environment variable named $key.\n"
+        )
+
+fun optionalReleaseSigningProperty(key: String): String? =
+    signingProperties.getProperty(key) ?: System.getenv(key)
+
+val releaseSigningKeys = listOf(
+    "RELEASE_STORE_FILE",
+    "RELEASE_STORE_PASSWORD",
+    "RELEASE_KEY_ALIAS",
+    "RELEASE_KEY_PASSWORD"
+)
+val missingReleaseSigningKeys = releaseSigningKeys.filter { optionalReleaseSigningProperty(it).isNullOrBlank() }
+val hasReleaseSigningConfig = missingReleaseSigningKeys.isEmpty()
+val releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("release", ignoreCase = true)
+}
+val allowDebugReleaseSigning =
+    optionalLocalProperty("ALLOW_DEBUG_RELEASE_SIGNING")?.toBooleanStrictOrNull() == true
+
+fun releaseSigningConfigError(): Nothing = error(
+    "\nMissing release signing config: ${missingReleaseSigningKeys.joinToString()}.\n" +
+        "Provide these in keystore.properties OR as environment variables.\n" +
+        "Example (keystore.properties):\n" +
+        "RELEASE_STORE_FILE=release-keystore.jks\n" +
+        "RELEASE_STORE_PASSWORD=your-store-password\n" +
+        "RELEASE_KEY_ALIAS=your-key-alias\n" +
+        "RELEASE_KEY_PASSWORD=your-key-password\n"
+)
 
 // Escapes a raw property value so it is safe to embed inside a double-quoted Kotlin/Java
 // string literal in generated BuildConfig code. Without this, a value containing a
@@ -63,6 +103,17 @@ android {
         buildConfigField("String", "ORS_API_KEY",   "\"${requiredLocalProperty("ORS_API_KEY").escapeBuildConfigString()}\"")
     }
 
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = rootProject.file(requiredReleaseSigningProperty("RELEASE_STORE_FILE"))
+                storePassword = requiredReleaseSigningProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = requiredReleaseSigningProperty("RELEASE_KEY_ALIAS")
+                keyPassword = requiredReleaseSigningProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         // Priority 3: Enable R8 minification and resource shrinking for release.
         // This reduces APK size and obfuscates the binary, limiting reverse-engineering exposure.
@@ -72,8 +123,11 @@ android {
             // Private/local builds can opt into debug signing explicitly:
             // ALLOW_DEBUG_RELEASE_SIGNING=true ./gradlew assembleRelease
             // Public distribution must use a real release signingConfig instead.
-            if (optionalLocalProperty("ALLOW_DEBUG_RELEASE_SIGNING")?.toBooleanStrictOrNull() == true) {
-                signingConfig = signingConfigs.getByName("debug")
+            signingConfig = when {
+                hasReleaseSigningConfig -> signingConfigs.getByName("release")
+                allowDebugReleaseSigning -> signingConfigs.getByName("debug")
+                releaseTaskRequested -> releaseSigningConfigError()
+                else -> null
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

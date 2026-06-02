@@ -567,6 +567,19 @@ class TransitTripForegroundService : Service() {
         WorkManager.getInstance(applicationContext).enqueue(workRequest)
     }
 
+    private fun enqueueTransitActionWorkerWithId(segId: String, isBoarding: Boolean) {
+        val timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        val workData = Data.Builder()
+            .putString(TransitActionWorker.KEY_TRIP_ID, segId)
+            .putBoolean(TransitActionWorker.KEY_IS_BOARDING, isBoarding)
+            .putString(TransitActionWorker.KEY_TIMESTAMP, timestamp)
+            .build()
+        val workRequest = OneTimeWorkRequestBuilder<TransitActionWorker>()
+            .setInputData(workData)
+            .build()
+        WorkManager.getInstance(applicationContext).enqueue(workRequest)
+    }
+
     // ── Proximity Watch ───────────────────────────────────────────────────────
 
     /**
@@ -642,7 +655,14 @@ class TransitTripForegroundService : Service() {
     }
 
     private fun handleAutoAlighting() {
-        enqueueTransitActionWorker(isBoarding = false)
+        val segId = segmentIds.getOrNull(currentSegmentIndex)
+            .takeIf { !it.isNullOrBlank() }
+            ?: currentTripId
+        if (segId.isBlank()) {
+            logD("Auto Indim iptal: segId bos")
+            return
+        }
+        enqueueTransitActionWorkerWithId(segId, isBoarding = false)
         getSystemService(NotificationManager::class.java).cancel(NOTIF_ID_REMINDER)
         cancelReminder()
         cancelProximityWatchAlarm()
@@ -651,6 +671,6 @@ class TransitTripForegroundService : Service() {
         } else {
             updateTrackingNotificationWaiting()
         }
-        logD("GPS proximity otomatik Indim kaydi olusturdu")
+        logD("GPS proximity otomatik Indim kaydi olusturdu: segId=$segId")
     }
 }

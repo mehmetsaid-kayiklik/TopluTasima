@@ -2,6 +2,9 @@
 .gradle
 .gradle-local
 /local.properties
+/keystore.properties
+/release-keystore.jks
+/release.keystore
 /.idea/
 .DS_Store
 /build

@@ -92,7 +92,8 @@ class TransitRecordRepository(
                 }
             }
             try {
-                tripRemoteDataSource.updateActual(id, actualDep, actualArr)
+                val ok = tripRemoteDataSource.updateActual(id, actualDep, actualArr)
+                ok
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
