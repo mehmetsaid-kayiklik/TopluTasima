@@ -69,11 +69,17 @@ class TransitRecordRepository(
     suspend fun updateActual(id: String, actualDep: String?, actualArr: String?): Boolean =
         withContext(Dispatchers.IO) {
             val tripDao = getTripDao()
+            // Firestore'a gönderilecek ID: önce Room'dan doğru kaydı bul,
+            // varsa Firestore doc içindeki "id" alanını kullan (doc'u "id" field'ı ile arıyoruz)
+            var firestoreQueryId = id
             if (tripDao != null) {
                 var existingEntity = tripDao.getTripById(id)
                 if (existingEntity == null) {
                     existingEntity = tripDao.getTripByFirestoreDocId(id)
                 }
+                // Room kaydındaki "id" alanı Firestore'daki "id" field'ı ile eşleşmeli
+                existingEntity?.id?.takeIf { it.isNotBlank() }?.let { firestoreQueryId = it }
+
                 val existing = existingEntity?.toMap()?.toMutableMap()
                 if (existing != null) {
                     if (!actualDep.isNullOrBlank()) existing["gercekBinis"] = actualDep
@@ -92,13 +98,13 @@ class TransitRecordRepository(
                 }
             }
             try {
-                val ok = tripRemoteDataSource.updateActual(id, actualDep, actualArr)
+                val ok = tripRemoteDataSource.updateActual(firestoreQueryId, actualDep, actualArr)
                 ok
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 appContext?.let {
-                    OfflineQueueStore.enqueueUpdateActual(it, id, actualDep, actualArr)
+                    OfflineQueueStore.enqueueUpdateActual(it, firestoreQueryId, actualDep, actualArr)
                     return@withContext true
                 }
                 false

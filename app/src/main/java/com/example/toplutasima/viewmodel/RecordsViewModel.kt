@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.TopluTasimaApp
 import com.example.toplutasima.data.repository.LocalTripRepository
+import com.example.toplutasima.data.repository.ProfileSyncRepository
 import com.example.toplutasima.data.repository.toEntity
 import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.model.MonthSummary
@@ -29,7 +30,10 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
-class RecordsViewModel(application: Application) : AndroidViewModel(application) {
+class RecordsViewModel(
+    application: Application,
+    private val profileSyncRepository: ProfileSyncRepository
+) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(RecordsUiState())
     val uiState: StateFlow<RecordsUiState> = _uiState.asStateFlow()
 
@@ -49,6 +53,12 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
     fun loadProfileData() {
         viewModelScope.launch {
             try {
+                // Firestore'dan sharedWithTransit=true olan kişileri çek ve Room'u güncelle.
+                // Hata alınırsa Room cache'i kullanılır; sessizce devam edilir.
+                try {
+                    profileSyncRepository.refreshSharedProfiles()
+                } catch (_: Exception) {}
+
                 val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
                 val profiles = db.profileDao().getAllProfiles()
                 val links = db.tripProfileLinkDao().getAllLinks()
@@ -57,7 +67,7 @@ class RecordsViewModel(application: Application) : AndroidViewModel(application)
                 allLinksMap = links.associateBy { it.tripStableKey }
 
                 _uiState.value = _uiState.value.copy(
-                    activeProfiles = profiles.filter { !it.archived }
+                    activeProfiles = profiles.filter { it.sharedWithTransit && !it.archived }
                 )
 
                 _uiState.value.selectedMonth?.let { selectMonth(it) }

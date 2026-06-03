@@ -20,7 +20,6 @@ import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.screens.settings.ColorPersonalSettingsSection
 import com.example.toplutasima.ui.screens.settings.DiagnosticsSection
 import com.example.toplutasima.ui.screens.settings.FavoriteSettingsSection
-import com.example.toplutasima.ui.screens.settings.ProfileBackupSection
 import com.example.toplutasima.ui.screens.settings.ThemeLanguageSettingsSection
 import com.example.toplutasima.ui.screens.settings.TransitNotificationSettingsSection
 import com.example.toplutasima.viewmodel.SettingsViewModel
@@ -51,11 +50,6 @@ fun SettingsScreen(
             )
             ColorPersonalSettingsSection(lang = lang)
             TransitNotificationSettingsSection(lang = lang)
-            ProfileBackupSection(
-                settingsState = settingsState,
-                settingsViewModel = settingsViewModel,
-                lang = lang
-            )
             DiagnosticsSection(lang = lang)
         }
     }

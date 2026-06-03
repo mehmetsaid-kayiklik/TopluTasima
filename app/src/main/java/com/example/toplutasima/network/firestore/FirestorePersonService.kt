@@ -3,7 +3,6 @@ package com.example.toplutasima.network.firestore
 import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.data.local.entity.ProfileEntity
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 
 object FirestorePersonService {
@@ -17,38 +16,6 @@ object FirestorePersonService {
         .collection("users")
         .document(AuthService.uid)
         .collection("persons")
-
-    /** Room'daki ProfileEntity'yi Firestore'a yazar/günceller. */
-    suspend fun upsertPerson(profile: ProfileEntity): Boolean {
-        return try {
-            val data = mapOf(
-                "id"                to profile.id,
-                "displayName"       to profile.displayName,
-                "nameKind"          to profile.nameKind,
-                "memoryNote"        to profile.memoryNote,
-                "birthHint"         to profile.birthHint,
-                "infoSource"        to profile.infoSource,
-                "createdAt"         to profile.createdAt,
-                "updatedAt"         to profile.updatedAt,
-                "archived"          to profile.archived,
-                "sharedWithTransit" to profile.sharedWithTransit
-            )
-            collection().document(profile.id).set(data).await()
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) { false }
-    }
-
-    /** Belirli bir kişiyi siler. */
-    suspend fun deletePerson(profileId: String): Boolean {
-        return try {
-            collection().document(profileId).delete().await()
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) { false }
-    }
 
     /**
      * Sadece sharedWithTransit = true olan kişileri çeker.

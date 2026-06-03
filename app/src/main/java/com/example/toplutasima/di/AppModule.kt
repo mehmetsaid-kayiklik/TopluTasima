@@ -64,7 +64,7 @@ val appModule = module {
     // ── ViewModels ──────────────────────────────────────────────────────────
     viewModel { RmvLogViewModel(androidApplication(), get(), get(), get(), get(), get(), get()) }
     viewModel { SummaryViewModel(androidApplication()) }
-    viewModel { RecordsViewModel(androidApplication()) }
+    viewModel { RecordsViewModel(androidApplication(), get()) }
     viewModel { BulkUpdateViewModel(androidApplication(), get()) }
     viewModel { SettingsViewModel(androidApplication()) }
     viewModel { PersonalTripViewModel(androidApplication(), get()) }  // Kişisel Araç
