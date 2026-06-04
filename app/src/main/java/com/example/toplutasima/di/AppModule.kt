@@ -12,6 +12,11 @@ import com.example.toplutasima.repository.RmvTripRepository
 import com.example.toplutasima.repository.TransitRecordRepository
 import com.example.toplutasima.repository.TripProfileLinkRepository
 import com.example.toplutasima.repository.TripRecordMapper
+import com.example.toplutasima.data.PrefsManager
+import com.example.toplutasima.usecase.JourneyMatchUseCase
+import com.example.toplutasima.usecase.ManualEntryUseCase
+import com.example.toplutasima.usecase.RecordSaveUseCase
+import com.example.toplutasima.usecase.StopSelectionUseCase
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
@@ -57,12 +62,30 @@ val appModule = module {
 
     // ── Use Case ────────────────────────────────────────────────────────────
     single { TripPlanningUseCase(get()) }
+    single { StopSelectionUseCase(get(), PrefsManager) }
+    single { JourneyMatchUseCase(get()) }
+    single { RecordSaveUseCase(get(), get()) }
+    single { ManualEntryUseCase() }
 
     // ── Location ────────────────────────────────────────────────────────────
     single { NearbyStopsManager(androidContext(), get()) }
 
     // ── ViewModels ──────────────────────────────────────────────────────────
-    viewModel { RmvLogViewModel(androidApplication(), get(), get(), get(), get(), get(), get()) }
+    viewModel {
+        RmvLogViewModel(
+            application = androidApplication(),
+            stopSelectionUseCase = get(),
+            journeyMatchUseCase = get(),
+            recordSaveUseCase = get(),
+            manualEntryUseCase = get(),
+            rmvTripRepository = get(),
+            transitRecordRepository = get(),
+            tripProfileLinkRepository = get(),
+            tripPlanner = get(),
+            nearbyManager = get(),
+            profileSyncRepository = get()
+        )
+    }
     viewModel { SummaryViewModel(androidApplication()) }
     viewModel { RecordsViewModel(androidApplication(), get()) }
     viewModel { BulkUpdateViewModel(androidApplication(), get()) }

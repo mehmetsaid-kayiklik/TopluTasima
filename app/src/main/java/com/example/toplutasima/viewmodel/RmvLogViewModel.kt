@@ -28,6 +28,10 @@ import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
 import com.example.toplutasima.usecase.TripPlanningUseCase
+import com.example.toplutasima.usecase.JourneyMatchUseCase
+import com.example.toplutasima.usecase.ManualEntryUseCase
+import com.example.toplutasima.usecase.RecordSaveUseCase
+import com.example.toplutasima.usecase.StopSelectionUseCase
 import com.example.toplutasima.viewmodel.rmvlog.LogMode
 import com.example.toplutasima.viewmodel.rmvlog.ManualEntryState
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
@@ -50,6 +54,10 @@ import java.util.UUID
 
 class RmvLogViewModel(
     application: Application,
+    private val stopSelectionUseCase: StopSelectionUseCase,
+    private val journeyMatchUseCase: JourneyMatchUseCase,
+    private val recordSaveUseCase: RecordSaveUseCase,
+    private val manualEntryUseCase: ManualEntryUseCase,
     private val rmvTripRepository: RmvTripRepository,
     private val transitRecordRepository: TransitRecordRepository,
     private val tripProfileLinkRepository: TripProfileLinkRepository,
@@ -208,99 +216,81 @@ class RmvLogViewModel(
         }
     }
 
+
     fun selectNearbyStop(stop: com.example.toplutasima.network.RmvApiService.NearbyStop) {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(
-            from = stop.name,
-            fromId = stop.id,
-            fromOptions = emptyList(),
-            fromMenuOpen = false
-        )
+        _uiState.value = stopSelectionUseCase.selectNearbyStop(_uiState.value, stop)
     }
 
     // ── Favoriye ekleme dialog ────────────────────────────────────────────────
 
+
     fun showAddFavoriteDialog(stopId: String, stopName: String) {
-        _uiState.value = _uiState.value.copy(
-            showAddFavDialog = true,
-            addFavStopId = stopId,
-            addFavStopName = stopName,
-            addFavLabel = "",
-            addFavUsageType = com.example.toplutasima.model.UsageType.BOTH,
-            addFavMessage = ""
-        )
+        _uiState.value = stopSelectionUseCase.showAddFavoriteDialog(_uiState.value, stopId, stopName)
     }
+
 
     fun dismissAddFavoriteDialog() {
-        _uiState.value = _uiState.value.copy(showAddFavDialog = false, addFavMessage = "")
+        _uiState.value = stopSelectionUseCase.dismissAddFavoriteDialog(_uiState.value)
     }
+
 
     fun updateAddFavLabel(label: String) {
-        _uiState.value = _uiState.value.copy(addFavLabel = label)
+        _uiState.value = stopSelectionUseCase.updateAddFavLabel(_uiState.value, label)
     }
+
 
     fun updateAddFavUsageType(type: com.example.toplutasima.model.UsageType) {
-        _uiState.value = _uiState.value.copy(addFavUsageType = type)
+        _uiState.value = stopSelectionUseCase.updateAddFavUsageType(_uiState.value, type)
     }
 
+
     fun confirmAddFavorite() {
-        val s = _uiState.value
-        if (s.addFavStopId.isBlank()) return
-        val label = s.addFavLabel.ifBlank { s.addFavStopName }
-        com.example.toplutasima.data.PrefsManager.addFavorite(
-            stopId = s.addFavStopId,
-            stopName = s.addFavStopName,
-            label = label,
-            usageType = s.addFavUsageType
-        )
-        _uiState.value = s.copy(
-            showAddFavDialog = false,
-            addFavMessage = S.favAdded(lang())
-        )
+        _uiState.value = stopSelectionUseCase.addFavorite(_uiState.value, lang())
     }
+
 
     fun selectFavoriteFrom(stopId: String, stopName: String) {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(
-            from = stopName, fromId = stopId, fromOptions = emptyList(), fromMenuOpen = false
-        )
+        _uiState.value = stopSelectionUseCase.selectFavoriteFrom(_uiState.value, stopId, stopName)
     }
+
 
     fun selectFavoriteTo(stopId: String, stopName: String) {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(
-            to = stopName, toId = stopId, toOptions = emptyList(), toMenuOpen = false
-        )
+        _uiState.value = stopSelectionUseCase.selectFavoriteTo(_uiState.value, stopId, stopName)
     }
+
+    fun removeFavorite(id: String) {
+        stopSelectionUseCase.removeFavorite(id)
+    }
+
+    fun loadFavorites() = stopSelectionUseCase.loadFavorites()
 
     // ── Durak arama ──────────────────────────────────────────────────────────
 
+
     fun updateFrom(value: String) {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(from = value, fromId = "", fromOptions = emptyList())
+        _uiState.value = stopSelectionUseCase.updateFrom(_uiState.value, value)
     }
+
 
     fun updateTo(value: String) {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(to = value, toId = "", toOptions = emptyList())
+        _uiState.value = stopSelectionUseCase.updateTo(_uiState.value, value)
     }
+
 
     fun selectFrom(option: StopOption) {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(
-            from = option.routingName,
-            fromId = option.routingId,
-            fromMenuOpen = false
-        )
+        _uiState.value = stopSelectionUseCase.selectFrom(_uiState.value, option)
     }
+
 
     fun selectTo(option: StopOption) {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(
-            to = option.routingName,
-            toId = option.routingId,
-            toMenuOpen = false
-        )
+        _uiState.value = stopSelectionUseCase.selectTo(_uiState.value, option)
     }
 
     fun setFromMenuOpen(open: Boolean) {
@@ -315,13 +305,10 @@ class RmvLogViewModel(
         _uiState.value = _uiState.value.copy(havaMenuOpen = open)
     }
 
+
     fun swapFromTo() {
         stopDepartureRefresh()
-        val s = _uiState.value
-        _uiState.value = s.copy(
-            from = s.to, fromId = s.toId, fromOptions = s.toOptions,
-            to = s.from, toId = s.fromId, toOptions = s.fromOptions
-        )
+        _uiState.value = stopSelectionUseCase.swapFromTo(_uiState.value)
     }
 
     fun updateDate(value: String) {
@@ -484,62 +471,38 @@ class RmvLogViewModel(
 
     // ── API çağrıları ────────────────────────────────────────────────────────
 
+
     fun searchFrom() {
         viewModelScope.launch {
             try {
                 val query = _uiState.value.from.trim()
-                val cached = PrefsManager.getCachedStops(query, 5)
-                if (cached.isNotEmpty()) {
-                    _uiState.value = _uiState.value.copy(
-                        fromOptions = cached,
-                        fromMenuOpen = true,
-                        status = S.statusFromReady(lang())
-                    )
-                    return@launch
-                }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingFrom(lang()), fromOptions = emptyList())
-                val opts = rmvTripRepository.searchLocations(query, 5).map { it.toStopOption() }
-                PrefsManager.saveStopSearch(query, opts)
+                val result = stopSelectionUseCase.searchStops(query, 5)
                 _uiState.value = _uiState.value.copy(
-                    fromOptions = opts,
+                    fromOptions = result.options,
                     fromMenuOpen = true,
-                    status = if (opts.isEmpty()) S.statusFromNoResult(lang()) else S.statusFromReady(lang())
+                    status = if (result.options.isEmpty()) S.statusFromNoResult(lang()) else S.statusFromReady(lang())
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    transitAlertsLoading = false,
-                    status = "${S.errorPrefix(lang())}: ${e.message}"
-                )
+                _uiState.value = _uiState.value.copy(transitAlertsLoading = false, status = "${S.errorPrefix(lang())}: ${e.message}")
             }
         }
     }
+
 
     fun searchTo() {
         viewModelScope.launch {
             try {
                 val query = _uiState.value.to.trim()
-                val cached = PrefsManager.getCachedStops(query, 5)
-                if (cached.isNotEmpty()) {
-                    _uiState.value = _uiState.value.copy(
-                        toOptions = cached,
-                        toMenuOpen = true,
-                        status = S.statusToReady(lang())
-                    )
-                    return@launch
-                }
                 _uiState.value = _uiState.value.copy(status = S.statusSearchingTo(lang()), toOptions = emptyList())
-                val opts = rmvTripRepository.searchLocations(query, 5).map { it.toStopOption() }
-                PrefsManager.saveStopSearch(query, opts)
+                val result = stopSelectionUseCase.searchStops(query, 5)
                 _uiState.value = _uiState.value.copy(
-                    toOptions = opts,
+                    toOptions = result.options,
                     toMenuOpen = true,
-                    status = if (opts.isEmpty()) S.statusToNoResult(lang()) else S.statusToReady(lang())
+                    status = if (result.options.isEmpty()) S.statusToNoResult(lang()) else S.statusToReady(lang())
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    transitAlertsLoading = false,
-                    status = "${S.errorPrefix(lang())}: ${e.message}"
-                )
+                _uiState.value = _uiState.value.copy(transitAlertsLoading = false, status = "${S.errorPrefix(lang())}: ${e.message}")
             }
         }
     }
@@ -590,79 +553,16 @@ class RmvLogViewModel(
      */
     fun selectDeparture(dep: Departure) {
         tripDetailJob?.cancel()
-        _uiState.value = _uiState.value.copy(
-            selectedDeparture = dep,
-            trip = null,
-            transitAlerts = emptyList(),
-            transitAlertsLoading = true,
-            journeyMatchCandidates = emptyList(),
-            firstSavedId = "",
-            lastSavedId = "",
-            segmentIds = emptyList(),
-            selectedSegmentIndex = 0,
-            isEditingTimes = false,
-            customBindimTime = "",
-            customIndimTime = "",
-            status = S.statusFetchingPlan(lang())
-        )
+        _uiState.value = stopSelectionUseCase.selectDepartureStart(_uiState.value, dep, lang())
         viewModelScope.launch {
             try {
-                val s = _uiState.value
-                if (s.fromId.isBlank() || s.toId.isBlank()) throw IllegalStateException(S.errorSelectFromList(lang()))
-
-                val input = TripPlanningUseCase.PlanInput(
-                    dep = dep,
-                    fromId = s.fromId,
-                    toId = s.toId,
-                    from = s.from,
-                    to = s.to,
-                    date = s.date
-                )
-                // UseCase içinde tüm hesaplama ve API çağrıları gerçekleşir
-                val finalTrip = tripPlanner.plan(input)
-
+                val result = stopSelectionUseCase.selectDeparture(dep, _uiState.value, tripPlanner, lang())
                 _uiState.value = _uiState.value.copy(
-                    trip = finalTrip,
-                    status = S.statusPlanReady(finalTrip.segments.size, lang())
+                    trip = result.trip,
+                    persistentStops = result.persistentStops,
+                    status = S.statusPlanReady(result.trip.segments.size, lang())
                 )
                 loadTransitAlerts(dep.line)
-
-                // Segment detaylarını arka planda tamamla (iptal edilebilir)
-                val expectedSegmentCount = finalTrip.segments.size
-                tripDetailJob = viewModelScope.launch {
-                    try {
-                        val detailsList = finalTrip.segments.map { seg ->
-                            ensureActive()
-                            if (seg.stopNames.isNotEmpty()) {
-                                RmvApiService.SegmentDetails(
-                                    distanceKm = seg.distanceKm,
-                                    stopCount = seg.stopCount,
-                                    stopNames = seg.stopNames,
-                                    stopTimes = seg.stopTimes,
-                                    fromIdx = seg.stopFromIdx,
-                                    toIdx = seg.stopToIdx,
-                                    toStopLat = seg.toStopLat,
-                                    toStopLng = seg.toStopLng
-                                )
-                            } else {
-                                runCatching { rmvTripRepository.fetchSegmentDetails(seg) }
-                                    .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
-                            }
-                        }
-                        ensureActive()
-                        val current = _uiState.value
-                        val currentTrip = current.trip ?: return@launch
-                        if (currentTrip.segments.size != expectedSegmentCount) return@launch
-                        val updatedSegs = currentTrip.segments.mapIndexed { idx, seg ->
-                            val d = detailsList[idx]
-                            applySegmentDetails(seg, d)
-                        }
-                        _uiState.value = current.copy(
-                            trip = currentTrip.copy(segments = updatedSegs),
-                            persistentStops = updatedSegs
-                        )
-                    } catch (_: Exception) { }
-                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     transitAlertsLoading = false,
@@ -732,37 +632,22 @@ class RmvLogViewModel(
         }
     }
 
+
     fun startJourneyMatch() {
-        val s = _uiState.value
-        if (!hasLocationPermission()) {
-            _uiState.value = s.copy(journeyMatchMessage = "Konum izni gerekli", status = "Konum izni gerekli")
-            return
+        val result = journeyMatchUseCase.matchJourney(_uiState.value, hasLocationPermission())
+        _uiState.value = result.state
+        if (result.shouldStartService) {
+            JourneyMatchForegroundService.start(ctx(), result.apiDate, result.searchTime)
         }
-        val apiDate = runCatching { RmvApiService.convertToApiDate(s.date) }.getOrDefault("")
-        val searchTime = if (s.time.isNotBlank()) RmvApiService.formatTimeDigits(s.time)
-            else LocalTime.now().withSecond(0).withNano(0).format(DateTimeFormatter.ofPattern("HH:mm"))
-        _uiState.value = s.copy(
-            journeyMatchLoading = true,
-            journeyMatchCandidates = emptyList(),
-            journeyMatchMessage = "GPS izi aliniyor...",
-            status = "GPS izi aliniyor..."
-        )
-        JourneyMatchForegroundService.start(ctx(), apiDate, searchTime)
     }
 
+
     fun confirmJourneyMatch(candidate: JourneyMatchCandidate) {
-        val matchingDeparture = _uiState.value.departures.firstOrNull {
-            RmvApiService.normalizeLineForDisplay(it.line) == RmvApiService.normalizeLineForDisplay(candidate.line)
-        }
-        _uiState.value = _uiState.value.copy(
-            journeyMatchCandidates = emptyList(),
-            journeyMatchMessage = "GPS eslesmesi onaylandi: ${candidate.line}",
-            status = "GPS eslesmesi onaylandi: ${candidate.line}"
-        )
-        if (matchingDeparture != null) {
-            selectDeparture(matchingDeparture)
-        }
+        val result = journeyMatchUseCase.selectJourneyMatch(_uiState.value, candidate)
+        _uiState.value = result.state
+        result.departureIndex?.let { selectDeparture(_uiState.value.departures[it]) }
     }
+
 
     fun saveToSheets() {
         viewModelScope.launch {
@@ -770,110 +655,44 @@ class RmvLogViewModel(
                 val s = _uiState.value
                 val tr = s.trip ?: throw IllegalStateException(S.errorGetPlanFirst(lang()))
                 _uiState.value = s.copy(status = S.statusSavingSheets(lang()))
-
-                if (s.segmentIds.isEmpty()) {
-                    val ids = tr.segments.mapIndexed { idx, seg ->
-                        val id = UUID.randomUUID().toString()
-                        val hava = s.segmentHavaDurumu[idx] ?: "Bilinmiyor"
-                        val otur = s.segmentOturabildim[idx] ?: false
-                        val bilet = s.segmentBiletKontrolu[idx] ?: false
-                        val not = s.segmentNote[idx] ?: ""
-                        val ok = transitRecordRepository.saveSegment(
-                            id, s.date, seg, hava, otur, bilet, not,
-                            profileId = s.segmentProfileId[idx].takeIf { !it.isNullOrBlank() },
-                            seatmateNote = s.segmentSeatmateNote[idx].takeIf { !it.isNullOrBlank() }
-                        )
-                        if (!ok) throw Exception(S.errorSaveFailed(lang()))
-                        if (idx == s.selectedSegmentIndex && (s.customBindimTime.isNotBlank() || s.customIndimTime.isNotBlank())) {
-                            transitRecordRepository.updateActual(
-                                id,
-                                s.customBindimTime.takeIf { it.isNotBlank() }?.let { RmvApiService.formatTimeDigits(it) },
-                                s.customIndimTime.takeIf { it.isNotBlank() }?.let { RmvApiService.formatTimeDigits(it) }
-                            )
-                        }
-                        id
-                    }
-                    val firstId = ids.firstOrNull().orEmpty()
-                    val lastId = ids.lastOrNull().orEmpty()
-                    prefs.edit().putString("first_id", firstId).putString("last_id", lastId).apply()
-                    _uiState.value = _uiState.value.copy(firstSavedId = firstId, lastSavedId = lastId, segmentIds = ids, status = S.statusSaved(lang()))
+                val result = recordSaveUseCase.saveRmvRecord(s) { id, profileId, seatmateNote ->
+                    tripProfileLinkRepository.updateTripProfileLink(id, profileId, seatmateNote)
+                }
+                if (result.segmentIds != null) {
+                    prefs.edit().putString("first_id", result.firstId.orEmpty()).putString("last_id", result.lastId.orEmpty()).apply()
+                    _uiState.value = _uiState.value.copy(firstSavedId = result.firstId.orEmpty(), lastSavedId = result.lastId.orEmpty(), segmentIds = result.segmentIds, status = S.statusSaved(lang()))
                 } else {
-                    s.segmentIds.forEachIndexed { idx, id ->
-                        val seg = tr.segments.getOrNull(idx) ?: return@forEachIndexed
-                        val hava = s.segmentHavaDurumu[idx] ?: "Bilinmiyor"
-                        val otur = s.segmentOturabildim[idx] ?: false
-                        val bilet = s.segmentBiletKontrolu[idx] ?: false
-                        val not = s.segmentNote[idx] ?: ""
-                        val planlananSure = TransitRecordCalculations.computeYolSuresi(
-                            seg.dep.ifBlank { null }, seg.arr.ifBlank { null }
-                        )
-                        val ok = transitRecordRepository.updateExistingRecord(id, mapOf(
-                            "planlananBinis" to seg.dep,
-                            "planlananInis" to seg.arr,
-                            "planlananYolSuresi" to planlananSure,
-                            "havaDurumu" to hava,
-                            "oturabildimMi" to SeatingStatus.fromBoolean(otur).key,
-                            "biletKontrolü" to TicketStatus.fromBoolean(bilet).key,
-                            "not" to not
-                        ))
-                        if (!ok) throw Exception(S.errorSaveFailed(lang()))
-
-                        tripProfileLinkRepository.updateTripProfileLink(
-                            id,
-                            s.segmentProfileId[idx].takeIf { !it.isNullOrBlank() },
-                            s.segmentSeatmateNote[idx].takeIf { !it.isNullOrBlank() }
-                        )
-                    }
                     _uiState.value = _uiState.value.copy(status = S.statusSaved(lang()))
                 }
-
-                // ── Bildirim başlat ──────────────────────────────────────────
-                startTransitNotification(tr)
-
+                if (result.shouldStartNotification) startTransitNotification(tr)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
         }
     }
+
 
     fun recordBindim() {
         viewModelScope.launch {
             try {
-                val s = _uiState.value
-                val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
-                if (segId.isBlank()) throw IllegalStateException(S.errorGetPlanFirst(lang()))
-                val t = if (s.customBindimTime.isNotBlank()) RmvApiService.formatTimeDigits(s.customBindimTime)
-                    else LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = transitRecordRepository.updateActual(segId, t, null)
-                _uiState.value = _uiState.value.copy(
-                    status = if (ok) S.statusBoarded(t, lang())
-                             else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=$segId)"
-                )
-                // ── Bildirimi güncelle (Bindim butonunu kaldır + hatırlatma kur) ──
-                if (ok) updateTransitNotificationBoarding(segId)
+                _uiState.value = _uiState.value.copy(status = S.statusSaving(lang()))
+                val result = recordSaveUseCase.recordBindim(_uiState.value)
+                _uiState.value = _uiState.value.copy(status = if (result.ok) S.statusBoarded(result.time, lang()) else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=${result.id})")
+                if (result.ok) updateTransitNotificationBoarding(result.id)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
         }
     }
 
+
     fun recordIndim() {
         viewModelScope.launch {
             try {
-                val s = _uiState.value
-                val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
-                if (segId.isBlank()) throw IllegalStateException(S.errorGetPlanFirst(lang()))
-                val t = if (s.customIndimTime.isNotBlank()) RmvApiService.formatTimeDigits(s.customIndimTime)
-                    else LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = transitRecordRepository.updateActual(segId, null, t)
-                _uiState.value = _uiState.value.copy(
-                    status = if (ok) S.statusAlighted(t, lang())
-                             else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=$segId)"
-                )
-                // ── Bildirim: durdur veya sonraki segmente geç ──
-                if (ok) handleTransitNotificationAfterIndim()
+                _uiState.value = _uiState.value.copy(status = S.statusSaving(lang()))
+                val result = recordSaveUseCase.recordIndim(_uiState.value)
+                _uiState.value = _uiState.value.copy(status = if (result.ok) S.statusAlighted(result.time, lang()) else "${S.errorPrefix(lang())}: Kayıt bulunamadı (id=${result.id})")
+                if (result.ok) handleTransitNotificationAfterIndim()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
@@ -882,6 +701,7 @@ class RmvLogViewModel(
 
     // ── Kayıt geri yükleme ───────────────────────────────────────────────────
 
+
     fun undoBindim() {
         viewModelScope.launch {
             try {
@@ -889,11 +709,8 @@ class RmvLogViewModel(
                 val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
                 if (segId.isBlank()) return@launch
                 _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = transitRecordRepository.clearActual(segId, clearDep = true, clearArr = false)
-                _uiState.value = _uiState.value.copy(
-                    customBindimTime = "",
-                    status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=$segId)"
-                )
+                val ok = recordSaveUseCase.clearRecord(segId, clearDep = true, clearArr = false)
+                _uiState.value = _uiState.value.copy(customBindimTime = "", status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=${segId})")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -901,6 +718,7 @@ class RmvLogViewModel(
             }
         }
     }
+
 
     fun undoIndim() {
         viewModelScope.launch {
@@ -909,11 +727,8 @@ class RmvLogViewModel(
                 val segId = s.segmentIds.getOrElse(s.selectedSegmentIndex) { "" }
                 if (segId.isBlank()) return@launch
                 _uiState.value = s.copy(status = S.statusSaving(lang()))
-                val ok = transitRecordRepository.clearActual(segId, clearDep = false, clearArr = true)
-                _uiState.value = _uiState.value.copy(
-                    customIndimTime = "",
-                    status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=$segId)"
-                )
+                val ok = recordSaveUseCase.clearRecord(segId, clearDep = false, clearArr = true)
+                _uiState.value = _uiState.value.copy(customIndimTime = "", status = if (ok) S.statusUndoDone(lang()) else "${S.errorPrefix(lang())}: Kayit bulunamadi (id=${segId})")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -922,101 +737,14 @@ class RmvLogViewModel(
         }
     }
 
+
     fun restoreRecord(record: Map<String, Any>) {
         clearForm()
         val docId = record["firestoreDocId"]?.toString() ?: ""
         val customId = record["id"]?.toString() ?: docId
-        val tarih = record["tarih"]?.toString() ?: ""
-        val tur = record["tur"]?.toString() ?: ""
-        val hat = record["hat"]?.toString() ?: ""
-        val yon = record["yon"]?.toString() ?: ""
-        val binisDuragi = record["binisDuragi"]?.toString() ?: ""
-        val inisDuragi = record["inisDuragi"]?.toString() ?: ""
-        val planlananBinis = record["planlananBinis"]?.toString() ?: ""
-        val planlananInis = record["planlananInis"]?.toString() ?: ""
-        val gercekBinis = record["gercekBinis"]?.toString() ?: ""
-        val gercekInis = record["gercekInis"]?.toString() ?: ""
-        val havaDurumu = record["havaDurumu"]?.toString() ?: "Bilinmiyor"
-        val oturabildim = record["oturabildimMi"]?.toString() == SeatingStatus.YES.key
-        val biletKontrolu = record["biletKontrolü"]?.toString() == TicketStatus.HAPPENED.key
-        val not = record["not"]?.toString() ?: ""
-        val mesafe = record["mesafe"]?.toString() ?: ""
-        val durakSayisi = record["durakSayisi"]?.toString() ?: ""
-
-        val distanceKm = TransitRecordCalculations.orsDistanceKm(record) ?: TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
-        val stopCount = durakSayisi.toIntOrNull() ?: 0
-        val manualDistance = run {
-            val orsRaw = record[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM]?.toString()?.trim().orEmpty()
-            val orsValue = orsRaw.replace(",", ".").toDoubleOrNull()
-            if (orsValue != null && orsValue > 0.0) {
-                orsRaw
-            } else {
-                mesafe.filter { it.isDigit() || it == '.' || it == ',' }
-            }
-        }
-        val manualStopCount = durakSayisi.trim().takeIf { it.toIntOrNull() != null }.orEmpty()
-
-        val segment = com.example.toplutasima.model.Segment(
-            typeTr = tur, line = hat, direction = yon,
-            fromStop = binisDuragi, toStop = inisDuragi,
-            dep = planlananBinis, arr = planlananInis,
-            distanceKm = distanceKm,
-            stopCount = stopCount,
-            journeyRef = record[TransitRecordCalculations.FIELD_JOURNEY_REF]?.toString().orEmpty(),
-            fromStopId = record[TransitRecordCalculations.FIELD_FROM_STOP_ID]?.toString().orEmpty(),
-            toStopId = record[TransitRecordCalculations.FIELD_TO_STOP_ID]?.toString().orEmpty()
-        )
-
-        val trip = com.example.toplutasima.model.TripResult(
-            segments = listOf(segment),
-            overallDep = planlananBinis,
-            overallArr = planlananInis,
-            durationMin = try {
-                val d = java.time.LocalTime.parse(planlananBinis.take(5))
-                val a = java.time.LocalTime.parse(planlananInis.take(5))
-                var diff = java.time.Duration.between(d, a).toMinutes().toInt()
-                if (diff < 0) diff += 24 * 60
-                diff
-            } catch (_: Exception) { 0 }
-        )
-
-        _uiState.value = _uiState.value.copy(
-            date = tarih,
-            from = binisDuragi,
-            to = inisDuragi,
-            trip = trip,
-            segmentIds = if (customId.isNotBlank()) listOf(customId) else emptyList(),
-            firstSavedId = customId,
-            lastSavedId = customId,
-            selectedSegmentIndex = 0,
-            customBindimTime = if (gercekBinis.isNotBlank()) TransitTimeUtils.toDigits(gercekBinis) else "",
-            customIndimTime = if (gercekInis.isNotBlank()) TransitTimeUtils.toDigits(gercekInis) else "",
-            segmentHavaDurumu = mapOf(0 to havaDurumu),
-            segmentOturabildim = mapOf(0 to oturabildim),
-            segmentBiletKontrolu = mapOf(0 to biletKontrolu),
-            segmentNote = mapOf(0 to not),
-            mode = LogMode.MANUAL,
-            manual = ManualEntryState(
-                typeTr = tur,
-                line = hat,
-                direction = yon,
-                boardingStop = binisDuragi,
-                alightingStop = inisDuragi,
-                plannedDep = toRaw(planlananBinis),
-                actualDep = toRaw(gercekBinis),
-                plannedArr = toRaw(planlananInis),
-                actualArr = toRaw(gercekInis),
-                distance = manualDistance,
-                stopCount = manualStopCount,
-                weather = record["havaDurumu"]?.toString().orEmpty(),
-                oturabildim = oturabildim,
-                biletKontrolu = biletKontrolu,
-                note = not
-            ),
-            status = S.statusReady(lang())
-        )
-        prefs.edit().putString("first_id", customId).putString("last_id", customId).apply()
-
+        val restored = recordSaveUseCase.restoreRecord(_uiState.value, record) { }
+        _uiState.value = restored.state.copy(status = S.statusReady(lang()))
+        prefs.edit().putString("first_id", restored.firstId).putString("last_id", restored.lastId).apply()
         viewModelScope.launch {
             try {
                 val linkDao = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication()).tripProfileLinkDao()
@@ -1024,19 +752,7 @@ class RmvLogViewModel(
                 val link = links.firstOrNull()
                 if (link != null) {
                     val current = _uiState.value
-                    if (current.isManualMode) {
-                        _uiState.value = current.copy(
-                            manual = current.manual.copy(
-                                profileId = link.profileId,
-                                seatmateNote = link.seatmateNote.orEmpty()
-                            )
-                        )
-                    } else {
-                        _uiState.value = current.copy(
-                            segmentProfileId = current.segmentProfileId + (0 to link.profileId),
-                            segmentSeatmateNote = current.segmentSeatmateNote + (0 to link.seatmateNote.orEmpty())
-                        )
-                    }
+                    _uiState.value = current.copy(manual = current.manual.copy(profileId = link.profileId, seatmateNote = link.seatmateNote.orEmpty()))
                 }
             } catch (_: Exception) {}
         }
@@ -1106,105 +822,22 @@ class RmvLogViewModel(
      * Segment'te stopNames varsa direkt dialog açar.
      * Yoksa (geri yüklenmiş kayıt), API'den durak listesini çekip sonra açar.
      */
+
     fun fetchStopsForChangeStop(segIdx: Int) {
         val s = _uiState.value
         val seg = s.trip?.segments?.getOrNull(segIdx) ?: return
-
-        // Durak listesi zaten varsa direkt dialog aç
         if (seg.stopNames.size > 1) {
             showChangeStopDialog(segIdx, "")
             return
         }
-
-        // stopNames yok → API'den çek
-        _uiState.value = s.copy(
-            isLoadingStopsForEdit = true,
-            status = S.loadingStopList(lang())
-        )
+        _uiState.value = s.copy(isLoadingStopsForEdit = true, status = S.loadingStopList(lang()))
         viewModelScope.launch {
             try {
-                // 1. Biniş ve iniş durak ID'lerini ara
-                val fromOpts = rmvTripRepository.searchStops(seg.fromStop.trim(), 3)
-                val fromId = fromOpts.firstOrNull()?.id
-                    ?: throw Exception(S.errorStopNotFound(lang()))
-
-                val toOpts = rmvTripRepository.searchStops(seg.toStop.trim(), 3)
-                val toId = toOpts.firstOrNull()?.id
-                    ?: throw Exception(S.errorStopNotFound(lang()))
-
-                // 2. Kalkış listesi çek (kayıtlı planlanan saati kullan)
-                val apiDate = RmvApiService.convertToApiDate(s.date)
-                val searchTime = seg.dep.take(5).ifBlank {
-                    java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
-                }
-                val deps = rmvTripRepository.fetchDepartures(fromId, toId, apiDate, searchTime)
-
-                // 3. Hat numarasına göre en uygun kalkışı bul
-                val matchingDep = deps.firstOrNull { dep ->
-                    dep.line.contains(seg.line, ignoreCase = true) ||
-                    seg.line.contains(dep.line, ignoreCase = true)
-                } ?: deps.firstOrNull()
-                    ?: throw Exception(S.statusNoDepartures(lang()))
-
-                // 4. Seyahat planını çek
-                val input = TripPlanningUseCase.PlanInput(
-                    dep = matchingDep,
-                    fromId = fromId,
-                    toId = toId,
-                    from = seg.fromStop,
-                    to = seg.toStop,
-                    date = s.date
-                )
-                val newTrip = tripPlanner.plan(input)
-                val newSeg = newTrip.segments.firstOrNull()
-                    ?: throw Exception("Segment bulunamadı")
-
-                // 5. Durak detaylarını (stopNames, stopTimes, journeyRef) çek
-                val details = runCatching { rmvTripRepository.fetchSegmentDetails(newSeg) }
-                    .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
-
-                val stopNames = details.stopNames.ifEmpty { newSeg.stopNames }
-                val stopTimes = details.stopTimes.ifEmpty { newSeg.stopTimes }
-
-                if (stopNames.size <= 1) throw Exception(S.errorStopNotFound(lang()))
-
-                // 6. Mevcut segmenti sadece durak meta verisiyle güncelle
-                //    (orijinal dep/arr/fromStop/toStop korunur)
-                val current = _uiState.value
-                val currentTrip = current.trip ?: return@launch
-                val currentSeg = currentTrip.segments.getOrNull(segIdx) ?: return@launch
-
-                val detailRangeResolved = details.fromIdx >= 0 && details.toIdx >= 0
-                val updatedSeg = currentSeg.copy(
-                    stopNames   = stopNames,
-                    stopTimes   = stopTimes,
-                    journeyRef  = newSeg.journeyRef,
-                    stopFromIdx = if (detailRangeResolved) details.fromIdx else newSeg.stopFromIdx,
-                    stopToIdx   = if (detailRangeResolved) details.toIdx else newSeg.stopToIdx,
-                    distanceKm  = if (details.distanceKm > 0) details.distanceKm else newSeg.distanceKm,
-                    stopCount   = if (details.stopCount > 0) details.stopCount else newSeg.stopCount,
-                    toStopLat   = if (!details.toStopLat.isNaN()) details.toStopLat else newSeg.toStopLat,
-                    toStopLng   = if (!details.toStopLng.isNaN()) details.toStopLng else newSeg.toStopLng
-                )
-                val newSegs = currentTrip.segments.toMutableList()
-                newSegs[segIdx] = updatedSeg
-
-                _uiState.value = current.copy(
-                    trip = currentTrip.copy(segments = newSegs),
-                    fromId = fromId,
-                    toId   = toId,
-                    isLoadingStopsForEdit = false,
-                    status = S.statusReady(lang())
-                )
-
-                // 7. Artık dialog açılabilir
-                showChangeStopDialog(segIdx, "")
-
+                val result = stopSelectionUseCase.fetchStopsForChangeStop(s, segIdx, tripPlanner, lang())
+                _uiState.value = result.state
+                if (result.openDialog) showChangeStopDialog(segIdx, "")
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoadingStopsForEdit = false,
-                    status = "${S.errorPrefix(lang())}: ${e.message}"
-                )
+                _uiState.value = _uiState.value.copy(isLoadingStopsForEdit = false, status = "${S.errorPrefix(lang())}: ${e.message}")
             }
         }
     }
@@ -1213,104 +846,14 @@ class RmvLogViewModel(
         _uiState.value = _uiState.value.copy(changeStopSelectedIdx = stopIdx)
     }
 
+
     fun confirmChangeStop() {
         viewModelScope.launch {
             try {
                 val s = _uiState.value
-                val segIdx = s.changeStopSegIdx
-                val trip = s.trip ?: return@launch
-                if (segIdx < 0 || segIdx >= trip.segments.size) return@launch
-                val seg = trip.segments[segIdx]
-                val selectedIdx = s.changeStopSelectedIdx
-                // Manuel modda (stopNames boş) selectedIdx=-1 geçerli; liste modunda sınır kontrolü yap
-                if (seg.stopNames.isNotEmpty() && (selectedIdx < 0 || selectedIdx >= seg.stopNames.size)) return@launch
-
-                val newStopName = if (seg.stopNames.isNotEmpty()) {
-                    // Liste modunda seçilen durak
-                    seg.stopNames[selectedIdx]
-                } else {
-                    // Manuel giriş modu
-                    val manualText = s.changeStopManualText.trim()
-                    if (manualText.isBlank()) return@launch
-                    manualText
-                }
-                val newTime = if (seg.stopNames.isNotEmpty()) seg.stopTimes.getOrElse(selectedIdx) { "" } else ""
-                val segId = s.segmentIds.getOrElse(segIdx) { "" }
-                if (segId.isBlank()) return@launch
-
                 _uiState.value = s.copy(status = S.savingStopChange(lang()))
-
-                val isBinis = s.changeStopMode == "binis"
-
-                // stopNames artık tüm hattı kapsıyor; seg.stopFromIdx / stopToIdx
-                // mevcut biniş-iniş pozisyonlarını tutuyor.
-                val currentFromIdx = if (isBinis) maxOf(0, selectedIdx) else seg.stopFromIdx
-                val currentToIdx   = if (!isBinis) maxOf(0, selectedIdx) else
-                    seg.stopToIdx.takeIf { it >= 0 } ?: maxOf(0, seg.stopNames.size - 1)
-                val newStopCount = kotlin.math.abs(currentToIdx - currentFromIdx)
-
-                var newDistanceKm = seg.distanceKm
-                if (seg.journeyRef.isNotBlank()) {
-                    val newFrom = if (isBinis) newStopName else seg.fromStop
-                    val newTo   = if (!isBinis) newStopName else seg.toStop
-                    try {
-                        val journeySegment = withContext(Dispatchers.IO) {
-                            RmvApiService.fetchJourneyStops(seg.journeyRef, newFrom, newTo)
-                        }
-                        // fetchJourneyStops coords = fromIdx→toIdx arası, mesafe için doğru
-                        if (journeySegment.coords.size >= 2) {
-                            newDistanceKm = withContext(Dispatchers.IO) {
-                                if (seg.typeTr == VehicleType.BUS.key) RmvApiService.calculateDistanceORS(journeySegment.coords)
-                                else RmvApiService.calculateDistanceRail(journeySegment.coords, journeySegment.allStopCoords, journeySegment.fromIdx, journeySegment.toIdx)
-                            }
-                        }
-                    } catch (_: Exception) { }
-                }
-
-                val newMesafe = if (newDistanceKm > 0) String.format(Locale.US, "%.2f km", newDistanceKm) else ""
-                val newDurakSayisi = if (newStopCount > 0) newStopCount.toString() else ""
-
-                val ok = transitRecordRepository.updateStops(
-                    id = segId,
-                    binisDuragi = if (isBinis) newStopName else null,
-                    binisTime   = if (isBinis) newTime else null,
-                    inisDuragi  = if (!isBinis) newStopName else null,
-                    inisTime    = if (!isBinis) newTime else null,
-                    mesafe      = newMesafe,
-                    durakSayisi = newDurakSayisi
-                )
-
-                if (ok) {
-                    val updatedSeg = if (isBinis)
-                        seg.copy(
-                            fromStop = newStopName, dep = newTime.ifBlank { seg.dep },
-                            distanceKm = newDistanceKm, stopCount = newStopCount,
-                            fromStopId = "",
-                            stopFromIdx = currentFromIdx
-                        )
-                    else
-                        seg.copy(
-                            toStop = newStopName, arr = newTime.ifBlank { seg.arr },
-                            distanceKm = newDistanceKm, stopCount = newStopCount,
-                            toStopId = "",
-                            stopToIdx = currentToIdx
-                        )
-                    val newSegs = trip.segments.toMutableList()
-                    newSegs[segIdx] = updatedSeg
-                    val newTrip = trip.copy(
-                        segments = newSegs,
-                        overallDep = newSegs.first().dep,
-                        overallArr = newSegs.last().arr
-                    )
-                    _uiState.value = _uiState.value.copy(
-                        trip = newTrip,
-                        changeStopSegIdx = -1,
-                        changeStopMode = "",
-                        changeStopSelectedIdx = -1,
-                        status = S.stopUpdated(lang())
-                    )
-                } else {
-                    _uiState.value = _uiState.value.copy(status = S.stopUpdateFailed(lang()))
+                _uiState.value = stopSelectionUseCase.confirmChangeStop(s, lang()) { id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi ->
+                    transitRecordRepository.updateStops(id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi)
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
@@ -1332,35 +875,49 @@ class RmvLogViewModel(
         )
     }
 
+
     fun setManualTypeMenuOpen(open: Boolean) {
         _uiState.value = _uiState.value.copy(manual = _uiState.value.manual.copy(typeMenuOpen = open))
     }
+
 
     fun setManualWeatherMenuOpen(open: Boolean) {
         _uiState.value = _uiState.value.copy(manual = _uiState.value.manual.copy(weatherMenuOpen = open))
     }
 
+
     fun updateManualField(field: String, value: String) {
-        val m = _uiState.value.manual
-        _uiState.value = _uiState.value.copy(manual = when (field) {
-            "type"         -> m.copy(typeTr = value, typeMenuOpen = false)
-            "line"         -> m.copy(line = value)
-            "direction"    -> m.copy(direction = value)
-            "boardingStop" -> m.copy(boardingStop = value)
-            "alightingStop"-> m.copy(alightingStop = value)
-            "plannedDep"   -> m.copy(plannedDep = value.filter { it.isDigit() }.take(4))
-            "actualDep"    -> m.copy(actualDep = value.filter { it.isDigit() }.take(4))
-            "plannedArr"   -> m.copy(plannedArr = value.filter { it.isDigit() }.take(4))
-            "actualArr"    -> m.copy(actualArr = value.filter { it.isDigit() }.take(4))
-            "distance"     -> m.copy(distance = value)
-            "stopCount"    -> m.copy(stopCount = value)
-            "weather"      -> m.copy(weather = value, weatherMenuOpen = false)
-            "note"         -> m.copy(note = value)
-            "profileId"    -> m.copy(profileId = value)
-            "seatmateNote" -> m.copy(seatmateNote = value)
-            else           -> m
-        })
+        _uiState.value = _uiState.value.copy(
+            manual = manualEntryUseCase.updateManualField(_uiState.value.manual, field, value)
+        )
     }
+
+    fun updateManualLine(value: String) {
+        updateManualField("line", value)
+    }
+
+    fun updateManualVehicle(value: String) {
+        updateManualField("type", value)
+    }
+
+    fun updateManualDelay(value: String) {
+        _uiState.value = _uiState.value.copy(
+            manual = manualEntryUseCase.updateManualDelay(_uiState.value.manual, value)
+        )
+    }
+
+    fun updateManualDuration(value: String) {
+        _uiState.value = _uiState.value.copy(
+            manual = manualEntryUseCase.updateManualDuration(_uiState.value.manual, value)
+        )
+    }
+
+    fun validateManualForm(): Boolean = manualEntryUseCase.validateManualForm(_uiState.value.manual)
+
+    fun computeManualDuration(): Int = manualEntryUseCase.computeManualDuration(
+        _uiState.value.manual.plannedDep,
+        _uiState.value.manual.plannedArr
+    )
 
     fun loadActiveProfiles() {
         viewModelScope.launch {
@@ -1400,102 +957,29 @@ class RmvLogViewModel(
         }
     }
 
+
     fun updateManualOtur(value: Boolean) {
         _uiState.value = _uiState.value.copy(manual = _uiState.value.manual.copy(oturabildim = value))
     }
+
 
     fun updateManualBilet(value: Boolean) {
         _uiState.value = _uiState.value.copy(manual = _uiState.value.manual.copy(biletKontrolu = value))
     }
 
+
     fun saveManualRecord() {
         viewModelScope.launch {
             try {
                 val s = _uiState.value
-                val m = s.manual
                 _uiState.value = s.copy(status = S.statusSavingSheets(lang()))
-
-                if (m.boardingStop.isBlank() || m.alightingStop.isBlank() || m.line.isBlank()) {
-                    throw IllegalStateException("Hat, biniş ve iniş durakları zorunludur.")
+                val result = recordSaveUseCase.saveManualRecord(s) { id, profileId, seatmateNote ->
+                    tripProfileLinkRepository.updateTripProfileLink(id, profileId, seatmateNote)
                 }
-
-                val distanceKm = m.distance.replace(",", ".").toDoubleOrNull() ?: 0.0
-                val stCount = m.stopCount.toIntOrNull() ?: 0
-
-                val segment = com.example.toplutasima.model.Segment(
-                    typeTr = m.typeTr, line = m.line, direction = m.direction,
-                    fromStop = m.boardingStop, toStop = m.alightingStop,
-                    dep = TransitTimeUtils.formatTime(m.plannedDep), arr = TransitTimeUtils.formatTime(m.plannedArr),
-                    distanceKm = distanceKm, stopCount = stCount
-                )
-
-                if (s.segmentIds.isEmpty()) {
-                    val newId = UUID.randomUUID().toString()
-                    val ok = transitRecordRepository.saveSegment(
-                        newId, s.date, segment, m.weather, m.oturabildim, m.biletKontrolu, m.note,
-                        profileId = m.profileId.takeIf { it.isNotBlank() },
-                        seatmateNote = m.seatmateNote.takeIf { it.isNotBlank() }
-                    )
-
-                    if (ok) {
-                        val actDep = TransitTimeUtils.formatTime(m.actualDep)
-                        val actArr = TransitTimeUtils.formatTime(m.actualArr)
-                        if (actDep.isNotBlank() || actArr.isNotBlank()) {
-                            transitRecordRepository.updateActual(newId, actDep.ifBlank { null }, actArr.ifBlank { null })
-                        }
-                    }
-                    if (!ok) throw Exception(S.errorSaveFailed(lang()))
-                    prefs.edit().putString("first_id", newId).putString("last_id", newId).apply()
-                    _uiState.value = _uiState.value.copy(firstSavedId = newId, lastSavedId = newId, segmentIds = listOf(newId), status = S.statusSaved(lang()))
+                if (result.segmentIds != null) {
+                    prefs.edit().putString("first_id", result.firstId.orEmpty()).putString("last_id", result.lastId.orEmpty()).apply()
+                    _uiState.value = _uiState.value.copy(firstSavedId = result.firstId.orEmpty(), lastSavedId = result.lastId.orEmpty(), segmentIds = result.segmentIds, status = S.statusSaved(lang()))
                 } else {
-                    val docId = s.segmentIds.first()
-                    val actDep = TransitTimeUtils.formatTime(m.actualDep)
-                    val actArr = TransitTimeUtils.formatTime(m.actualArr)
-
-                    // Bug 2 fix: türetilen alanları (gecikme, süreler) client-side hesapla ve
-                    // updateMap'e ekle. updateExistingRecord ham alan yazdığından bunları
-                    // yeniden hesaplamaz; burada açıkça eklemek gerekir.
-                    val gecikme = TransitRecordCalculations.computeGecikme(
-                        segment.dep.ifBlank { null }, actDep.ifBlank { null }
-                    )
-                    val planlananSure = TransitRecordCalculations.computeYolSuresi(
-                        segment.dep.ifBlank { null }, segment.arr.ifBlank { null }
-                    )
-                    val gercekSure = TransitRecordCalculations.computeYolSuresi(
-                        actDep.ifBlank { null }, actArr.ifBlank { null }
-                    )
-
-                    val mesafeText = if (distanceKm > 0) String.format(Locale.US, "%.2f km", distanceKm) else "Bilinmiyor"
-                    val updateMap = linkedMapOf<String, Any>(
-                        "tur" to m.typeTr,
-                        "hat" to m.line,
-                        "yon" to m.direction,
-                        "binisDuragi" to m.boardingStop,
-                        "inisDuragi" to m.alightingStop,
-                        "planlananBinis" to segment.dep,
-                        "planlananInis" to segment.arr,
-                        "gercekBinis" to actDep,
-                        "gercekInis" to actArr,
-                        "gecikme" to gecikme,
-                        "planlananYolSuresi" to planlananSure,
-                        "gercekYolSuresi" to gercekSure,
-                        "mesafe" to mesafeText,
-                        "durakSayisi" to if (stCount > 0) stCount.toString() else "Bilinmiyor",
-                        "havaDurumu" to m.weather,
-                        "oturabildimMi" to SeatingStatus.fromBoolean(m.oturabildim).key,
-                        "biletKontrolü" to TicketStatus.fromBoolean(m.biletKontrolu).key,
-                        "not" to m.note
-                    )
-                    updateMap.putAll(TransitRecordCalculations.calculatedDistanceFields(distanceKm, resetRmvDistance = true))
-                    val ok = transitRecordRepository.updateExistingRecord(docId, updateMap)
-                    if (!ok) throw Exception(S.errorSaveFailed(lang()))
-
-                    tripProfileLinkRepository.updateTripProfileLink(
-                        docId,
-                        m.profileId.takeIf { it.isNotBlank() },
-                        m.seatmateNote.takeIf { it.isNotBlank() }
-                    )
-
                     _uiState.value = _uiState.value.copy(status = S.statusSaved(lang()))
                 }
             } catch (e: Exception) {
