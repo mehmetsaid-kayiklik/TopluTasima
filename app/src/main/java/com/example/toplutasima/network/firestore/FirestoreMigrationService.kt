@@ -1,21 +1,13 @@
 package com.example.toplutasima.network.firestore
 
 import android.util.Log
-import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
-class FirestoreMigrationService(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val collectionName: String = "trips"
-) {
-    private fun collection() = db
-        .collection("users")
-        .document(AuthService.uid)
-        .collection(collectionName)
+class FirestoreMigrationService {
+    private fun collection() = FirestoreHelper.tripsCollection()
 
     suspend fun migrateStripSeconds(): Int {
         val timeFields = listOf("planlananBinis", "gercekBinis", "planlananInis", "gercekInis")
@@ -133,10 +125,11 @@ class FirestoreMigrationService(
 
             if (updates.isNotEmpty()) {
                 updates["updatedAt"] = System.currentTimeMillis()
-                try {
+                FirestoreHelper.safeFirestore {
                     doc.reference.update(updates).await()
+                }.onSuccess {
                     updated++
-                } catch (e: Exception) {
+                }.onFailure { e ->
                     Log.e(TAG, "migrateDerivedFields failed for doc: ${doc.id}", e)
                 }
             }
@@ -160,7 +153,7 @@ class FirestoreMigrationService(
             if (snapshot.isEmpty) break
 
             total += snapshot.documents.size
-            val batch = db.batch()
+            val batch = FirestoreHelper.batch()
             var batchCount = 0
 
             for (doc in snapshot.documents) {
@@ -205,15 +198,16 @@ class FirestoreMigrationService(
             val sd = TransitRecordCalculations.computeSortDate(tarih)
             if (sd.isBlank()) continue
 
-            try {
+            FirestoreHelper.safeFirestore {
                 doc.reference.update(
                     mapOf(
                         "sortDate" to sd,
                         "updatedAt" to System.currentTimeMillis()
                     )
                 ).await()
+            }.onSuccess {
                 updated++
-            } catch (e: Exception) {
+            }.onFailure { e ->
                 Log.e(TAG, "migrateSortDate failed for doc: ${doc.id}", e)
             }
         }
@@ -281,10 +275,11 @@ class FirestoreMigrationService(
 
             if (updates.isNotEmpty()) {
                 updates["updatedAt"] = System.currentTimeMillis()
-                try {
+                FirestoreHelper.safeFirestore {
                     doc.reference.update(updates).await()
+                }.onSuccess {
                     updated++
-                } catch (e: Exception) {
+                }.onFailure { e ->
                     Log.e(TAG, "migrateDistanceFields failed for doc: ${doc.id}", e)
                 }
             }
@@ -307,7 +302,7 @@ class FirestoreMigrationService(
             if (snapshot.isEmpty) break
 
             total += snapshot.documents.size
-            val batch = db.batch()
+            val batch = FirestoreHelper.batch()
             var batchCount = 0
 
             for (doc in snapshot.documents) {
@@ -367,15 +362,16 @@ class FirestoreMigrationService(
 
             val diff = actualMin - plannedMin // negative value (early)
 
-            try {
+            FirestoreHelper.safeFirestore {
                 doc.reference.update(
                     mapOf(
                         "gecikme" to diff,
                         "updatedAt" to System.currentTimeMillis()
                     )
                 ).await()
+            }.onSuccess {
                 updated++
-            } catch (e: Exception) {
+            }.onFailure { e ->
                 Log.e(TAG, "migrateEarlyDepartures failed for doc: ${doc.id}", e)
             }
         }

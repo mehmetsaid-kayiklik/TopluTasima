@@ -1,24 +1,15 @@
 package com.example.toplutasima.network.firestore
 
 import android.util.Log
-import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.model.FavoriteStop
 import com.example.toplutasima.model.UsageType
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 
-class FirestoreFavoriteDataSource(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val favoriteCollectionName: String = "favorite_stops"
-) {
-    private fun collection() = db
-        .collection("users")
-        .document(AuthService.uid)
-        .collection(favoriteCollectionName)
+class FirestoreFavoriteDataSource {
+    private fun collection() = FirestoreHelper.favoritesCollection()
 
     suspend fun saveFavorite(fav: FavoriteStop) {
-        try {
+        FirestoreHelper.safeFirestore {
             collection().document(fav.id).set(
                 mapOf(
                     "id" to fav.id,
@@ -28,27 +19,23 @@ class FirestoreFavoriteDataSource(
                     "usageType" to fav.usageType.name
                 )
             ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             Log.e(TAG, "saveFavorite failed for: ${fav.id}", e)
             throw e
         }
     }
 
     suspend fun deleteFavorite(favId: String) {
-        try {
+        FirestoreHelper.safeFirestore {
             collection().document(favId).delete().await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             Log.e(TAG, "deleteFavorite failed for: $favId", e)
             throw e
         }
     }
 
     suspend fun fetchAllFavorites(): List<FavoriteStop> {
-        return try {
+        return FirestoreHelper.safeFirestore {
             val snapshot = collection().get().await()
             snapshot.documents.mapNotNull { doc ->
                 val data = doc.data ?: return@mapNotNull null
@@ -70,9 +57,7 @@ class FirestoreFavoriteDataSource(
                     usageType = usageType
                 )
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             Log.e(TAG, "fetchAllFavorites failed", e)
             throw e
         }

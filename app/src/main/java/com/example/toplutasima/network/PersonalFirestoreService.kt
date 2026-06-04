@@ -1,9 +1,7 @@
 package com.example.toplutasima.network
 
-import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.model.PersonalTrip
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CancellationException
+import com.example.toplutasima.network.firestore.FirestoreHelper
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -12,10 +10,7 @@ import kotlinx.coroutines.tasks.await
  */
 object PersonalFirestoreService {
 
-    private fun collection() = FirebaseFirestore.getInstance()
-        .collection("users")
-        .document(AuthService.uid)
-        .collection("personaltrips")
+    private fun collection() = FirestoreHelper.personalTripsCollection()
 
     // ── Yardımcılar ─────────────────────────────────────────────────────────
 
@@ -95,7 +90,7 @@ object PersonalFirestoreService {
      * Belirli alanları günceller (Bindim / İndim sonrası).
      */
     suspend fun updateTrip(docId: String, fields: Map<String, Any?>): Boolean {
-        return try {
+        return FirestoreHelper.safeFirestore {
             val clean = fields.filterValues { it != null }.mapValues { it.value!! }.toMutableMap()
             val tarih = clean["tarih"]?.toString()
             if (!tarih.isNullOrBlank()) {
@@ -104,21 +99,17 @@ object PersonalFirestoreService {
             }
             collection().document(docId).update(clean).await()
             true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) { false }
+        }.getOrElse { false }
     }
 
     /**
      * Firestore dokümanını siler.
      */
     suspend fun deleteTrip(docId: String): Boolean {
-        return try {
+        return FirestoreHelper.safeFirestore {
             collection().document(docId).delete().await()
             true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) { false }
+        }.getOrElse { false }
     }
 
     /**

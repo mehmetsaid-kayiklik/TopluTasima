@@ -1,22 +1,13 @@
 package com.example.toplutasima.network.firestore
 
 import android.util.Log
-import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.BulkUpdateRow
 import com.example.toplutasima.usecase.TransitRecordCalculations
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 
-class FirestoreTripRemoteDataSource(
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val collectionName: String = "trips"
-) {
-    private fun collection() = db
-        .collection("users")
-        .document(AuthService.uid)
-        .collection(collectionName)
+class FirestoreTripRemoteDataSource {
+    private fun collection() = FirestoreHelper.tripsCollection()
 
     suspend fun saveTrip(data: Map<String, Any?>): String {
         val enriched = data.toMutableMap()
@@ -104,15 +95,13 @@ class FirestoreTripRemoteDataSource(
 
     suspend fun fetchRecord(tripId: String): Map<String, Any>? {
         if (tripId.isBlank()) return null
-        return try {
+        return FirestoreHelper.safeFirestore {
             val snapshot = collection()
                 .whereEqualTo("id", tripId)
                 .limit(1)
                 .get().await()
             if (snapshot.isEmpty) null else snapshot.documents[0].data
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             Log.e(TAG, "fetchRecord failed for tripId: $tripId", e)
             throw e
         }
@@ -197,7 +186,7 @@ class FirestoreTripRemoteDataSource(
 
     suspend fun updateTrip(docId: String, fields: Map<String, Any?>): Boolean {
         logD("FirestoreUpdate", "docId='$docId' isEmpty=${docId.isBlank()}")
-        return try {
+        return FirestoreHelper.safeFirestore {
             val docRef = collection().document(docId)
             val cleanFields = fields.filterValues { it != null }.mapValues { it.value!! }
             val existing = docRef.get().await().data
@@ -235,9 +224,7 @@ class FirestoreTripRemoteDataSource(
             updates["updatedAt"] = System.currentTimeMillis()
             docRef.update(updates).await()
             true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             Log.e(TAG, "updateTrip failed for docId: $docId", e)
             throw e
         }
@@ -299,12 +286,10 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun deleteTrip(docId: String): Boolean {
-        return try {
+        return FirestoreHelper.safeFirestore {
             collection().document(docId).delete().await()
             true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             Log.e(TAG, "deleteTrip failed for docId: $docId", e)
             throw e
         }
@@ -335,24 +320,27 @@ class FirestoreTripRemoteDataSource(
     }
 
     suspend fun updateExistingRecord(tripId: String, fields: Map<String, Any>): Boolean {
-        return try {
+        return FirestoreHelper.safeFirestore {
             val snapshot = collection()
                 .whereEqualTo("id", tripId)
                 .get().await()
-            if (snapshot.isEmpty) return false
-            val updates = fields.toMutableMap()
-            enrichUpdatedDistanceFields(updates)
-            updates["updatedAt"] = System.currentTimeMillis()
-            snapshot.documents[0].reference.update(updates).await()
-            true
-        } catch (e: Exception) {
+            if (snapshot.isEmpty) {
+                false
+            } else {
+                val updates = fields.toMutableMap()
+                enrichUpdatedDistanceFields(updates)
+                updates["updatedAt"] = System.currentTimeMillis()
+                snapshot.documents[0].reference.update(updates).await()
+                true
+            }
+        }.getOrElse { e ->
             Log.e(TAG, "updateExistingRecord failed for tripId: $tripId", e)
             throw e
         }
     }
 
     suspend fun saveTripMap(data: Map<String, Any?>): Boolean {
-        return try {
+        return FirestoreHelper.safeFirestore {
             val enriched = data.toMutableMap()
             val tarih = enriched["tarih"]?.toString()
             if (!tarih.isNullOrBlank()) {
@@ -367,9 +355,7 @@ class FirestoreTripRemoteDataSource(
             enrichNewDistanceFields(enriched)
             collection().add(buildOrderedMap(enriched)).await()
             true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             Log.e(TAG, "saveTripMap failed", e)
             throw e
         }

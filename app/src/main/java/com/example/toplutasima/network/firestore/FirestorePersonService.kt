@@ -1,8 +1,6 @@
 package com.example.toplutasima.network.firestore
 
-import com.example.toplutasima.auth.AuthService
 import com.example.toplutasima.data.local.entity.ProfileEntity
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
 object FirestorePersonService {
@@ -12,10 +10,7 @@ object FirestorePersonService {
         val archived: Boolean
     )
 
-    private fun collection() = FirebaseFirestore.getInstance()
-        .collection("users")
-        .document(AuthService.uid)
-        .collection("persons")
+    private fun collection() = FirestoreHelper.personsCollection()
 
     /**
      * Sadece sharedWithTransit = true olan kişileri çeker.
