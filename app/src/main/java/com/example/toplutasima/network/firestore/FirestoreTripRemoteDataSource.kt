@@ -37,7 +37,11 @@ class FirestoreTripRemoteDataSource {
         val snapshot = collection()
             .whereEqualTo("id", tripId)
             .get().await()
-        if (snapshot.isEmpty) return false
+        Log.d(TAG, "updateActual query for id=$tripId → found ${snapshot.size()} docs")
+        if (snapshot.isEmpty) {
+            Log.w(TAG, "updateActual: no document found with id=$tripId — write skipped")
+            return false
+        }
         val docRef = snapshot.documents[0].reference
         val existingData = snapshot.documents[0].data ?: return false
         val updates = mutableMapOf<String, Any>()

@@ -24,6 +24,7 @@ class TransitActionWorker(
     override suspend fun doWork(): Result {
         val tripId = inputData.getString(KEY_TRIP_ID) ?: return Result.failure()
         val isBoarding = inputData.getBoolean(KEY_IS_BOARDING, true)
+        Log.d(TAG, "doWork started: tripId=$tripId isBoarding=$isBoarding")
         val timestamp = inputData.getString(KEY_TIMESTAMP)
             ?: LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
@@ -34,9 +35,11 @@ class TransitActionWorker(
             } else {
                 repository.updateActual(tripId, null, timestamp)
             }
+            Log.d(TAG, "updateActual result: $updated for tripId=$tripId")
             if (!updated) {
-                Log.w(TAG, "updateActual basarisiz: trip=$tripId isBoarding=$isBoarding time=$timestamp — Result.failure()")
-                return Result.failure()
+                Log.w(TAG, "updateActual returned false — document not found for id=$tripId")
+                Log.w(TAG, "updateActual basarisiz: trip=$tripId isBoarding=$isBoarding time=$timestamp — Result.retry()")
+                return Result.retry()
             }
             Log.d(TAG, "Yolculuk zamani islendi: trip=$tripId isBoarding=$isBoarding time=$timestamp")
 

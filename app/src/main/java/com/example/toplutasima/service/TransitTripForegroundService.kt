@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.work.BackoffPolicy
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeUnit
 
 /**
  * Toplu taşıma yolculuğu sırasında sürekli (ongoing) bildirim gösterir.
@@ -575,6 +577,7 @@ class TransitTripForegroundService : Service() {
             .putString(TransitActionWorker.KEY_TIMESTAMP, timestamp)
             .build()
         val workRequest = OneTimeWorkRequestBuilder<TransitActionWorker>()
+            .setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.SECONDS)
             .setInputData(workData)
             .build()
         WorkManager.getInstance(applicationContext).enqueue(workRequest)
@@ -658,6 +661,7 @@ class TransitTripForegroundService : Service() {
         val segId = segmentIds.getOrNull(currentSegmentIndex)
             .takeIf { !it.isNullOrBlank() }
             ?: currentTripId
+        Log.d(TAG, "handleAutoAlighting: currentSegmentIndex=$currentSegmentIndex segmentIds=$segmentIds resolvedSegId=$segId")
         if (segId.isBlank()) {
             logD("Auto Indim iptal: segId bos")
             return
