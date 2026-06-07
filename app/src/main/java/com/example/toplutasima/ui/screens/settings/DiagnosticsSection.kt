@@ -28,6 +28,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.window.DialogProperties
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
@@ -40,8 +43,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.LaunchedEffect
 import com.example.toplutasima.diagnostics.PersonalTripTrackerLogger
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
+import kotlinx.coroutines.delay
 import java.io.File
 
 @Composable
@@ -322,7 +327,13 @@ private fun TrackingLogSection(
 ) {
     var logFiles by remember { mutableStateOf(getLogFiles()) }
     var selectedLogFile by remember { mutableStateOf<File?>(null) }
-    var selectedLogContent by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            logFiles = getLogFiles()
+            delay(2000L)
+        }
+    }
 
     Text(
         title,
@@ -357,7 +368,6 @@ private fun TrackingLogSection(
                 }
                 TextButton(onClick = {
                     selectedLogFile = file
-                    selectedLogContent = readLogFile(file)
                 }) {
                     Text(viewBtnText, fontSize = 12.sp)
                 }
@@ -389,13 +399,14 @@ private fun TrackingLogSection(
         }
     }
 
-    if (selectedLogFile != null) {
+    selectedLogFile?.let { logFile ->
         LogFileContentDialog(
             lang = lang,
             title = dialogTitle(
-                selectedLogFile?.name?.removePrefix(filePrefix)?.removeSuffix(".txt").orEmpty()
+                logFile.name.removePrefix(filePrefix).removeSuffix(".txt")
             ),
-            content = selectedLogContent,
+            file = logFile,
+            readLogFile = readLogFile,
             onDismiss = { selectedLogFile = null }
         )
     }
@@ -405,9 +416,29 @@ private fun TrackingLogSection(
 private fun LogFileContentDialog(
     lang: AppLanguage,
     title: String,
-    content: String,
+    file: File,
+    readLogFile: (File) -> String,
     onDismiss: () -> Unit
 ) {
+    var content by remember(file) { mutableStateOf("") }
+    val logLines = remember(content) {
+        if (content.isBlank()) emptyList() else content.lines()
+    }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(file) {
+        while (true) {
+            content = readLogFile(file)
+            delay(2000L)
+        }
+    }
+
+    LaunchedEffect(logLines.size) {
+        if (logLines.isNotEmpty()) {
+            listState.animateScrollToItem(logLines.size - 1)
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -434,6 +465,7 @@ private fun LogFileContentDialog(
                         .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp))
                         .padding(8.dp)
                 ) {
+                    if (logLines.isEmpty()) {
                     val scrollState = rememberScrollState()
                     Text(
                         text = content.ifBlank {
@@ -449,6 +481,20 @@ private fun LogFileContentDialog(
                             .fillMaxSize()
                             .verticalScroll(scrollState)
                     )
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(logLines) { line ->
+                                Text(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Row(
