@@ -795,13 +795,16 @@ class RmvLogViewModel(
 
     // ── Durak değiştirme dialog ───────────────────────────────────────────────
 
-    fun showChangeStopDialog(segIdx: Int, mode: String) {
-        _uiState.value = _uiState.value.copy(
+    private fun changeStopDialogState(state: RmvLogUiState, segIdx: Int, mode: String): RmvLogUiState =
+        state.copy(
             changeStopSegIdx = segIdx,
             changeStopMode = mode,
             changeStopSelectedIdx = -1,
             changeStopManualText = ""
         )
+
+    fun showChangeStopDialog(segIdx: Int, mode: String) {
+        _uiState.value = changeStopDialogState(_uiState.value, segIdx, mode)
     }
 
     fun dismissChangeStopDialog() {
@@ -833,9 +836,17 @@ class RmvLogViewModel(
         _uiState.value = s.copy(isLoadingStopsForEdit = true, status = S.loadingStopList(lang()))
         viewModelScope.launch {
             try {
-                val result = stopSelectionUseCase.fetchStopsForChangeStop(s, segIdx, tripPlanner, lang())
-                _uiState.value = result.state
-                if (result.openDialog) showChangeStopDialog(segIdx, "")
+                val result = stopSelectionUseCase.fetchStopsForChangeStop(
+                    _uiState.value,
+                    segIdx,
+                    tripPlanner,
+                    lang()
+                )
+                _uiState.value = if (result.openDialog) {
+                    changeStopDialogState(result.state, segIdx, "")
+                } else {
+                    result.state
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingStopsForEdit = false, status = "${S.errorPrefix(lang())}: ${e.message}")
             }

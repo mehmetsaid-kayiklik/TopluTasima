@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.example.toplutasima.diagnostics.PersonalTripTrackerLogger
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import java.io.File
 
@@ -49,6 +50,7 @@ internal fun DiagnosticsSection(
 ) {
     val context = LocalContext.current
     var showMaintenance by remember { mutableStateOf(false) }
+    var showTrackingLogs by remember { mutableStateOf(false) }
     var pendingQueueCount by remember { mutableStateOf(OfflineQueueStore.pendingCount(context)) }
     var stopCacheCount by remember { mutableStateOf(PrefsManager.stopSearchCacheSize()) }
     var lastCrashReport by remember { mutableStateOf(AppErrorReporter.lastCrash(context)) }
@@ -146,151 +148,17 @@ internal fun DiagnosticsSection(
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
-                val trackingLogsTitle = when (lang) {
-                    AppLanguage.TR -> "GPS Takip Günlükleri (Son 2 Gün)"
-                    AppLanguage.DE -> "GPS-Tracking-Logs (Letzte 2 Tage)"
-                    else -> "GPS Tracking Logs (Last 2 Days)"
+                val trackingLogsButtonText = when (lang) {
+                    AppLanguage.TR -> "Takip günlüklerini aç"
+                    AppLanguage.DE -> "Tracking-Logs öffnen"
+                    else -> "Open tracking logs"
                 }
-                Text(
-                    trackingLogsTitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                var logFiles by remember { mutableStateOf(TransitTrackerLogger.getLogFiles(context)) }
-                var selectedLogFile by remember { mutableStateOf<File?>(null) }
-                var selectedLogContent by remember { mutableStateOf("") }
-
-                if (logFiles.isEmpty()) {
-                    val noLogsText = when (lang) {
-                        AppLanguage.TR -> "Kayıtlı takip günlüğü bulunamadı."
-                        AppLanguage.DE -> "Keine Tracking-Logs gefunden."
-                        else -> "No tracking logs found."
-                    }
-                    Text(
-                        noLogsText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    logFiles.forEach { file ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                        ) {
-                            val displayName = file.name.removePrefix("tracker_log_").removeSuffix(".txt")
-                            Text(
-                                displayName,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            
-                            val viewBtnText = when (lang) {
-                                AppLanguage.TR -> "Görüntüle"
-                                AppLanguage.DE -> "Ansehen"
-                                else -> "View"
-                            }
-                            TextButton(onClick = {
-                                selectedLogFile = file
-                                selectedLogContent = TransitTrackerLogger.readLogFile(file)
-                            }) {
-                                Text(viewBtnText, fontSize = 12.sp)
-                            }
-
-                            val shareBtnText = when (lang) {
-                                AppLanguage.TR -> "Paylaş"
-                                AppLanguage.DE -> "Teilen"
-                                else -> "Share"
-                            }
-                            TextButton(onClick = {
-                                shareLogFile(context, file, lang)
-                            }) {
-                                Text(shareBtnText, fontSize = 12.sp)
-                            }
-                            
-                            val deleteBtnText = when (lang) {
-                                AppLanguage.TR -> "Sil"
-                                AppLanguage.DE -> "Löschen"
-                                else -> "Delete"
-                            }
-                            TextButton(onClick = {
-                                if (TransitTrackerLogger.deleteLogFile(file)) {
-                                    logFiles = TransitTrackerLogger.getLogFiles(context)
-                                }
-                            }) {
-                                Text(deleteBtnText, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-                }
-
-                if (selectedLogFile != null) {
-                    Dialog(
-                        onDismissRequest = { selectedLogFile = null },
-                        properties = DialogProperties(usePlatformDefaultWidth = false)
-                    ) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp).fillMaxSize()
-                            ) {
-                                val titleText = selectedLogFile?.name?.removePrefix("tracker_log_")?.removeSuffix(".txt").orEmpty()
-                                val header = when (lang) {
-                                    AppLanguage.TR -> "Takip Günlüğü: $titleText"
-                                    AppLanguage.DE -> "Tracking-Log: $titleText"
-                                    else -> "Tracking Log: $titleText"
-                                }
-                                Text(
-                                    header,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                                
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp))
-                                        .padding(8.dp)
-                                ) {
-                                    val scrollState = rememberScrollState()
-                                    Text(
-                                        text = selectedLogContent.ifBlank {
-                                            when (lang) {
-                                                AppLanguage.TR -> "Dosya boş."
-                                                AppLanguage.DE -> "Datei ist leer."
-                                                else -> "File is empty."
-                                            }
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .verticalScroll(scrollState)
-                                    )
-                                }
-                                
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    val closeText = when (lang) {
-                                        AppLanguage.TR -> "Kapat"
-                                        AppLanguage.DE -> "Schließen"
-                                        else -> "Close"
-                                    }
-                                    OutlinedButton(onClick = { selectedLogFile = null }) {
-                                        Text(closeText)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                OutlinedButton(
+                    onClick = { showTrackingLogs = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(trackingLogsButtonText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -316,9 +184,297 @@ internal fun DiagnosticsSection(
             }
         }
 
+        if (showTrackingLogs) {
+            TrackingLogsDialog(
+                context = context,
+                lang = lang,
+                onDismiss = { showTrackingLogs = false }
+            )
+        }
+
 }
 
-private fun shareLogFile(context: android.content.Context, file: File, lang: AppLanguage) {
+@Composable
+private fun TrackingLogsDialog(
+    context: android.content.Context,
+    lang: AppLanguage,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp).fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    val title = when (lang) {
+                        AppLanguage.TR -> "Takip Günlükleri"
+                        AppLanguage.DE -> "Tracking-Logs"
+                        else -> "Tracking Logs"
+                    }
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    val closeText = when (lang) {
+                        AppLanguage.TR -> "Kapat"
+                        AppLanguage.DE -> "Schließen"
+                        else -> "Close"
+                    }
+                    OutlinedButton(onClick = onDismiss) {
+                        Text(closeText)
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TrackingLogSection(
+                        context = context,
+                        lang = lang,
+                        title = when (lang) {
+                            AppLanguage.TR -> "Toplu Taşıma GPS Takip Günlükleri (Son 2 Gün)"
+                            AppLanguage.DE -> "ÖPNV-GPS-Tracking-Logs (Letzte 2 Tage)"
+                            else -> "Transit GPS Tracking Logs (Last 2 Days)"
+                        },
+                        noLogsText = when (lang) {
+                            AppLanguage.TR -> "Kayıtlı toplu taşıma takip günlüğü bulunamadı."
+                            AppLanguage.DE -> "Keine ÖPNV-Tracking-Logs gefunden."
+                            else -> "No transit tracking logs found."
+                        },
+                        filePrefix = "tracker_log_",
+                        getLogFiles = { TransitTrackerLogger.getLogFiles(context) },
+                        readLogFile = { TransitTrackerLogger.readLogFile(it) },
+                        deleteLogFile = { TransitTrackerLogger.deleteLogFile(it) },
+                        dialogTitle = { titleText ->
+                            when (lang) {
+                                AppLanguage.TR -> "Toplu Taşıma Logu: $titleText"
+                                AppLanguage.DE -> "ÖPNV-Log: $titleText"
+                                else -> "Transit Log: $titleText"
+                            }
+                        },
+                        subjectPrefix = "Transit GPS Log"
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                    TrackingLogSection(
+                        context = context,
+                        lang = lang,
+                        title = when (lang) {
+                            AppLanguage.TR -> "Kişisel GPS Mesafe Logları (Son 7 Gün)"
+                            AppLanguage.DE -> "Persönliche GPS-Distanz-Logs (Letzte 7 Tage)"
+                            else -> "Personal GPS Distance Logs (Last 7 Days)"
+                        },
+                        noLogsText = when (lang) {
+                            AppLanguage.TR -> "Kayıtlı kişisel mesafe logu bulunamadı."
+                            AppLanguage.DE -> "Keine persönlichen Distanz-Logs gefunden."
+                            else -> "No personal distance logs found."
+                        },
+                        filePrefix = "personal_trip_log_",
+                        getLogFiles = { PersonalTripTrackerLogger.getLogFiles(context) },
+                        readLogFile = { PersonalTripTrackerLogger.readLogFile(it) },
+                        deleteLogFile = { PersonalTripTrackerLogger.deleteLogFile(it) },
+                        dialogTitle = { titleText ->
+                            when (lang) {
+                                AppLanguage.TR -> "Kişisel Mesafe Logu: $titleText"
+                                AppLanguage.DE -> "Persönliches Distanz-Log: $titleText"
+                                else -> "Personal Distance Log: $titleText"
+                            }
+                        },
+                        subjectPrefix = "Personal Trip GPS Log"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackingLogSection(
+    context: android.content.Context,
+    lang: AppLanguage,
+    title: String,
+    noLogsText: String,
+    filePrefix: String,
+    getLogFiles: () -> List<File>,
+    readLogFile: (File) -> String,
+    deleteLogFile: (File) -> Boolean,
+    dialogTitle: (String) -> String,
+    subjectPrefix: String
+) {
+    var logFiles by remember { mutableStateOf(getLogFiles()) }
+    var selectedLogFile by remember { mutableStateOf<File?>(null) }
+    var selectedLogContent by remember { mutableStateOf("") }
+
+    Text(
+        title,
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.SemiBold
+    )
+
+    if (logFiles.isEmpty()) {
+        Text(
+            noLogsText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    } else {
+        logFiles.forEach { file ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                val displayName = file.name.removePrefix(filePrefix).removeSuffix(".txt")
+                Text(
+                    displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+
+                val viewBtnText = when (lang) {
+                    AppLanguage.TR -> "Görüntüle"
+                    AppLanguage.DE -> "Ansehen"
+                    else -> "View"
+                }
+                TextButton(onClick = {
+                    selectedLogFile = file
+                    selectedLogContent = readLogFile(file)
+                }) {
+                    Text(viewBtnText, fontSize = 12.sp)
+                }
+
+                val shareBtnText = when (lang) {
+                    AppLanguage.TR -> "Paylaş"
+                    AppLanguage.DE -> "Teilen"
+                    else -> "Share"
+                }
+                TextButton(onClick = {
+                    shareLogFile(context, file, lang, subjectPrefix = subjectPrefix)
+                }) {
+                    Text(shareBtnText, fontSize = 12.sp)
+                }
+
+                val deleteBtnText = when (lang) {
+                    AppLanguage.TR -> "Sil"
+                    AppLanguage.DE -> "Löschen"
+                    else -> "Delete"
+                }
+                TextButton(onClick = {
+                    if (deleteLogFile(file)) {
+                        logFiles = getLogFiles()
+                    }
+                }) {
+                    Text(deleteBtnText, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+
+    if (selectedLogFile != null) {
+        LogFileContentDialog(
+            lang = lang,
+            title = dialogTitle(
+                selectedLogFile?.name?.removePrefix(filePrefix)?.removeSuffix(".txt").orEmpty()
+            ),
+            content = selectedLogContent,
+            onDismiss = { selectedLogFile = null }
+        )
+    }
+}
+
+@Composable
+private fun LogFileContentDialog(
+    lang: AppLanguage,
+    title: String,
+    content: String,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp).fillMaxSize()
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp))
+                        .padding(8.dp)
+                ) {
+                    val scrollState = rememberScrollState()
+                    Text(
+                        text = content.ifBlank {
+                            when (lang) {
+                                AppLanguage.TR -> "Dosya boş."
+                                AppLanguage.DE -> "Datei ist leer."
+                                else -> "File is empty."
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    val closeText = when (lang) {
+                        AppLanguage.TR -> "Kapat"
+                        AppLanguage.DE -> "Schließen"
+                        else -> "Close"
+                    }
+                    OutlinedButton(onClick = onDismiss) {
+                        Text(closeText)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun shareLogFile(
+    context: android.content.Context,
+    file: File,
+    lang: AppLanguage,
+    subjectPrefix: String = "GPS Proximity Log"
+) {
     try {
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context,
@@ -328,7 +484,7 @@ private fun shareLogFile(context: android.content.Context, file: File, lang: App
         val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            putExtra(android.content.Intent.EXTRA_SUBJECT, "GPS Proximity Log: ${file.name}")
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "$subjectPrefix: ${file.name}")
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         

@@ -1,0 +1,77 @@
+package com.example.toplutasima.diagnostics
+
+import android.content.Context
+import android.util.Log
+import java.io.File
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+
+object PersonalTripTrackerLogger {
+    private const val TAG = "PersonalTripTrackerLogger"
+    private const val FILE_PREFIX = "personal_trip_log_"
+    private const val FILE_SUFFIX = ".txt"
+
+    fun log(context: Context, logTag: String, message: String) {
+        try {
+            val dateStr = LocalDate.now().toString()
+            val logFile = File(context.filesDir, "$FILE_PREFIX$dateStr$FILE_SUFFIX")
+            val timeStr = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+            logFile.appendText("[$timeStr] [$logTag] $message\n")
+        } catch (e: Exception) {
+            Log.w(TAG, "Log dosyaya yazilamadi: ${e.message}")
+        }
+    }
+
+    fun cleanOldLogs(context: Context, maxDaysToKeep: Int = 7) {
+        try {
+            val logFiles = context.filesDir.listFiles { _, name ->
+                name.startsWith(FILE_PREFIX) && name.endsWith(FILE_SUFFIX)
+            } ?: return
+
+            val thresholdDate = LocalDate.now().minusDays(maxDaysToKeep.toLong())
+            for (file in logFiles) {
+                val datePart = file.name.removePrefix(FILE_PREFIX).removeSuffix(FILE_SUFFIX)
+                try {
+                    if (LocalDate.parse(datePart).isBefore(thresholdDate)) {
+                        file.delete()
+                    }
+                } catch (_: Exception) {
+                    file.delete()
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Eski loglar temizlenirken hata olustu: ${e.message}")
+        }
+    }
+
+    fun getLogFiles(context: Context): List<File> {
+        return try {
+            val files = context.filesDir.listFiles { _, name ->
+                name.startsWith(FILE_PREFIX) && name.endsWith(FILE_SUFFIX)
+            } ?: emptyArray()
+            files.sortedByDescending { it.name }
+        } catch (e: Exception) {
+            Log.w(TAG, "Log dosyalari listelenemedi: ${e.message}")
+            emptyList()
+        }
+    }
+
+    fun readLogFile(file: File): String {
+        return try {
+            if (file.exists()) file.readText() else ""
+        } catch (e: Exception) {
+            Log.w(TAG, "Log dosyasi okunamadi: ${file.name}, ${e.message}")
+            ""
+        }
+    }
+
+    fun deleteLogFile(file: File): Boolean {
+        return try {
+            if (file.exists()) file.delete() else false
+        } catch (e: Exception) {
+            Log.w(TAG, "Log dosyasi silinemedi: ${file.name}, ${e.message}")
+            false
+        }
+    }
+}

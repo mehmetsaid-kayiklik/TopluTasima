@@ -4,9 +4,11 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Geocoder
+import android.location.Location
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.toplutasima.BuildConfig
+import com.example.toplutasima.diagnostics.PersonalTripTrackerLogger
 import com.example.toplutasima.network.ApiErrors
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -63,9 +65,17 @@ class PersonalLocationHelper(private val context: Context) {
      * @return Triple(adres, lat, lng) veya null (izin yok / timeout / Geocoder başarısız)
      */
     suspend fun resolveCurrentLocation(): Triple<String, Double, Double>? {
-        if (!hasPermission()) return null
-        val coords = withTimeoutOrNull(LOCATION_TIMEOUT_MS) { getCurrentCoords() } ?: return null
+        logTracker("resolveCurrentLocation start hasPermission=${hasPermission()}")
+        if (!hasPermission()) {
+            logTracker("resolveCurrentLocation aborted reason=no_location_permission")
+            return null
+        }
+        val coords = withTimeoutOrNull(LOCATION_TIMEOUT_MS) { getCurrentCoords() } ?: run {
+            logTracker("resolveCurrentLocation failed reason=timeout_or_null timeoutMs=$LOCATION_TIMEOUT_MS")
+            return null
+        }
         val address = getAddressFromCoords(coords.first, coords.second)
+        logTracker("resolveCurrentLocation success point=${formatPoint(coords)} addressChars=${address.length}")
         return Triple(address, coords.first, coords.second)
     }
 
@@ -79,18 +89,29 @@ class PersonalLocationHelper(private val context: Context) {
             client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, tokenSource.token)
                 .addOnSuccessListener { loc ->
                     if (loc != null) {
+                        logTracker("getCurrentLocation success source=current ${formatLocation(loc)}")
                         cont.resume(loc.latitude to loc.longitude)
                     } else {
+                        logTracker("getCurrentLocation returned null; reading lastLocation")
                         // Yedek: son bilinen konum
                         client.lastLocation
                             .addOnSuccessListener { last ->
+                                if (last != null) {
+                                    logTracker("lastLocation success ${formatLocation(last)}")
+                                } else {
+                                    logTracker("lastLocation returned null")
+                                }
                                 cont.resume(if (last != null) last.latitude to last.longitude else null)
                             }
-                            .addOnFailureListener { cont.resume(null) }
+                            .addOnFailureListener {
+                                logTracker("lastLocation failed message=${it.message}")
+                                cont.resume(null)
+                            }
                     }
                 }
                 .addOnFailureListener {
                     if (BuildConfig.DEBUG) Log.e(TAG, "getCurrentLocation failed: ${it.message}")
+                    logTracker("getCurrentLocation failed message=${it.message}")
                     cont.resume(null)
                 }
         }
@@ -99,17 +120,24 @@ class PersonalLocationHelper(private val context: Context) {
     private suspend fun getAddressFromCoords(lat: Double, lng: Double): String {
         return withContext(Dispatchers.IO) {
             try {
-                if (!Geocoder.isPresent()) return@withContext "$lat, $lng"
+                if (!Geocoder.isPresent()) {
+                    logTracker("Geocoder not present point=${formatPoint(lat to lng)}")
+                    return@withContext "$lat, $lng"
+                }
                 @Suppress("DEPRECATION")
                 val results = Geocoder(context, Locale.getDefault())
                     .getFromLocation(lat, lng, 1)
                 if (!results.isNullOrEmpty()) {
-                    results[0].getAddressLine(0) ?: "$lat, $lng"
+                    val address = results[0].getAddressLine(0) ?: "$lat, $lng"
+                    logTracker("Geocoder success point=${formatPoint(lat to lng)} addressChars=${address.length}")
+                    address
                 } else {
+                    logTracker("Geocoder empty point=${formatPoint(lat to lng)}")
                     "$lat, $lng"
                 }
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "Geocoder failed: ${e.message}")
+                logTracker("Geocoder failed point=${formatPoint(lat to lng)} message=${e.message}")
                 "$lat, $lng"
             }
         }
@@ -127,6 +155,10 @@ class PersonalLocationHelper(private val context: Context) {
         return withContext(Dispatchers.IO) {
             try {
                 val requestId = ApiErrors.newRequestId()
+                logTracker(
+                    "ORS_HTTP request requestId=$requestId waypoints=${waypoints.size} " +
+                        "first=${formatPoint(waypoints.first())} last=${formatPoint(waypoints.last())}"
+                )
                 // ORS beklentisi: [[lng, lat], [lng, lat], ...]
                 val coords = JSONArray().apply {
                     waypoints.forEach { (lat, lng) ->
@@ -146,6 +178,10 @@ class PersonalLocationHelper(private val context: Context) {
 
                 httpClient.newCall(request).execute().use { response ->
                     val responseBody = response.body?.string().orEmpty()
+                    logTracker(
+                        "ORS_HTTP response requestId=$requestId status=${response.code} " +
+                            "successful=${response.isSuccessful} bodyChars=${responseBody.length}"
+                    )
                     if (!response.isSuccessful) {
                         val apiError = ApiErrors.fromHttpStatus(
                             provider = "ORS",
@@ -155,18 +191,24 @@ class PersonalLocationHelper(private val context: Context) {
                             body = responseBody
                         )
                         if (BuildConfig.DEBUG) Log.e(TAG, apiError.message ?: "ORS HTTP ${response.code}", apiError)
+                        logTracker("ORS_HTTP failed requestId=$requestId status=${response.code} message=${apiError.message}")
                         return@withContext null
                     }
 
                     val json = JSONObject(responseBody)
                     val routes = json.optJSONArray("routes") ?: return@withContext null
                     val summary = routes.getJSONObject(0).getJSONObject("summary")
-                    summary.getDouble("distance") // metre
+                    val distanceMeters = summary.getDouble("distance")
+                    logTracker(
+                        "ORS_HTTP success requestId=$requestId distanceKm=${String.format(Locale.US, "%.3f", distanceMeters / 1000.0)}"
+                    )
+                    distanceMeters // metre
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (BuildConfig.DEBUG) Log.e(TAG, "fetchRouteDistanceMeters failed: ${e.message}")
+                logTracker("ORS_HTTP exception message=${e.message}")
                 null
             }
         }
@@ -177,4 +219,21 @@ class PersonalLocationHelper(private val context: Context) {
      */
     fun formatKm(meters: Double): String =
         String.format(Locale.getDefault(), "%.1f km", meters / 1000.0)
+
+    private fun logTracker(message: String) {
+        if (BuildConfig.DEBUG) Log.d(TAG, message)
+        PersonalTripTrackerLogger.log(context, TAG, message)
+    }
+
+    private fun formatLocation(location: Location): String =
+        "lat=${formatCoord(location.latitude)} lng=${formatCoord(location.longitude)} " +
+            "accuracyM=${if (location.hasAccuracy()) String.format(Locale.US, "%.1f", location.accuracy) else "n/a"} " +
+            "speedMps=${if (location.hasSpeed()) String.format(Locale.US, "%.2f", location.speed) else "n/a"} " +
+            "ageMs=${System.currentTimeMillis() - location.time} elapsedNanos=${location.elapsedRealtimeNanos}"
+
+    private fun formatPoint(point: Pair<Double, Double>): String =
+        "${formatCoord(point.first)},${formatCoord(point.second)}"
+
+    private fun formatCoord(value: Double): String =
+        String.format(Locale.US, "%.6f", value)
 }

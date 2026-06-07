@@ -16,7 +16,7 @@ object FirestoreHelper {
         userRoot().collection("trips")
 
     fun favoritesCollection(): CollectionReference =
-        userRoot().collection("favorites")
+        userRoot().collection("favorite_stops")
 
     fun personsCollection(): CollectionReference =
         userRoot().collection("persons")

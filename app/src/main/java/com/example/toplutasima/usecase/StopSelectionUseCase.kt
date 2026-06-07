@@ -199,8 +199,11 @@ class StopSelectionUseCase(
         tripPlanner: TripPlanningUseCase,
         language: AppLanguage
     ): ChangeStopFetchResult {
-        val seg = state.trip?.segments?.getOrNull(segIdx) ?: return ChangeStopFetchResult(state, false)
-        if (seg.stopNames.size > 1) return ChangeStopFetchResult(state, true)
+        val seg = state.trip?.segments?.getOrNull(segIdx)
+            ?: return ChangeStopFetchResult(state.copy(isLoadingStopsForEdit = false), false)
+        if (seg.stopNames.size > 1) {
+            return ChangeStopFetchResult(state.copy(isLoadingStopsForEdit = false), true)
+        }
 
         val fromOpts = rmvTripRepository.searchStops(seg.fromStop.trim(), 3)
         val fromId = fromOpts.firstOrNull()?.id ?: throw Exception(S.errorStopNotFound(language))
@@ -247,9 +250,15 @@ class StopSelectionUseCase(
         )
         val newSegments = currentTrip.segments.toMutableList()
         newSegments[segIdx] = updatedSeg
+        val newPersistentStops = state.persistentStops.toMutableList().also { stops ->
+            if (segIdx in stops.indices) {
+                stops[segIdx] = updatedSeg
+            }
+        }
         return ChangeStopFetchResult(
             state.copy(
                 trip = currentTrip.copy(segments = newSegments),
+                persistentStops = newPersistentStops,
                 fromId = fromId,
                 toId = toId,
                 isLoadingStopsForEdit = false,
@@ -285,7 +294,7 @@ class StopSelectionUseCase(
             state.changeStopManualText.trim().ifBlank { return state }
         }
         val newTime = if (seg.stopNames.isNotEmpty()) seg.stopTimes.getOrElse(selectedIdx) { "" } else ""
-        val segId = state.segmentIds.getOrElse(segIdx) { "" }
+        val segId = state.changeStopSegmentId(segIdx)
         if (segId.isBlank()) return state
 
         val isBinis = state.changeStopMode == "binis"
@@ -361,8 +370,14 @@ class StopSelectionUseCase(
             overallDep = newSegments.first().dep,
             overallArr = newSegments.last().arr
         )
+        val newPersistentStops = state.persistentStops.toMutableList().also { stops ->
+            if (segIdx in stops.indices) {
+                stops[segIdx] = updatedSeg
+            }
+        }
         return state.copy(
             trip = newTrip,
+            persistentStops = newPersistentStops,
             changeStopSegIdx = -1,
             changeStopMode = "",
             changeStopSelectedIdx = -1,
@@ -384,5 +399,20 @@ class StopSelectionUseCase(
             toStopLat = if (!details.toStopLat.isNaN()) details.toStopLat else seg.toStopLat,
             toStopLng = if (!details.toStopLng.isNaN()) details.toStopLng else seg.toStopLng
         )
+    }
+
+    private fun RmvLogUiState.changeStopSegmentId(segIdx: Int): String {
+        val directId = segmentIds.getOrNull(segIdx).orEmpty()
+        if (directId.isNotBlank()) return directId
+
+        val segmentCount = trip?.segments?.size ?: 0
+        val lastSegIdx = (segmentCount - 1).coerceAtLeast(0)
+        return when {
+            segmentCount <= 1 && firstSavedId.isNotBlank() -> firstSavedId
+            segmentCount <= 1 && lastSavedId.isNotBlank() -> lastSavedId
+            segIdx == 0 && firstSavedId.isNotBlank() -> firstSavedId
+            segIdx == lastSegIdx && lastSavedId.isNotBlank() -> lastSavedId
+            else -> ""
+        }
     }
 }

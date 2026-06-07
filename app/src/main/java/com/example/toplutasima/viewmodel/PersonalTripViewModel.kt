@@ -234,7 +234,7 @@ class PersonalTripViewModel(
             try {
                 repository.deleteTrip(docId)
                 if (_uiState.value.activeDocId == docId) {
-                    stopTracking(getApplication())
+                    stopTracking(getApplication(), docId)
                 }
                 load()
             } catch (e: Exception) {
@@ -290,6 +290,7 @@ class PersonalTripViewModel(
             try {
                 val intent = Intent(context, PersonalTripForegroundService::class.java)
                     .setAction(PersonalTripForegroundService.ACTION_START)
+                    .putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
                 context.startForegroundService(intent)
             } catch (e: Exception) {
                 repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
@@ -314,7 +315,7 @@ class PersonalTripViewModel(
     fun recordIndim(context: Context, docId: String) {
         viewModelScope.launch {
             // Önce servisi durdur (son batch ORS'e gönderilecek)
-            stopTracking(context)
+            stopTracking(context, docId)
             withTimeoutOrNull(15_000L) {
                 PersonalTripForegroundService.isTracking.first { !it }
             }
@@ -358,9 +359,12 @@ class PersonalTripViewModel(
         }
     }
 
-    private fun stopTracking(context: Context) {
+    private fun stopTracking(context: Context, docId: String? = null) {
         val intent = Intent(context, PersonalTripForegroundService::class.java)
             .setAction(PersonalTripForegroundService.ACTION_STOP)
+        if (!docId.isNullOrBlank()) {
+            intent.putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
+        }
         context.startService(intent)
     }
 
