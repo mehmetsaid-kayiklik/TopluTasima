@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.toplutasima.data.AppEventBus
+import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.repository.TransitRecordRepository
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -24,7 +25,10 @@ class TransitActionWorker(
     override suspend fun doWork(): Result {
         val tripId = inputData.getString(KEY_TRIP_ID) ?: return Result.failure()
         val isBoarding = inputData.getBoolean(KEY_IS_BOARDING, true)
-        Log.d(TAG, "doWork started: tripId=$tripId isBoarding=$isBoarding")
+        val msgStart = "doWork started: tripId=$tripId isBoarding=$isBoarding"
+        Log.d(TAG, msgStart)
+        TransitTrackerLogger.log(applicationContext, TAG, msgStart)
+
         val timestamp = inputData.getString(KEY_TIMESTAMP)
             ?: LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
@@ -35,13 +39,24 @@ class TransitActionWorker(
             } else {
                 repository.updateActual(tripId, null, timestamp)
             }
-            Log.d(TAG, "updateActual result: $updated for tripId=$tripId")
+            val msgResult = "updateActual result: $updated for tripId=$tripId"
+            Log.d(TAG, msgResult)
+            TransitTrackerLogger.log(applicationContext, TAG, msgResult)
+
             if (!updated) {
-                Log.w(TAG, "updateActual returned false — document not found for id=$tripId")
-                Log.w(TAG, "updateActual basarisiz: trip=$tripId isBoarding=$isBoarding time=$timestamp — Result.retry()")
+                val msgNotFound = "updateActual returned false — document not found for id=$tripId"
+                Log.w(TAG, msgNotFound)
+                TransitTrackerLogger.log(applicationContext, TAG, msgNotFound)
+
+                val msgFailed = "updateActual basarisiz: trip=$tripId isBoarding=$isBoarding time=$timestamp — Result.retry()"
+                Log.w(TAG, msgFailed)
+                TransitTrackerLogger.log(applicationContext, TAG, msgFailed)
+
                 return Result.retry()
             }
-            Log.d(TAG, "Yolculuk zamani islendi: trip=$tripId isBoarding=$isBoarding time=$timestamp")
+            val msgSuccess = "Yolculuk zamani islendi: trip=$tripId isBoarding=$isBoarding time=$timestamp"
+            Log.d(TAG, msgSuccess)
+            TransitTrackerLogger.log(applicationContext, TAG, msgSuccess)
 
             // UI senkronizasyonu için AppEventBus'a emit et
             AppEventBus.emit(
@@ -54,7 +69,9 @@ class TransitActionWorker(
 
             Result.success()
         } catch (e: Exception) {
-            Log.e(TAG, "Firestore yazılamadı, yeniden deneniyor: ${e.message}")
+            val msgError = "Firestore yazılamadı, yeniden deneniyor: ${e.message}"
+            Log.e(TAG, msgError)
+            TransitTrackerLogger.log(applicationContext, TAG, msgError)
             Result.retry()
         }
     }
