@@ -5,6 +5,8 @@
 /keystore.properties
 /release-keystore.jks
 /release.keystore
+*.jks
+*.keystore
 /.idea/
 .DS_Store
 /build

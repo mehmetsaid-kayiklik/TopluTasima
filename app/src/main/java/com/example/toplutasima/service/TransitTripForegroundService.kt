@@ -7,11 +7,17 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import androidx.work.BackoffPolicy
 import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
@@ -27,6 +33,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.UUID
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 
 /**
@@ -100,6 +108,18 @@ class TransitTripForegroundService : Service() {
     private var currentTripId = ""
     private var segmentIds: List<String> = emptyList()
     private var hasBoarded = false
+    @Volatile
+    private var isServiceDestroyed = false
+
+    private data class AutoAlightWorkRequest(
+        val uniqueName: String,
+        val workId: UUID
+    )
+
+    private data class AutoAlightWorkObserver(
+        val liveData: LiveData<List<WorkInfo>>,
+        val observer: Observer<List<WorkInfo>>
+    )
 
     // Proximity alert alanları
     private var alightingLat: Double = Double.NaN
@@ -109,6 +129,10 @@ class TransitTripForegroundService : Service() {
 
     private val stateStore by lazy { TransitServiceStateStore(this) }
     private val notificationBuilder by lazy { TransitNotificationBuilder(this) }
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val workStatusExecutor by lazy { Executor { command -> mainHandler.post(command) } }
+    private val autoAlightWorkObservers = mutableMapOf<String, AutoAlightWorkObserver>()
+    private val autoAlightWorkStates = mutableMapOf<UUID, WorkInfo.State>()
     private val reminderScheduler by lazy {
         TransitReminderScheduler(
             context = this,
@@ -134,6 +158,7 @@ class TransitTripForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isServiceDestroyed = false
         createNotificationChannels()
     }
 
@@ -272,6 +297,8 @@ class TransitTripForegroundService : Service() {
         cancelReminder()
         cancelProximityWatchAlarm()
         proximityTracker.shutdown()
+        isServiceDestroyed = true
+        removeAutoAlightWorkObservers()
         _isActive.value = false
     }
 
@@ -569,7 +596,10 @@ class TransitTripForegroundService : Service() {
         WorkManager.getInstance(applicationContext).enqueue(workRequest)
     }
 
-    private fun enqueueTransitActionWorkerWithId(segId: String, isBoarding: Boolean) {
+    private fun enqueueTransitActionWorkerWithId(
+        segId: String,
+        isBoarding: Boolean
+    ): AutoAlightWorkRequest {
         val timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
         val workData = Data.Builder()
             .putString(TransitActionWorker.KEY_TRIP_ID, segId)
@@ -580,7 +610,84 @@ class TransitTripForegroundService : Service() {
             .setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.SECONDS)
             .setInputData(workData)
             .build()
-        WorkManager.getInstance(applicationContext).enqueue(workRequest)
+        val uniqueName = "autoAlight_$segId"
+        WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+            uniqueName,
+            ExistingWorkPolicy.KEEP,
+            workRequest
+        )
+        observeAutoAlightWork(uniqueName)
+        return AutoAlightWorkRequest(uniqueName = uniqueName, workId = workRequest.id)
+    }
+
+    private fun observeAutoAlightWork(uniqueName: String) {
+        mainHandler.post {
+            if (isServiceDestroyed) return@post
+            if (autoAlightWorkObservers.containsKey(uniqueName)) return@post
+
+            val liveData = WorkManager.getInstance(applicationContext)
+                .getWorkInfosForUniqueWorkLiveData(uniqueName)
+            val observer = Observer<List<WorkInfo>> { workInfos ->
+                workInfos.forEach { workInfo ->
+                    val previousState = autoAlightWorkStates[workInfo.id]
+                    if (previousState != workInfo.state) {
+                        autoAlightWorkStates[workInfo.id] = workInfo.state
+                        TransitTrackerLogger.log(
+                            applicationContext,
+                            TAG,
+                            "AutoAlight worker state changed uniqueName=$uniqueName " +
+                                "workId=${workInfo.id} state=${workInfo.state}"
+                        )
+                    }
+                }
+            }
+            autoAlightWorkObservers[uniqueName] = AutoAlightWorkObserver(liveData, observer)
+            liveData.observeForever(observer)
+        }
+    }
+
+    private fun logAutoAlightWorkStatus(uniqueName: String, requestedWorkId: UUID) {
+        val workManager = WorkManager.getInstance(applicationContext)
+        val future = workManager.getWorkInfosForUniqueWork(uniqueName)
+        future.addListener(
+            {
+                try {
+                    val workInfos = future.get()
+                    val status = workInfos.joinToString(separator = ", ") { workInfo ->
+                        "${workInfo.id}:${workInfo.state}"
+                    }.ifBlank { "no WorkInfo found" }
+                    TransitTrackerLogger.log(
+                        applicationContext,
+                        TAG,
+                        "AutoAlight worker status uniqueName=$uniqueName " +
+                            "requestedWorkId=$requestedWorkId workInfos=[$status]"
+                    )
+                } catch (e: Exception) {
+                    TransitTrackerLogger.log(
+                        applicationContext,
+                        TAG,
+                        "AutoAlight worker status query failed uniqueName=$uniqueName " +
+                            "requestedWorkId=$requestedWorkId error=${e.message}"
+                    )
+                }
+            },
+            workStatusExecutor
+        )
+    }
+
+    private fun removeAutoAlightWorkObservers() {
+        val removeObservers = {
+            autoAlightWorkObservers.values.forEach { entry ->
+                entry.liveData.removeObserver(entry.observer)
+            }
+            autoAlightWorkObservers.clear()
+            autoAlightWorkStates.clear()
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            removeObservers()
+        } else {
+            mainHandler.post { removeObservers() }
+        }
     }
 
     // ── Proximity Watch ───────────────────────────────────────────────────────
@@ -666,7 +773,12 @@ class TransitTripForegroundService : Service() {
             logD("Auto Indim iptal: segId bos")
             return
         }
-        enqueueTransitActionWorkerWithId(segId, isBoarding = false)
+        val workRequest = enqueueTransitActionWorkerWithId(segId, isBoarding = false)
+        logD(
+            "[TransitTripService] Worker enqueued for segId=$segId " +
+                "uniqueName=${workRequest.uniqueName} workId=${workRequest.workId}"
+        )
+        logAutoAlightWorkStatus(workRequest.uniqueName, workRequest.workId)
         getSystemService(NotificationManager::class.java).cancel(NOTIF_ID_REMINDER)
         cancelReminder()
         cancelProximityWatchAlarm()

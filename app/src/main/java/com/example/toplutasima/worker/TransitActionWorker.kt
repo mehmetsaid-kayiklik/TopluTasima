@@ -23,6 +23,9 @@ class TransitActionWorker(
     }
 
     override suspend fun doWork(): Result {
+        Log.d(TAG, "doWork() entered")
+        TransitTrackerLogger.log(applicationContext, TAG, "doWork() entered")
+
         val tripId = inputData.getString(KEY_TRIP_ID) ?: return Result.failure()
         val isBoarding = inputData.getBoolean(KEY_IS_BOARDING, true)
         val msgStart = "doWork started: tripId=$tripId isBoarding=$isBoarding"
