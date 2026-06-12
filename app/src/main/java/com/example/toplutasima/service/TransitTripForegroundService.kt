@@ -592,6 +592,7 @@ class TransitTripForegroundService : Service() {
             .build()
         val workRequest = OneTimeWorkRequestBuilder<TransitActionWorker>()
             .setInputData(workData)
+            .addTag(TransitActionWorker.TAG)
             .build()
         WorkManager.getInstance(applicationContext).enqueue(workRequest)
     }
@@ -609,6 +610,7 @@ class TransitTripForegroundService : Service() {
         val workRequest = OneTimeWorkRequestBuilder<TransitActionWorker>()
             .setBackoffCriteria(BackoffPolicy.LINEAR, 10, TimeUnit.SECONDS)
             .setInputData(workData)
+            .addTag(TransitActionWorker.TAG)
             .build()
         val uniqueName = "autoAlight_$segId"
         WorkManager.getInstance(applicationContext).enqueueUniqueWork(

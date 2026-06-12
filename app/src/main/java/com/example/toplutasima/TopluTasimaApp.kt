@@ -2,19 +2,32 @@ package com.example.toplutasima
 
 import android.app.Application
 import android.content.Context
+import androidx.work.Configuration
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.di.appModule
 import com.example.toplutasima.diagnostics.AppErrorReporter
+import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.ui.LocaleManager
+import com.example.toplutasima.worker.PeriodicSyncWorker
+import com.example.toplutasima.worker.TopluTasimaWorkerFactory
+import com.example.toplutasima.worker.TransitActionWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import java.util.concurrent.TimeUnit
 
 class TopluTasimaApp : Application() {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val loggedTransitWorkerTerminalStates = mutableSetOf<String>()
 
     val database by lazy { com.example.toplutasima.data.local.AppDatabase.getDatabase(this) }
 
@@ -28,22 +41,50 @@ class TopluTasimaApp : Application() {
         val prefs = getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
         LocaleManager.init(prefs)
         PrefsManager.init(prefs, appScope)
+
+        val koinApplication = startKoin {
+            androidContext(this@TopluTasimaApp)
+            modules(appModule)
+        }
+
+        WorkManager.initialize(
+            this,
+            Configuration.Builder()
+                .setWorkerFactory(koinApplication.koin.get<TopluTasimaWorkerFactory>())
+                .build()
+        )
+        observeTransitActionWorkerTerminalStates()
+
         if (OfflineQueueStore.pendingCount(this) > 0) {
             OfflineQueueStore.scheduleSync(this)
         }
 
-        val syncRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.toplutasima.worker.PeriodicSyncWorker>(6, java.util.concurrent.TimeUnit.HOURS)
-            .setConstraints(androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build())
+        val syncRequest = PeriodicWorkRequestBuilder<PeriodicSyncWorker>(6, TimeUnit.HOURS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
-        androidx.work.WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "PeriodicFirestoreSync",
-            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.KEEP,
             syncRequest
         )
+    }
 
-        startKoin {
-            androidContext(this@TopluTasimaApp)
-            modules(appModule)
-        }
+    private fun observeTransitActionWorkerTerminalStates() {
+        WorkManager.getInstance(this)
+            .getWorkInfosByTagLiveData(TransitActionWorker.TAG)
+            .observeForever { workInfoList ->
+                workInfoList?.forEach { info ->
+                    if (info.state == WorkInfo.State.FAILED || info.state == WorkInfo.State.CANCELLED) {
+                        val logKey = "${info.id}:${info.state}"
+                        if (loggedTransitWorkerTerminalStates.add(logKey)) {
+                            TransitTrackerLogger.log(
+                                this,
+                                "WorkManagerObserver",
+                                "Worker ${info.state}: tags=${info.tags}"
+                            )
+                        }
+                    }
+                }
+            }
     }
 }

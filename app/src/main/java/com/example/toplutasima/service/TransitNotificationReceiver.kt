@@ -77,6 +77,7 @@ class TransitNotificationReceiver : BroadcastReceiver() {
 
         val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.example.toplutasima.worker.TransitActionWorker>()
             .setInputData(workData)
+            .addTag(com.example.toplutasima.worker.TransitActionWorker.TAG)
             .build()
 
         androidx.work.WorkManager.getInstance(context).enqueue(workRequest)

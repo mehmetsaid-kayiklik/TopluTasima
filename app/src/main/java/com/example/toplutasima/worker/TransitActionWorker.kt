@@ -12,11 +12,26 @@ import java.time.format.DateTimeFormatter
 
 class TransitActionWorker(
     appContext: Context,
-    workerParams: WorkerParameters
+    workerParams: WorkerParameters,
+    private val repository: TransitRecordRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
+    init {
+        // Defensive check: repository is non-null by Kotlin's type system,
+        // but Koin DI might inject a Java-null via unchecked cast.
+        @Suppress("SENSELESS_COMPARISON")
+        if (repository == null) {
+            val msg = "CRITICAL: repository is null at construction! DI injection failed."
+            Log.e(TAG, msg)
+            TransitTrackerLogger.log(appContext, TAG, msg)
+            throw IllegalStateException(msg)
+        }
+        Log.d(TAG, "TransitActionWorker constructed — repository=$repository")
+        TransitTrackerLogger.log(appContext, TAG, "TransitActionWorker constructed OK")
+    }
+
     companion object {
-        private const val TAG = "TransitActionWorker"
+        const val TAG = "TransitActionWorker"
         const val KEY_TRIP_ID = "tripId"
         const val KEY_IS_BOARDING = "isBoarding"
         const val KEY_TIMESTAMP = "timestamp"
@@ -36,7 +51,6 @@ class TransitActionWorker(
             ?: LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
         return try {
-            val repository = TransitRecordRepository(applicationContext)
             val updated = if (isBoarding) {
                 repository.updateActual(tripId, timestamp, null)
             } else {

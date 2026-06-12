@@ -24,6 +24,7 @@ import com.example.toplutasima.viewmodel.RecordsViewModel
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.SettingsViewModel
 import com.example.toplutasima.viewmodel.SummaryViewModel
+import com.example.toplutasima.worker.TopluTasimaWorkerFactory
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -59,6 +60,7 @@ val appModule = module {
     }
     single { PersonalTripRepository() }       // Kişisel Araç — "personaltrips"
     single { ProfileSyncRepository(androidContext()) }
+    single { TopluTasimaWorkerFactory(get()) }
 
     // ── Use Case ────────────────────────────────────────────────────────────
     single { TripPlanningUseCase(get()) }
