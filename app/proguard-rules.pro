@@ -73,3 +73,8 @@
 # for WorkDatabase_Impl sometimes gets stripped by R8)
 # -----------------------------------------------------------------------
 -keep class androidx.work.impl.WorkDatabase_Impl { *; }
+-keep class com.example.toplutasima.worker.** { *; }
+-keep class com.example.toplutasima.factory.** { *; }
+-keep class * extends androidx.work.Worker { *; }
+-keep class * extends androidx.work.CoroutineWorker { *; }
+-keep class * extends androidx.work.ListenableWorker { *; }

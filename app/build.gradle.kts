@@ -14,10 +14,17 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
-val signingProperties = Properties().apply {
-    val file = rootProject.file("keystore.properties")
-    if (file.exists()) file.inputStream().use { load(it) }
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
+
+val releaseStoreFile = keystoreProperties["RELEASE_STORE_FILE"]?.toString()?.let { file(it) }
+val releaseStorePassword = keystoreProperties["RELEASE_STORE_PASSWORD"]?.toString()
+val releaseKeyAlias = keystoreProperties["RELEASE_KEY_ALIAS"]?.toString()
+val releaseKeyPassword = keystoreProperties["RELEASE_KEY_PASSWORD"]?.toString()
+val hasReleaseSigningConfig = releaseStoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null
 
 // Priority 2: Fail-fast helper — throws a Gradle build error if a required key is absent.
 // Resolution order: local.properties → environment variable → build error.
@@ -35,25 +42,12 @@ fun requiredLocalProperty(key: String): String =
 fun optionalLocalProperty(key: String): String? =
     localProperties.getProperty(key) ?: System.getenv(key)
 
-fun requiredReleaseSigningProperty(key: String): String =
-    signingProperties.getProperty(key)
-        ?: System.getenv(key)
-        ?: error(
-            "\nMissing release signing key \"$key\".\n" +
-                "Provide it in keystore.properties OR as an environment variable named $key.\n"
-        )
-
-fun optionalReleaseSigningProperty(key: String): String? =
-    signingProperties.getProperty(key) ?: System.getenv(key)
-
-val releaseSigningKeys = listOf(
-    "RELEASE_STORE_FILE",
-    "RELEASE_STORE_PASSWORD",
-    "RELEASE_KEY_ALIAS",
-    "RELEASE_KEY_PASSWORD"
+val missingReleaseSigningKeys = listOfNotNull(
+    "RELEASE_STORE_FILE".takeIf { releaseStoreFile == null },
+    "RELEASE_STORE_PASSWORD".takeIf { releaseStorePassword == null },
+    "RELEASE_KEY_ALIAS".takeIf { releaseKeyAlias == null },
+    "RELEASE_KEY_PASSWORD".takeIf { releaseKeyPassword == null }
 )
-val missingReleaseSigningKeys = releaseSigningKeys.filter { optionalReleaseSigningProperty(it).isNullOrBlank() }
-val hasReleaseSigningConfig = missingReleaseSigningKeys.isEmpty()
 val releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.contains("release", ignoreCase = true)
 }
@@ -106,13 +100,14 @@ android {
     signingConfigs {
         if (hasReleaseSigningConfig) {
             create("release") {
-                storeFile = rootProject.file(requiredReleaseSigningProperty("RELEASE_STORE_FILE"))
-                storePassword = requiredReleaseSigningProperty("RELEASE_STORE_PASSWORD")
-                keyAlias = requiredReleaseSigningProperty("RELEASE_KEY_ALIAS")
-                keyPassword = requiredReleaseSigningProperty("RELEASE_KEY_PASSWORD")
+                storeFile = releaseStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
+
 
     buildTypes {
         // Priority 3: Enable R8 minification and resource shrinking for release.

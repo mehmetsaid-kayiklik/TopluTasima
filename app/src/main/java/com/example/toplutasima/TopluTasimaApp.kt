@@ -2,6 +2,7 @@ package com.example.toplutasima
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -47,12 +48,21 @@ class TopluTasimaApp : Application() {
             modules(appModule)
         }
 
+        val workerFactory: TopluTasimaWorkerFactory = koinApplication.koin.get()
+        val workerFactoryClassName = workerFactory::class.java.name
+        val workerFactoryMessage =
+            "WorkManager initialized with factory: $workerFactoryClassName; " +
+                "expected=com.example.toplutasima.worker.TopluTasimaWorkerFactory"
+
+        TransitTrackerLogger.log(this, "WorkerFactory", "About to initialize WorkManager with factory: ${workerFactory::class.java.name}")
         WorkManager.initialize(
             this,
             Configuration.Builder()
-                .setWorkerFactory(koinApplication.koin.get<TopluTasimaWorkerFactory>())
+                .setWorkerFactory(workerFactory)
                 .build()
         )
+        Log.d("WorkerFactory", workerFactoryMessage)
+        TransitTrackerLogger.log(this, "WorkerFactory", workerFactoryMessage)
         observeTransitActionWorkerTerminalStates()
 
         if (OfflineQueueStore.pendingCount(this) > 0) {
@@ -80,7 +90,7 @@ class TopluTasimaApp : Application() {
                             TransitTrackerLogger.log(
                                 this,
                                 "WorkManagerObserver",
-                                "Worker ${info.state}: tags=${info.tags}"
+                                "Worker ${info.state}: id=${info.id} tags=${info.tags}"
                             )
                         }
                     }

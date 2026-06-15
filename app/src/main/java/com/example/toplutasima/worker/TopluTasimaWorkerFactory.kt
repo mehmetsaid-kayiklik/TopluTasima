@@ -21,28 +21,35 @@ class TopluTasimaWorkerFactory(
         workerClassName: String,
         workerParameters: WorkerParameters
     ): ListenableWorker? {
-        return try {
-            when (workerClassName) {
-                TransitActionWorker::class.java.name -> {
-                    Log.d(TAG, "Creating TransitActionWorker, repository=$transitRecordRepository")
-                    TransitActionWorker(
+        val msg = "createWorker() called: class=$workerClassName"
+        Log.d(TAG, msg)
+        TransitTrackerLogger.log(appContext, TAG, msg)
+
+        return when (workerClassName) {
+            TransitActionWorker::class.java.name -> {
+                try {
+                    val w = TransitActionWorker(
                         appContext = appContext,
                         workerParams = workerParameters,
                         repository = transitRecordRepository
                     )
-                }
-                else -> {
-                    Log.w(TAG, "Unknown worker class: $workerClassName")
-                    null
+                    TransitTrackerLogger.log(appContext, TAG, "TransitActionWorker created OK")
+                    w
+                } catch (e: Exception) {
+                    val errMsg =
+                        "createWorker() FAILED for $workerClassName: ${e::class.simpleName}: ${e.message}"
+                    Log.e(TAG, errMsg, e)
+                    TransitTrackerLogger.log(appContext, TAG, errMsg)
+                    throw e
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "createWorker failed: $e", e)
-            TransitTrackerLogger.log(
-                appContext, TAG,
-                "createWorker FAILED: class=$workerClassName error=${e.message}"
-            )
-            null
+            else -> {
+                // Return null to let WorkManager use delegate/default factory for other workers
+                val warnMsg = "createWorker() — delegating to default factory: $workerClassName"
+                Log.w(TAG, warnMsg)
+                TransitTrackerLogger.log(appContext, TAG, warnMsg)
+                null
+            }
         }
     }
 }
