@@ -15,7 +15,7 @@ import com.example.toplutasima.data.local.entity.TripProfileLinkEntity
 
 @Database(
     entities = [TripEntity::class, ProfileEntity::class, TripProfileLinkEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -40,13 +40,10 @@ abstract class AppDatabase : RoomDatabase() {
                     CREATE TABLE IF NOT EXISTS `profiles` (
                         `id` TEXT NOT NULL, 
                         `displayName` TEXT NOT NULL, 
-                        `nameKind` TEXT NOT NULL, 
                         `memoryNote` TEXT, 
-                        `birthHint` TEXT, 
-                        `infoSource` TEXT NOT NULL, 
                         `createdAt` INTEGER NOT NULL, 
                         `updatedAt` INTEGER NOT NULL, 
-                        `archived` INTEGER NOT NULL DEFAULT 0, 
+                        `archived` INTEGER NOT NULL,
                         PRIMARY KEY(`id`)
                     )
                 """.trimIndent())
@@ -77,6 +74,84 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `profiles` RENAME TO `profiles_old`")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `profiles` (
+                        `id` TEXT NOT NULL,
+                        `displayName` TEXT NOT NULL,
+                        `memoryNote` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `archived` INTEGER NOT NULL,
+                        `sharedWithTransit` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+
+                db.execSQL("""
+                    INSERT INTO `profiles` (
+                        `id`,
+                        `displayName`,
+                        `memoryNote`,
+                        `createdAt`,
+                        `updatedAt`,
+                        `archived`,
+                        `sharedWithTransit`
+                    )
+                    SELECT
+                        `id`,
+                        `displayName`,
+                        `memoryNote`,
+                        `createdAt`,
+                        `updatedAt`,
+                        `archived`,
+                        `sharedWithTransit`
+                    FROM `profiles_old`
+                """.trimIndent())
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `trip_profile_links_new` (
+                        `id` TEXT NOT NULL,
+                        `tripStableKey` TEXT NOT NULL,
+                        `profileId` TEXT NOT NULL,
+                        `seatmateNote` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`profileId`) REFERENCES `profiles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+
+                db.execSQL("""
+                    INSERT INTO `trip_profile_links_new` (
+                        `id`,
+                        `tripStableKey`,
+                        `profileId`,
+                        `seatmateNote`,
+                        `createdAt`,
+                        `updatedAt`
+                    )
+                    SELECT
+                        `id`,
+                        `tripStableKey`,
+                        `profileId`,
+                        `seatmateNote`,
+                        `createdAt`,
+                        `updatedAt`
+                    FROM `trip_profile_links`
+                """.trimIndent())
+
+                db.execSQL("DROP TABLE `trip_profile_links`")
+                db.execSQL("DROP TABLE `profiles_old`")
+                db.execSQL("ALTER TABLE `trip_profile_links_new` RENAME TO `trip_profile_links`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_profile_links_tripStableKey` ON `trip_profile_links` (`tripStableKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_trip_profile_links_profileId` ON `trip_profile_links` (`profileId`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -84,7 +159,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "toplutasima_database"
                 )
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

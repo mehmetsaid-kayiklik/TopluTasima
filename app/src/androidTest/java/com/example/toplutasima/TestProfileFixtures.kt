@@ -7,10 +7,7 @@ object TestProfileFixtures {
     fun profile(
         id: String = "profile-1",
         displayName: String = "Mehmet",
-        nameKind: String = "FIRST_NAME",
         memoryNote: String? = null,
-        birthHint: String? = null,
-        infoSource: String = "ASKED",
         createdAt: Long = 1000L,
         updatedAt: Long = 1000L,
         archived: Boolean = false
@@ -18,10 +15,7 @@ object TestProfileFixtures {
         ProfileEntity(
             id = id,
             displayName = displayName,
-            nameKind = nameKind,
             memoryNote = memoryNote,
-            birthHint = birthHint,
-            infoSource = infoSource,
             createdAt = createdAt,
             updatedAt = updatedAt,
             archived = archived

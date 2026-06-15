@@ -30,8 +30,7 @@ class ProfileDaoTest {
     fun testProfileDao_CRUD_Operations() = runBlocking {
         val profileDao = db.profileDao()
         val profile = TestProfileFixtures.profile(
-            memoryNote = "Yol arkadasi",
-            birthHint = "1990"
+            memoryNote = "Yol arkadasi"
         )
 
         profileDao.upsertAll(listOf(profile))

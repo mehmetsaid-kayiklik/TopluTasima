@@ -26,10 +26,7 @@ object FirestorePersonService {
             ProfileEntity(
                 id                = d["id"]?.toString() ?: doc.id,
                 displayName       = d["displayName"]?.toString() ?: "",
-                nameKind          = d["nameKind"]?.toString() ?: "UNKNOWN",
                 memoryNote        = d["memoryNote"]?.toString(),
-                birthHint         = d["birthHint"]?.toString() ?: d["birthday"]?.toString(),
-                infoSource        = d["infoSource"]?.toString() ?: "UNKNOWN",
                 createdAt         = (d["createdAt"] as? Number)?.toLong() ?: 0L,
                 updatedAt         = (d["updatedAt"] as? Number)?.toLong() ?: 0L,
                 archived          = d["archived"] as? Boolean ?: false,
