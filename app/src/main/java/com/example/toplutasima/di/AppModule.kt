@@ -60,7 +60,7 @@ val appModule = module {
     }
     single { PersonalTripRepository() }       // Kişisel Araç — "personaltrips"
     single { ProfileSyncRepository(androidContext()) }
-    single { TopluTasimaWorkerFactory(get()) }
+    single { TopluTasimaWorkerFactory() }
 
     // ── Use Case ────────────────────────────────────────────────────────────
     single { TripPlanningUseCase(get()) }

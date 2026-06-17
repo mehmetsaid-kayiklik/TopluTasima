@@ -6,11 +6,10 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
-import com.example.toplutasima.repository.TransitRecordRepository
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.get
 
-class TopluTasimaWorkerFactory(
-    private val transitRecordRepository: TransitRecordRepository
-) : WorkerFactory() {
+class TopluTasimaWorkerFactory : WorkerFactory(), KoinComponent {
 
     companion object {
         private const val TAG = "WorkerFactory"
@@ -28,10 +27,15 @@ class TopluTasimaWorkerFactory(
         return when (workerClassName) {
             TransitActionWorker::class.java.name -> {
                 try {
+                    TransitTrackerLogger.log(
+                        appContext,
+                        TAG,
+                        "createWorker() — creating TransitActionWorker via Koin"
+                    )
                     val w = TransitActionWorker(
-                        appContext = appContext,
-                        workerParams = workerParameters,
-                        repository = transitRecordRepository
+                        appContext,
+                        workerParameters,
+                        get()
                     )
                     TransitTrackerLogger.log(appContext, TAG, "TransitActionWorker created OK")
                     w
@@ -45,7 +49,7 @@ class TopluTasimaWorkerFactory(
             }
             else -> {
                 // Return null to let WorkManager use delegate/default factory for other workers
-                val warnMsg = "createWorker() — delegating to default factory: $workerClassName"
+                val warnMsg = "createWorker() — unknown class, delegating to default factory: $workerClassName"
                 Log.w(TAG, warnMsg)
                 TransitTrackerLogger.log(appContext, TAG, warnMsg)
                 null
