@@ -17,6 +17,12 @@ class TransitActionWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     init {
+        TransitTrackerLogger.log(
+            appContext,
+            "TransitActionWorker",
+            "CONSTRUCTOR called — instance created"
+        )
+
         // Defensive check: repository is non-null by Kotlin's type system,
         // but Koin DI might inject a Java-null via unchecked cast.
         @Suppress("SENSELESS_COMPARISON")

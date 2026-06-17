@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import java.util.Locale
+import kotlin.math.abs
 
 object RmvFeatureParsers {
     private val alertTitleKeys = setOf("summary", "title", "head", "header", "subject")
@@ -85,8 +86,8 @@ object RmvFeatureParsers {
                 id = id,
                 name = name,
                 kind = kind,
-                lat = double(obj, "lat", "y"),
-                lon = double(obj, "lon", "lng", "x")
+                lat = coordinate(obj, "lat", "y"),
+                lon = coordinate(obj, "lon", "lng", "x")
             )
         }
 
@@ -208,8 +209,18 @@ object RmvFeatureParsers {
     private fun int(obj: JsonObject, vararg keys: String): Int? =
         keys.firstNotNullOfOrNull { key -> (obj[key] as? JsonPrimitive)?.intOrNull }
 
-    private fun double(obj: JsonObject, vararg keys: String): Double? =
-        keys.firstNotNullOfOrNull { key -> (obj[key] as? JsonPrimitive)?.doubleOrNull }
+    private fun coordinate(obj: JsonObject, vararg keys: String): Double? =
+        keys.firstNotNullOfOrNull { key ->
+            val raw = obj.entries.firstOrNull { it.key.equals(key, ignoreCase = true) }
+                ?.value
+                ?.let { it as? JsonPrimitive }
+                ?.doubleOrNull
+                ?: return@firstNotNullOfOrNull null
+            normalizeCoordinate(raw)
+        }
+
+    private fun normalizeCoordinate(value: Double): Double =
+        if (abs(value) > 1_000.0) value / 1_000_000.0 else value
 
     private fun productName(obj: JsonObject): String? =
         (obj["Product"] as? JsonObject)?.let { string(it, "name", "num") }

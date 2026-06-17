@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -21,6 +22,15 @@ private val json = Json {
 private val rmvHttpClient = OkHttpClient.Builder()
     .addInterceptor { chain ->
         chain.proceed(chain.request().withRmvAccessId(BuildConfig.RMV_ACCESS_ID))
+    }
+    .apply {
+        if (BuildConfig.DEBUG) {
+            addInterceptor(
+                HttpLoggingInterceptor().apply {
+                    level = HttpLoggingInterceptor.Level.HEADERS
+                }
+            )
+        }
     }
     .build()
 

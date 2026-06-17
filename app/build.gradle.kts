@@ -173,6 +173,7 @@ dependencies {
     // Priority 4: All previously hardcoded strings are now resolved from libs.versions.toml.
     // Versions are unchanged — only the declaration location has moved.
     implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
     implementation("com.google.firebase:firebase-auth-ktx")

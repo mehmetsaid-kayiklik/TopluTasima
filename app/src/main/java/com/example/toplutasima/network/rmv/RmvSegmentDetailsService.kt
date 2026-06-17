@@ -2,6 +2,7 @@ package com.example.toplutasima.network.rmv
 
 import android.util.Log
 import com.example.toplutasima.BuildConfig
+import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.ApiErrors
@@ -14,10 +15,20 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
+import kotlin.math.pow
 
 class RmvSegmentDetailsService(
     private val distanceService: RmvDistanceService = RmvDistanceService()
 ) {
+    private data class StopInfo(
+        val name: String,
+        val lat: Double,
+        val lon: Double,
+        val depTime: String,
+        val extId: String
+    )
+
     suspend fun fetchJourneyStops(
         ref: String,
         fromStop: String,
@@ -47,14 +58,6 @@ class RmvSegmentDetailsService(
                 else -> stops
             }
         } ?: json.opt("Stop")
-
-        data class StopInfo(
-            val name: String,
-            val lat: Double,
-            val lon: Double,
-            val depTime: String,
-            val extId: String
-        )
 
         val stopList = mutableListOf<StopInfo>()
         var totalStopsBeforeFilter = 0
@@ -110,8 +113,12 @@ class RmvSegmentDetailsService(
         var fromIdx = -1
         var toIdx = -1
 
-        fun extractExtId(compositeId: String): String =
-            Regex("""L=(\d+)""").find(compositeId)?.groupValues?.get(1).orEmpty()
+        fun extractExtId(compositeId: String): String {
+            val value = compositeId.trim()
+            val lParam = Regex("""L=(\d+)""").find(value)?.groupValues?.get(1).orEmpty()
+            if (lParam.isNotBlank()) return lParam
+            return value.takeIf { it.matches(Regex("""\d+""")) }.orEmpty()
+        }
 
         val fromExtId = extractExtId(fromId)
         val toExtId = extractExtId(toId)
@@ -205,6 +212,7 @@ class RmvSegmentDetailsService(
             stopList.subList(resolvedTo, resolvedFrom + 1).asReversed()
         }
         val segmentCoords = segmentStops.map { Pair(it.lat, it.lon) }
+        logWaypointDiagnostics(segmentStops, resolvedFrom, resolvedTo)
         val segStopCount = kotlin.math.abs(resolvedTo - resolvedFrom)
         val allNames = stopList.map { it.name }
         val allTimes = stopList.map { it.depTime }
@@ -243,7 +251,14 @@ class RmvSegmentDetailsService(
         }
 
     private suspend fun fetchSegmentDetailsOnce(seg: Segment): RmvApiService.SegmentDetails {
-        val journeySegment = fetchJourneyStops(seg.journeyRef, seg.fromStop, seg.toStop, seg.dep)
+        val journeySegment = fetchJourneyStops(
+            seg.journeyRef,
+            seg.fromStop,
+            seg.toStop,
+            seg.dep,
+            seg.fromStopId,
+            seg.toStopId
+        )
         val distanceKm = if (journeySegment.coords.size >= 2) {
             when (seg.typeTr) {
                 VehicleType.BUS.key -> distanceService.calculateDistanceORS(journeySegment.coords)
@@ -285,6 +300,50 @@ class RmvSegmentDetailsService(
             throw apiError
         }
     }
+
+    private fun logWaypointDiagnostics(stops: List<StopInfo>, resolvedFrom: Int, resolvedTo: Int) {
+        if (!BuildConfig.DEBUG) return
+        val step = if (resolvedTo >= resolvedFrom) 1 else -1
+        TransitTrackerLogger.log(
+            "JourneyWaypoint",
+            "Waypoint list before ORS: count=${stops.size} fromIdx=$resolvedFrom toIdx=$resolvedTo"
+        )
+        stops.forEachIndexed { index, stop ->
+            val sourceIndex = resolvedFrom + (index * step)
+            TransitTrackerLogger.log(
+                "JourneyWaypoint",
+                "Waypoint[$index] sourceIdx=$sourceIndex id=${stop.extId} " +
+                    "name='${stop.name}' lat=${formatCoord(stop.lat)} lon=${formatCoord(stop.lon)}"
+            )
+        }
+        logWaypointSegments(stops)
+    }
+
+    private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val R = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2).pow(2) +
+            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2).pow(2)
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    }
+
+    private fun logWaypointSegments(stops: List<StopInfo>) {
+        if (!BuildConfig.DEBUG) return
+        for (i in 0 until stops.size - 1) {
+            val a = stops[i]
+            val b = stops[i + 1]
+            val d = haversineKm(a.lat, a.lon, b.lat, b.lon)
+            val flag = if (d > 1.0) " ANOMALI" else ""
+            TransitTrackerLogger.log(
+                "JourneyWaypoint",
+                "Segment[$i] ${a.name} -> ${b.name}: ${String.format(Locale.US, "%.3f", d)} km$flag"
+            )
+        }
+    }
+
+    private fun formatCoord(value: Double): String =
+        String.format(Locale.US, "%.6f", value)
 
     private fun logD(tag: String, msg: String) {
         if (BuildConfig.DEBUG) Log.d(tag, msg)

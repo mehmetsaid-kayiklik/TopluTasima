@@ -74,6 +74,27 @@ class RmvFeatureParsersTest {
     }
 
     @Test
+    fun `location parser converts HAFAS xy microdegree coordinates`() {
+        val json = Json.parseToJsonElement(
+            """
+            {
+              "StopLocation": {
+                "id": "stop-1",
+                "name": "Frankfurt Westbahnhof",
+                "x": 8640884,
+                "y": 50119568
+              }
+            }
+            """.trimIndent()
+        ).jsonObject
+
+        val option = RmvFeatureParsers.parseLocationOptions(json).first()
+
+        assertEquals(50.119568, option.lat ?: 0.0, 0.000001)
+        assertEquals(8.640884, option.lon ?: 0.0, 0.000001)
+    }
+
+    @Test
     fun `journey match parser extracts candidate line`() {
         val json = Json.parseToJsonElement(
             """

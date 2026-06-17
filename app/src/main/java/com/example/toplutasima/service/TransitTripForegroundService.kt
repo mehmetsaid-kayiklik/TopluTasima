@@ -613,10 +613,40 @@ class TransitTripForegroundService : Service() {
             .addTag(TransitActionWorker.TAG)
             .build()
         val uniqueName = "autoAlight_$segId"
-        WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+        val workManager = WorkManager.getInstance(applicationContext)
+        TransitTrackerLogger.log(
+            applicationContext,
+            TAG,
+            "About to call enqueueUniqueWork for $uniqueName"
+        )
+        val operation = workManager.enqueueUniqueWork(
             uniqueName,
             ExistingWorkPolicy.KEEP,
             workRequest
+        )
+        TransitTrackerLogger.log(
+            applicationContext,
+            TAG,
+            "enqueueUniqueWork() returned, operation=${operation.result}"
+        )
+        operation.result.addListener(
+            {
+                try {
+                    operation.result.get()
+                    TransitTrackerLogger.log(
+                        applicationContext,
+                        TAG,
+                        "enqueue operation SUCCEEDED for $uniqueName"
+                    )
+                } catch (e: Exception) {
+                    TransitTrackerLogger.log(
+                        applicationContext,
+                        TAG,
+                        "enqueue operation FAILED for $uniqueName: ${e.message}"
+                    )
+                }
+            },
+            Executor { it.run() }
         )
         observeAutoAlightWork(uniqueName)
         return AutoAlightWorkRequest(uniqueName = uniqueName, workId = workRequest.id)

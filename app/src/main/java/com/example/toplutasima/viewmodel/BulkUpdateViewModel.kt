@@ -419,7 +419,12 @@ class BulkUpdateViewModel(
         // 4) Fetch journey stops
         checkRmvRateLimit()
         val journeySegment = RmvApiService.fetchJourneyStops(
-            seg.journeyRef, seg.fromStop, seg.toStop, seg.dep
+            seg.journeyRef,
+            seg.fromStop,
+            seg.toStop,
+            seg.dep,
+            seg.fromStopId,
+            seg.toStopId
         )
         recordRmvCall()
 

@@ -11,6 +11,24 @@ object TransitTrackerLogger {
     private const val TAG = "TransitTrackerLogger"
     private const val FILE_PREFIX = "tracker_log_"
     private const val FILE_SUFFIX = ".txt"
+    @Volatile private var appContext: Context? = null
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    fun log(logTag: String, message: String) {
+        val context = appContext
+        if (context != null) {
+            log(context, logTag, message)
+        } else {
+            Log.d(logTag, message)
+        }
+    }
+
+    fun log(message: String) {
+        log(TAG, message)
+    }
 
     /**
      * Günün tarihini temel alarak yerel bir dosyaya log ekler.

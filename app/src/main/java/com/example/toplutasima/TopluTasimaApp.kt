@@ -35,6 +35,7 @@ class TopluTasimaApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AppErrorReporter.install(this)
+        TransitTrackerLogger.init(this)
 
         // PrefsManager ve LocaleManager'ı burada başlat.
         // Service / Worker / BroadcastReceiver, MainActivity'den önce çalışabilir;
@@ -59,6 +60,7 @@ class TopluTasimaApp : Application() {
             this,
             Configuration.Builder()
                 .setWorkerFactory(workerFactory)
+                .setMinimumLoggingLevel(Log.DEBUG)
                 .build()
         )
         Log.d("WorkerFactory", workerFactoryMessage)
