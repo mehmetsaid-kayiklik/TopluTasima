@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.Configuration
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
@@ -92,11 +93,33 @@ class TopluTasimaApp : Application() {
                             TransitTrackerLogger.log(
                                 this,
                                 "WorkManagerObserver",
-                                "Worker ${info.state}: id=${info.id} tags=${info.tags}"
+                                "Worker ${info.state}: id=${info.id} tags=${info.tags} " +
+                                    "outputData=${formatWorkData(info.outputData)}"
                             )
                         }
                     }
                 }
             }
     }
+
+    private fun formatWorkData(data: Data): String {
+        val values = data.keyValueMap
+        if (values.isEmpty()) return "{}"
+
+        return values.entries.joinToString(prefix = "{", postfix = "}") { (key, value) ->
+            "$key=${formatDataValue(value)}"
+        }
+    }
+
+    private fun formatDataValue(value: Any?): String =
+        when (value) {
+            is Array<*> -> value.contentDeepToString()
+            is BooleanArray -> value.contentToString()
+            is ByteArray -> value.contentToString()
+            is DoubleArray -> value.contentToString()
+            is FloatArray -> value.contentToString()
+            is IntArray -> value.contentToString()
+            is LongArray -> value.contentToString()
+            else -> value.toString()
+        }
 }

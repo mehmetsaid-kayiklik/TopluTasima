@@ -156,6 +156,27 @@ class TransitTripForegroundService : Service() {
         TransitTrackerLogger.log(this, TAG, message)
     }
 
+    private fun formatWorkData(data: Data): String {
+        val values = data.keyValueMap
+        if (values.isEmpty()) return "{}"
+
+        return values.entries.joinToString(prefix = "{", postfix = "}") { (key, value) ->
+            "$key=${formatDataValue(value)}"
+        }
+    }
+
+    private fun formatDataValue(value: Any?): String =
+        when (value) {
+            is Array<*> -> value.contentDeepToString()
+            is BooleanArray -> value.contentToString()
+            is ByteArray -> value.contentToString()
+            is DoubleArray -> value.contentToString()
+            is FloatArray -> value.contentToString()
+            is IntArray -> value.contentToString()
+            is LongArray -> value.contentToString()
+            else -> value.toString()
+        }
+
     override fun onCreate() {
         super.onCreate()
         isServiceDestroyed = false
@@ -594,7 +615,32 @@ class TransitTripForegroundService : Service() {
             .setInputData(workData)
             .addTag(TransitActionWorker.TAG)
             .build()
-        WorkManager.getInstance(applicationContext).enqueue(workRequest)
+        TransitTrackerLogger.log(
+            applicationContext,
+            TAG,
+            "About to enqueue TransitActionWorker workId=${workRequest.id} " +
+                "class=${TransitActionWorker::class.java.name} tripId=$currentTripId isBoarding=$isBoarding"
+        )
+        val operation = WorkManager.getInstance(applicationContext).enqueue(workRequest)
+        operation.result.addListener(
+            {
+                try {
+                    operation.result.get()
+                    TransitTrackerLogger.log(
+                        applicationContext,
+                        TAG,
+                        "enqueue operation SUCCEEDED for TransitActionWorker workId=${workRequest.id}"
+                    )
+                } catch (e: Exception) {
+                    TransitTrackerLogger.log(
+                        applicationContext,
+                        TAG,
+                        "enqueue operation FAILED for TransitActionWorker workId=${workRequest.id}: ${e.message}"
+                    )
+                }
+            },
+            Executor { it.run() }
+        )
     }
 
     private fun enqueueTransitActionWorkerWithId(
@@ -617,7 +663,8 @@ class TransitTripForegroundService : Service() {
         TransitTrackerLogger.log(
             applicationContext,
             TAG,
-            "About to call enqueueUniqueWork for $uniqueName"
+            "About to call enqueueUniqueWork for $uniqueName workId=${workRequest.id} " +
+                "class=${TransitActionWorker::class.java.name}"
         )
         val operation = workManager.enqueueUniqueWork(
             uniqueName,
@@ -668,7 +715,8 @@ class TransitTripForegroundService : Service() {
                             applicationContext,
                             TAG,
                             "AutoAlight worker state changed uniqueName=$uniqueName " +
-                                "workId=${workInfo.id} state=${workInfo.state}"
+                                "workId=${workInfo.id} state=${workInfo.state} " +
+                                "outputData=${formatWorkData(workInfo.outputData)}"
                         )
                     }
                 }
@@ -686,7 +734,7 @@ class TransitTripForegroundService : Service() {
                 try {
                     val workInfos = future.get()
                     val status = workInfos.joinToString(separator = ", ") { workInfo ->
-                        "${workInfo.id}:${workInfo.state}"
+                        "${workInfo.id}:${workInfo.state}:outputData=${formatWorkData(workInfo.outputData)}"
                     }.ifBlank { "no WorkInfo found" }
                     TransitTrackerLogger.log(
                         applicationContext,
