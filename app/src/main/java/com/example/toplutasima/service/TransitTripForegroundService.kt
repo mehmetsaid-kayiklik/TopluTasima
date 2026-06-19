@@ -199,14 +199,16 @@ class TransitTripForegroundService : Service() {
         when (intent.action) {
             ACTION_START -> {
                 readExtras(intent)
-                hasBoarded = false
+                val isReentry = _isActive.value
+                hasBoarded = if (isReentry) hasBoarded else false
                 persistServiceState()
-                if (!startForegroundForCurrentState(useLocationType = false)) {
+                val useLocation = isReentry || proximityTracker.isTracking
+                if (!startForegroundForCurrentState(useLocationType = useLocation)) {
                     stopSelf()
                     return START_NOT_STICKY
                 }
                 TransitTrackerLogger.cleanOldLogs(this, maxDaysToKeep = 2)
-                logD("Bildirim başladı")
+                logD("Bildirim başladı (reentry=$isReentry, useLocation=$useLocation)")
             }
             ACTION_UPDATE_BOARDING -> {
                 if (!hasUsableServiceState() || !isNotificationActionForCurrentTrip(intent)) {
@@ -660,6 +662,13 @@ class TransitTripForegroundService : Service() {
             .build()
         val uniqueName = "autoAlight_$segId"
         val workManager = WorkManager.getInstance(applicationContext)
+        val existingInfos = workManager.getWorkInfosForUniqueWork(uniqueName).get()
+        TransitTrackerLogger.log(
+            applicationContext,
+            TAG,
+            "Existing work for $uniqueName before enqueue: " +
+                existingInfos.joinToString { "id=${it.id} state=${it.state}" }
+        )
         TransitTrackerLogger.log(
             applicationContext,
             TAG,
@@ -668,7 +677,7 @@ class TransitTripForegroundService : Service() {
         )
         val operation = workManager.enqueueUniqueWork(
             uniqueName,
-            ExistingWorkPolicy.KEEP,
+            ExistingWorkPolicy.REPLACE,
             workRequest
         )
         TransitTrackerLogger.log(

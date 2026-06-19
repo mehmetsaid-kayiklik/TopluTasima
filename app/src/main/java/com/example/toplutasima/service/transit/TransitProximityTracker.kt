@@ -48,6 +48,9 @@ class TransitProximityTracker(
     private var isCurrentlyWalking = false
     private var consecutiveWalkingLoops = 0
 
+    val isTracking: Boolean
+        get() = proximityJob != null
+
     fun missingPrerequisiteReason(targetLat: Double, targetLng: Double): String? {
         if (targetLat.isNaN() || targetLng.isNaN()) return "koordinat yok"
         if (!hasLocationPermission()) return "konum izni yok"
