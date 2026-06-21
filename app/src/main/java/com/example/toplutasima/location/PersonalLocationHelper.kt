@@ -28,6 +28,13 @@ import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
+data class RouteWaypoint(
+    val latitude: Double,
+    val longitude: Double,
+    val speedMps: Double? = null,
+    val accuracyM: Double? = null
+)
+
 /**
  * Kişisel biniş özelliği için konum yardımcısı.
  * Toplu taşımanın NearbyStopsManager'ından tamamen bağımsızdır.
@@ -43,6 +50,9 @@ class PersonalLocationHelper(private val context: Context) {
         private const val LOCATION_TIMEOUT_MS = 8_000L
         private const val ORS_DIRECTIONS_URL =
             "https://api.openrouteservice.org/v2/directions/driving-car"
+        private const val DEFAULT_ORS_RADIUS_M = 50.0
+        private const val MIN_ORS_RADIUS_M = 20.0
+        private const val MAX_ORS_RADIUS_M = 50.0
     }
 
     private val httpClient = OkHttpClient.Builder()
@@ -147,10 +157,10 @@ class PersonalLocationHelper(private val context: Context) {
 
     /**
      * Verilen waypoint listesinden ORS API ile gerçek yol mesafesini hesaplar.
-     * @param waypoints (lat, lng) çiftlerinin listesi — en az 2 nokta gerekmektedir
+     * @param waypoints rota noktaları — en az 2 nokta gerekmektedir
      * @return metre cinsinden yol mesafesi, veya null (hata / API limiti)
      */
-    suspend fun fetchRouteDistanceMeters(waypoints: List<Pair<Double, Double>>): Double? {
+    suspend fun fetchRouteDistanceMeters(waypoints: List<RouteWaypoint>): Double? {
         if (waypoints.size < 2) return null
         return withContext(Dispatchers.IO) {
             try {
@@ -161,11 +171,20 @@ class PersonalLocationHelper(private val context: Context) {
                 )
                 // ORS beklentisi: [[lng, lat], [lng, lat], ...]
                 val coords = JSONArray().apply {
-                    waypoints.forEach { (lat, lng) ->
-                        put(JSONArray().put(lng).put(lat))
+                    waypoints.forEach { waypoint ->
+                        put(JSONArray().put(waypoint.longitude).put(waypoint.latitude))
                     }
                 }
-                val body = JSONObject().put("coordinates", coords).toString()
+                val radiuses = JSONArray().apply {
+                    waypoints.forEach { waypoint ->
+                        put(radiusForAccuracyM(waypoint.accuracyM))
+                    }
+                }
+                val body = JSONObject()
+                    .put("coordinates", coords)
+                    .put("continue_straight", true)
+                    .put("radiuses", radiuses)
+                    .toString()
 
                 val request = Request.Builder()
                     .url(ORS_DIRECTIONS_URL)
@@ -231,8 +250,15 @@ class PersonalLocationHelper(private val context: Context) {
             "speedMps=${if (location.hasSpeed()) String.format(Locale.US, "%.2f", location.speed) else "n/a"} " +
             "ageMs=${System.currentTimeMillis() - location.time} elapsedNanos=${location.elapsedRealtimeNanos}"
 
+    private fun radiusForAccuracyM(accuracyM: Double?): Double =
+        (accuracyM?.let { it * 2.0 } ?: DEFAULT_ORS_RADIUS_M)
+            .coerceIn(MIN_ORS_RADIUS_M, MAX_ORS_RADIUS_M)
+
     private fun formatPoint(point: Pair<Double, Double>): String =
         "${formatCoord(point.first)},${formatCoord(point.second)}"
+
+    private fun formatPoint(point: RouteWaypoint): String =
+        "${formatCoord(point.latitude)},${formatCoord(point.longitude)}"
 
     private fun formatCoord(value: Double): String =
         String.format(Locale.US, "%.6f", value)

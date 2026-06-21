@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">RMV Log</string>
+    <string name="personal_trip_tile_label">Kişisel Seyahat</string>
+    <string name="personal_trip_tile_label_active">Seyahat Aktif</string>
+    <string name="personal_trip_tile_subtitle_active">Takip açık</string>
+    <string name="personal_trip_tile_subtitle_inactive">Takip kapalı</string>
 </resources>

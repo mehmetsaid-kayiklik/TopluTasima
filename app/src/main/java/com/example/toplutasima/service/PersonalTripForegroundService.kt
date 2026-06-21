@@ -13,6 +13,7 @@ import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.diagnostics.PersonalTripTrackerLogger
 import com.example.toplutasima.location.PersonalLocationHelper
+import com.example.toplutasima.location.RouteWaypoint
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -46,6 +47,9 @@ class PersonalTripForegroundService : Service() {
         private const val CHANNEL_ID = "personal_trip_tracking"
         private const val NOTIF_ID = 9001
         private const val ORS_BATCH_INTERVAL_MS = 4 * 60 * 1000L // 4 dakika
+        private const val DEFAULT_FILTER_DISTANCE_M = 30.0
+        private const val HIGH_SPEED_FILTER_DISTANCE_M = 15.0
+        private const val HIGH_SPEED_THRESHOLD_MPS = 15.0
 
         // ViewModel tarafından gözlemlenen durum akışları
         private val _liveDistanceKm = MutableStateFlow(0.0)
@@ -65,7 +69,7 @@ class PersonalTripForegroundService : Service() {
     private lateinit var locationHelper: PersonalLocationHelper
 
     /** Birikmiş ama henüz ORS'e gönderilmemiş waypoint'ler */
-    private val pendingWaypoints = mutableListOf<Pair<Double, Double>>()
+    private val pendingWaypoints = mutableListOf<RouteWaypoint>()
     /** Tamamlanmış ORS batch'lerinden gelen toplam mesafe (metre) */
     private var totalDistanceMeters = 0.0
     private var activeTripDocId = ""
@@ -86,8 +90,14 @@ class PersonalTripForegroundService : Service() {
             val previous = lastRawLocation
             val deltaMeters = previous?.distanceTo(loc)?.toDouble()
             val ageMs = System.currentTimeMillis() - loc.time
+            val waypoint = RouteWaypoint(
+                latitude = loc.latitude,
+                longitude = loc.longitude,
+                speedMps = if (loc.hasSpeed()) loc.speed.toDouble() else null,
+                accuracyM = if (loc.hasAccuracy()) loc.accuracy.toDouble() else null
+            )
             val count = synchronized(pendingWaypoints) {
-                pendingWaypoints.add(loc.latitude to loc.longitude)
+                pendingWaypoints.add(waypoint)
                 pendingWaypoints.size
             }
             rawWaypointCount += 1
@@ -110,6 +120,7 @@ class PersonalTripForegroundService : Service() {
         locationHelper = PersonalLocationHelper(this)
         createNotificationChannel()
         PersonalTripTrackerLogger.cleanOldLogs(this, maxDaysToKeep = 7)
+        PersonalTripTrackingState.setTracking(this, _isTracking.value)
         logD("onCreate")
     }
 
@@ -153,16 +164,23 @@ class PersonalTripForegroundService : Service() {
             "startTracking begin hasPermission=${locationHelper.hasPermission()} existingJobActive=${orsBatchJob?.isActive == true} " +
                 "pendingBefore=${pendingCount()} totalBeforeKm=${formatKm(totalDistanceMeters)}"
         )
+        if (_isTracking.value) {
+            PersonalTripTrackingState.setTracking(this, true)
+            logD("startTracking skipped reason=already_tracking")
+            return
+        }
         if (!locationHelper.hasPermission()) {
             Log.w(TAG, "Konum izni yok, takip başlatılmadı")
             logD("startTracking aborted reason=no_location_permission")
             _isTracking.value = false
+            PersonalTripTrackingState.setTracking(this, false)
             stopSelf()
             return
         }
 
         logD("Takip başlıyor")
         _isTracking.value = true
+        PersonalTripTrackingState.setTracking(this, true)
         _liveDistanceKm.value = 0.0
         totalDistanceMeters = 0.0
         rawWaypointCount = 0
@@ -186,6 +204,7 @@ class PersonalTripForegroundService : Service() {
             Log.e(TAG, "Konum izni kayboldu, takip durduruluyor: ${e.message}")
             logD("requestLocationUpdates failed reason=security_exception message=${e.message}")
             _isTracking.value = false
+            PersonalTripTrackingState.setTracking(this, false)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
@@ -206,6 +225,7 @@ class PersonalTripForegroundService : Service() {
             "stopTracking requested tracking=${_isTracking.value} jobActive=${orsBatchJob?.isActive == true} " +
                 "pending=${pendingCount()} totalKm=${formatKm(totalDistanceMeters)}"
         )
+        PersonalTripTrackingState.setTracking(this, false)
         orsBatchJob?.cancel()
         orsBatchJob = null
         fusedClient.removeLocationUpdates(locationCallback)
@@ -215,6 +235,7 @@ class PersonalTripForegroundService : Service() {
         serviceScope.launch {
             sendBatchToOrs(trigger = "stop")
             _isTracking.value = false
+            PersonalTripTrackingState.setTracking(this@PersonalTripForegroundService, false)
             logD("tracking stopped finalTotalKm=${formatKm(totalDistanceMeters)}")
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -241,21 +262,31 @@ class PersonalTripForegroundService : Service() {
                 "rawPathKm=${formatKm(pathDistanceMeters(batch))} totalBeforeKm=${formatKm(totalDistanceMeters)}"
         )
 
-        // GPS drift filtresi: birbirine 30m'den yakın ardışık noktaları ele
+        // GPS drift filtresi: düşük hızda 30m, otoyol hızında 15m'den yakın noktaları ele.
         // Bu hem GPS titreşiminden kaynaklanan sahte mesafeyi önler
         // hem de ORS'e giden nokta sayısını azaltır
-        val filtered = mutableListOf<Pair<Double, Double>>()
+        val filtered = mutableListOf<RouteWaypoint>()
         filtered.add(batch.first())
         logD("BATCH#$batchId filter[0] KEEP first=${formatPoint(batch.first())}")
         for (i in 1 until batch.size) {
             val prev = filtered.last()
             val curr = batch[i]
-            val distM = haversineMeters(prev.first, prev.second, curr.first, curr.second)
-            if (distM >= 30.0) {   // 30m'den kısa hareketi yoksay
+            val distM = haversineMeters(prev.latitude, prev.longitude, curr.latitude, curr.longitude)
+            val avgRawSpeedMps = averageSpeedMps(batch[i - 1], curr)
+            val minDistanceM = filterDistanceForSpeed(avgRawSpeedMps)
+            if (distM >= minDistanceM) {
                 filtered.add(curr)
-                logD("BATCH#$batchId filter[$i] KEEP distFromPrevFilteredM=${formatMeters(distM)} point=${formatPoint(curr)}")
+                logD(
+                    "BATCH#$batchId filter[$i] KEEP distFromPrevFilteredM=${formatMeters(distM)} " +
+                        "minDistM=${formatMeters(minDistanceM)} avgRawSpeedMps=${formatSpeed(avgRawSpeedMps)} " +
+                        "point=${formatPoint(curr)}"
+                )
             } else {
-                logD("BATCH#$batchId filter[$i] SKIP distFromPrevFilteredM=${formatMeters(distM)} point=${formatPoint(curr)}")
+                logD(
+                    "BATCH#$batchId filter[$i] SKIP distFromPrevFilteredM=${formatMeters(distM)} " +
+                        "minDistM=${formatMeters(minDistanceM)} avgRawSpeedMps=${formatSpeed(avgRawSpeedMps)} " +
+                        "point=${formatPoint(curr)}"
+                )
             }
         }
 
@@ -264,9 +295,10 @@ class PersonalTripForegroundService : Service() {
             return
         }
 
+        val filteredStraightPathMeters = pathDistanceMeters(filtered)
         logD(
             "BATCH#$batchId ORS request trigger=$trigger raw=${batch.size} filtered=${filtered.size} " +
-                "filteredStraightPathKm=${formatKm(pathDistanceMeters(filtered))} first=${formatPoint(filtered.first())} last=${formatPoint(filtered.last())}"
+                "filteredStraightPathKm=${formatKm(filteredStraightPathMeters)} first=${formatPoint(filtered.first())} last=${formatPoint(filtered.last())}"
         )
         val meters = locationHelper.fetchRouteDistanceMeters(filtered)
         if (meters != null) {
@@ -277,6 +309,8 @@ class PersonalTripForegroundService : Service() {
             updateNotification(String.format(Locale.US, "%.1f km", km))
             logD(
                 "BATCH#$batchId ORS success addedKm=${formatKm(meters)} " +
+                    "filteredStraightPathKm=${formatKm(filteredStraightPathMeters)} " +
+                    "ratio=${formatRatio(meters, filteredStraightPathMeters)} " +
                     "totalBeforeKm=${formatKm(beforeMeters)} totalAfterKm=${formatKm(totalDistanceMeters)}"
             )
 
@@ -316,18 +350,31 @@ class PersonalTripForegroundService : Service() {
 
     private fun pendingCount(): Int = synchronized(pendingWaypoints) { pendingWaypoints.size }
 
-    private fun pathDistanceMeters(points: List<Pair<Double, Double>>): Double {
+    private fun pathDistanceMeters(points: List<RouteWaypoint>): Double {
         var meters = 0.0
         for (i in 0 until points.lastIndex) {
             val a = points[i]
             val b = points[i + 1]
-            meters += haversineMeters(a.first, a.second, b.first, b.second)
+            meters += haversineMeters(a.latitude, a.longitude, b.latitude, b.longitude)
         }
         return meters
     }
 
-    private fun formatPoint(point: Pair<Double, Double>): String =
-        "${formatCoord(point.first)},${formatCoord(point.second)}"
+    private fun averageSpeedMps(previousRaw: RouteWaypoint, currentRaw: RouteWaypoint): Double? {
+        val speeds = listOfNotNull(previousRaw.speedMps, currentRaw.speedMps)
+        if (speeds.isEmpty()) return null
+        return speeds.average()
+    }
+
+    private fun filterDistanceForSpeed(avgRawSpeedMps: Double?): Double =
+        if (avgRawSpeedMps != null && avgRawSpeedMps > HIGH_SPEED_THRESHOLD_MPS) {
+            HIGH_SPEED_FILTER_DISTANCE_M
+        } else {
+            DEFAULT_FILTER_DISTANCE_M
+        }
+
+    private fun formatPoint(point: RouteWaypoint): String =
+        "${formatCoord(point.latitude)},${formatCoord(point.longitude)}"
 
     private fun formatCoord(value: Double): String =
         String.format(Locale.US, "%.6f", value)
@@ -337,6 +384,12 @@ class PersonalTripForegroundService : Service() {
 
     private fun formatKm(meters: Double): String =
         String.format(Locale.US, "%.3f", meters / 1000.0)
+
+    private fun formatRatio(numerator: Double, denominator: Double): String =
+        if (denominator <= 0.0) "n/a" else String.format(Locale.US, "%.2f", numerator / denominator)
+
+    private fun formatSpeed(value: Double?): String =
+        if (value == null) "n/a" else String.format(Locale.US, "%.2f", value)
 
     private fun accuracyText(location: Location): String =
         if (location.hasAccuracy()) String.format(Locale.US, "%.1f", location.accuracy) else "n/a"

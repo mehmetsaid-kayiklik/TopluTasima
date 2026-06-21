@@ -7,7 +7,9 @@ import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -16,6 +18,7 @@ import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.di.appModule
 import com.example.toplutasima.diagnostics.AppErrorReporter
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
+import com.example.toplutasima.service.PersonalTripActivityTransitionReceiver
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.worker.PeriodicSyncWorker
 import com.example.toplutasima.worker.TopluTasimaWorkerFactory
@@ -44,6 +47,7 @@ class TopluTasimaApp : Application() {
         val prefs = getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
         LocaleManager.init(prefs)
         PrefsManager.init(prefs, appScope)
+        PersonalTripActivityTransitionReceiver.register(this)
 
         val koinApplication = startKoin {
             androidContext(this@TopluTasimaApp)
@@ -63,6 +67,19 @@ class TopluTasimaApp : Application() {
                 .setWorkerFactory(workerFactory)
                 .setMinimumLoggingLevel(Log.DEBUG)
                 .build()
+        )
+        val pingRequest = OneTimeWorkRequestBuilder<PeriodicSyncWorker>()
+            .build()
+        WorkManager.getInstance(this).enqueueUniqueWork(
+            "factory_selftest_ping",
+            ExistingWorkPolicy.REPLACE,
+            pingRequest
+        )
+        val workManagerInstance = WorkManager.getInstance(this)
+        TransitTrackerLogger.log(
+            this,
+            "WorkerFactory",
+            "App WorkManager instance hash=${System.identityHashCode(workManagerInstance)}"
         )
         Log.d("WorkerFactory", workerFactoryMessage)
         TransitTrackerLogger.log(this, "WorkerFactory", workerFactoryMessage)

@@ -92,6 +92,7 @@ class RmvJourneyService {
         date: String,
         time: String
     ): List<Departure> = withContext(Dispatchers.IO) {
+        var destinationDisplayName = ""
         val validLineDirections = mutableMapOf<String, MutableSet<String>>()
         if (destId.isNotBlank()) {
             try {
@@ -116,6 +117,11 @@ class RmvJourneyService {
                         RmvSegmentParser.legsArrayKtx(trip)
                     } catch (_: Exception) {
                         return@forEach
+                    }
+                    if (destinationDisplayName.isBlank()) {
+                        destinationDisplayName = legs.lastOrNull()?.jsonObject
+                            ?.get("Destination")?.jsonObject
+                            ?.get("name")?.jsonPrimitive?.content?.trim() ?: ""
                     }
                     for (legElement in legs) {
                         val leg = legElement.jsonObject
@@ -215,22 +221,30 @@ class RmvJourneyService {
             if (validLineDirections.isNotEmpty()) {
                 val normalizedLine = RmvSegmentParser.normalizeLineCode(line)
                 val validDirs = validLineDirections[normalizedLine]
+                val directionMatchesDestination = destinationDisplayName.isNotBlank() &&
+                    (direction.contains(destinationDisplayName, ignoreCase = true) ||
+                        destinationDisplayName.contains(direction, ignoreCase = true))
                 if (validDirs == null) {
-                    logD("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' - line not in valid set")
-                    continue
-                }
-                if (validDirs.isNotEmpty() && direction.isNotBlank()) {
-                    val dirMatch = validDirs.any { validDir ->
-                        validDir.isBlank() ||
-                            direction.contains(validDir, ignoreCase = true) ||
-                            validDir.contains(direction, ignoreCase = true)
-                    }
-                    if (!dirMatch) {
-                        logD("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' - direction mismatch")
+                    if (directionMatchesDestination) {
+                        logD("DepartureBoard", "KEEP '$normalizedLine' dir='$direction' - direction matches destination (fallback)")
+                    } else {
+                        logD("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' - line not in valid set")
                         continue
                     }
+                } else {
+                    if (validDirs.isNotEmpty() && direction.isNotBlank()) {
+                        val dirMatch = validDirs.any { validDir ->
+                            validDir.isBlank() ||
+                                direction.contains(validDir, ignoreCase = true) ||
+                                validDir.contains(direction, ignoreCase = true)
+                        }
+                        if (!dirMatch && !directionMatchesDestination) {
+                            logD("DepartureBoard", "SKIP '$normalizedLine' dir='$direction' - direction mismatch")
+                            continue
+                        }
+                    }
+                    logD("DepartureBoard", "KEEP '$normalizedLine' dir='$direction'")
                 }
-                logD("DepartureBoard", "KEEP '$normalizedLine' dir='$direction'")
             }
 
             val typeTr = RmvSegmentParser.mapTypeTrKtx(product, line)

@@ -145,6 +145,14 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets {
+        listOf("debug", "release").forEach { variant ->
+            getByName(variant) {
+                kotlin.directories.add("build/generated/ksp/$variant/kotlin")
+                java.directories.add("build/generated/ksp/$variant/java")
+            }
+        }
+    }
 }
 
 kotlin {

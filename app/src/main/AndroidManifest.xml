@@ -66,6 +66,20 @@
             android:foregroundServiceType="location"
             android:exported="false"/>
 
+        <service
+            android:name=".service.PersonalTripQuickTile"
+            android:exported="true"
+            android:icon="@drawable/ic_personal_trip_tile"
+            android:label="@string/personal_trip_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true"/>
+        </service>
+
         <!-- Toplu Taşıma — Bildirim Servisi -->
         <service
             android:name=".service.TransitTripForegroundService"
@@ -94,6 +108,10 @@
 
         <receiver
             android:name=".service.ActivityRecognitionReceiver"
+            android:exported="false"/>
+
+        <receiver
+            android:name=".service.PersonalTripActivityTransitionReceiver"
             android:exported="false"/>
 
     </application>

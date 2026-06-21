@@ -316,6 +316,7 @@ class TransitTripForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        TransitTrackerLogger.log(applicationContext, TAG, "onDestroy() called")
         super.onDestroy()
         cancelReminder()
         cancelProximityWatchAlarm()
@@ -668,6 +669,11 @@ class TransitTripForegroundService : Service() {
             TAG,
             "Existing work for $uniqueName before enqueue: " +
                 existingInfos.joinToString { "id=${it.id} state=${it.state}" }
+        )
+        TransitTrackerLogger.log(
+            applicationContext,
+            TAG,
+            "Service WorkManager instance hash=${System.identityHashCode(workManager)}"
         )
         TransitTrackerLogger.log(
             applicationContext,
