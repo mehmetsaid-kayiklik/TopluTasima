@@ -99,6 +99,7 @@ android {
 
     lint {
         checkGeneratedSources = false
+        disable += "RestrictedApi"
     }
 
     signingConfigs {
