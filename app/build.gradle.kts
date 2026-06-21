@@ -97,6 +97,10 @@ android {
         buildConfigField("String", "ORS_API_KEY",   "\"${requiredLocalProperty("ORS_API_KEY").escapeBuildConfigString()}\"")
     }
 
+    lint {
+        checkGeneratedSources = false
+    }
+
     signingConfigs {
         if (hasReleaseSigningConfig) {
             create("release") {
