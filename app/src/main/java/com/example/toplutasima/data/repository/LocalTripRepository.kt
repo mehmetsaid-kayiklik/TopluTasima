@@ -10,6 +10,7 @@ import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.usecase.SummaryCalculator
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
@@ -122,6 +123,10 @@ class LocalTripRepository(
         emit(tripDao.getAllTrips())
     }
 
+    suspend fun getTripsNeedingMesafeBackfill(): List<TripEntity> = withContext(Dispatchers.IO) {
+        tripDao.getTripsNeedingMesafeBackfill()
+    }
+
     suspend fun searchTrips(query: String): List<TripEntity> = withContext(Dispatchers.IO) {
         tripDao.searchTrips("%$query%")
     }
@@ -137,6 +142,46 @@ class LocalTripRepository(
             getTripProfileLinkDao().updateStableKey(trip.id, firestoreDocId, System.currentTimeMillis())
         }
     }
+
+    suspend fun updateTripMesafeBackfill(trip: TripEntity, fields: Map<String, Any>) = withContext(Dispatchers.IO) {
+        withContext(NonCancellable) {
+            val docId = trip.firestoreDocId?.takeIf { it.isNotBlank() } ?: trip.id
+            try {
+                tripRemoteDataSource.updateTrip(docId, fields)
+                tripDao.upsertAll(listOf(trip.withMesafeBackfillFields(fields)))
+            } catch (e: Exception) {
+                tripDao.upsertAll(listOf(trip.withMesafeBackfillFields(fields.asFailedMesafeBackfillFields())))
+                throw e
+            }
+        }
+    }
+
+    private fun TripEntity.withMesafeBackfillFields(fields: Map<String, Any>): TripEntity = copy(
+        orsMesafeKm = fields[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM]?.toString()?.toDoubleOrNull()
+            ?: orsMesafeKm,
+        orsMesafeText = fields[TransitRecordCalculations.FIELD_ORS_DISTANCE_TEXT]?.toString()
+            ?: orsMesafeText,
+        rmvMesafeKm = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM]?.toString()?.toDoubleOrNull()
+            ?: rmvMesafeKm,
+        rmvMesafeMetre = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS]?.toString()?.toDoubleOrNull()?.toInt()
+            ?: rmvMesafeMetre,
+        rmvMesafeText = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT]?.toString()
+            ?: rmvMesafeText,
+        rmvMesafeDurumu = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS]?.toString()
+            ?: rmvMesafeDurumu,
+        rmvMesafeGuncellemeTarihi = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_UPDATED_AT]?.toString()
+            ?: rmvMesafeGuncellemeTarihi,
+        rmvApiVersion = fields[TransitRecordCalculations.FIELD_RMV_API_VERSION]?.toString()
+            ?: rmvApiVersion
+    )
+
+    private fun Map<String, Any>.asFailedMesafeBackfillFields(): Map<String, Any> =
+        toMutableMap().apply {
+            this[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM] = 0.0
+            this[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS] = 0
+            this[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT] = ""
+            this[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS] = TransitRecordCalculations.RMV_DISTANCE_FAILED
+        }
 
     suspend fun deleteTrip(id: String) = withContext(Dispatchers.IO) {
         val localTrip = tripDao.getTripByFirestoreDocId(id) ?: tripDao.getTripById(id)

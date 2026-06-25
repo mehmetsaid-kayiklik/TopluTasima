@@ -12,55 +12,78 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
-class RmvDistanceService {
+data class SegmentDistanceResult(
+    val apiDistanceKm: Double?,
+    val polyDistanceKm: Double?
+)
+
+class RmvDistanceService(
+    private val orsDistanceCalculator: (suspend (List<Pair<Double, Double>>) -> Double)? = null,
+    private val railDistanceCalculator: ((List<Pair<Double, Double>>) -> Double)? = null
+) {
     private val orsApiKey = BuildConfig.ORS_API_KEY
 
-    suspend fun calculateDistanceORS(coords: List<Pair<Double, Double>>): Double {
-        if (coords.size < 2) return 0.0
+    suspend fun calculateDistanceORS(
+        coords: List<Pair<Double, Double>>,
+        polylineCoords: List<Pair<Double, Double>> = emptyList()
+    ): SegmentDistanceResult {
+        if (coords.size < 2) return SegmentDistanceResult(null, null)
         return withContext(Dispatchers.IO) {
-            try {
-                val requestId = ApiErrors.newRequestId()
-                val coordArray = org.json.JSONArray()
-                for (coord in coords) coordArray.put(org.json.JSONArray().put(coord.second).put(coord.first))
-                val jsonBody = JSONObject().put("coordinates", coordArray).toString()
-                val reqBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaType())
-                val req = Request.Builder()
-                    .url("https://api.openrouteservice.org/v2/directions/driving-car/geojson")
-                    .addHeader("Authorization", orsApiKey)
-                    .addHeader("X-Request-Id", requestId)
-                    .post(reqBody)
-                    .build()
-                ApiClient.http.newCall(req).execute().use { res ->
-                    val respBody = res.body?.string().orEmpty()
-                    if (res.isSuccessful) {
-                        val json = JSONObject(respBody)
-                        val segments = json.optJSONArray("features")
-                            ?.optJSONObject(0)
-                            ?.optJSONObject("properties")
-                            ?.optJSONArray("segments") ?: org.json.JSONArray()
-                        var meters = 0.0
-                        for (i in 0 until segments.length()) {
-                            meters += segments.optJSONObject(i)?.optDouble("distance", 0.0) ?: 0.0
-                        }
-                        meters / 1000.0
-                    } else {
-                        val apiError = ApiErrors.fromHttpStatus(
-                            provider = "ORS",
-                            endpoint = "directions/driving-car",
-                            requestId = requestId,
-                            statusCode = res.code,
-                            body = respBody
-                        )
-                        logE("ORSDiag", apiError.message ?: "ORS HTTP ${res.code}", apiError)
-                        0.0
-                    }
-                }
+            val apiDistanceKm = try {
+                (orsDistanceCalculator?.invoke(coords) ?: requestOrsDistance(coords))
+                    .takeIf { it > 0.0 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 logE("ORSDiag", "ORS EXCEPTION: ${e.message}")
-                0.0
+                null
             }
+            val polyDistanceKm = calculateDistanceFromPoly(polylineCoords, coords.first(), coords.last())
+            SegmentDistanceResult(apiDistanceKm, polyDistanceKm)
+        }
+    }
+
+    private fun requestOrsDistance(coords: List<Pair<Double, Double>>): Double {
+        return try {
+            val requestId = ApiErrors.newRequestId()
+            val coordArray = org.json.JSONArray()
+            for (coord in coords) coordArray.put(org.json.JSONArray().put(coord.second).put(coord.first))
+            val jsonBody = JSONObject().put("coordinates", coordArray).toString()
+            val reqBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder()
+                .url("https://api.openrouteservice.org/v2/directions/driving-car/geojson")
+                .addHeader("Authorization", orsApiKey)
+                .addHeader("X-Request-Id", requestId)
+                .post(reqBody)
+                .build()
+            ApiClient.http.newCall(req).execute().use { res ->
+                val respBody = res.body?.string().orEmpty()
+                if (res.isSuccessful) {
+                    val json = JSONObject(respBody)
+                    val segments = json.optJSONArray("features")
+                        ?.optJSONObject(0)
+                        ?.optJSONObject("properties")
+                        ?.optJSONArray("segments") ?: org.json.JSONArray()
+                    var meters = 0.0
+                    for (i in 0 until segments.length()) {
+                        meters += segments.optJSONObject(i)?.optDouble("distance", 0.0) ?: 0.0
+                    }
+                    meters / 1000.0
+                } else {
+                    val apiError = ApiErrors.fromHttpStatus(
+                        provider = "ORS",
+                        endpoint = "directions/driving-car",
+                        requestId = requestId,
+                        statusCode = res.code,
+                        body = respBody
+                    )
+                    logE("ORSDiag", apiError.message ?: "ORS HTTP ${res.code}", apiError)
+                    0.0
+                }
+            }
+        } catch (e: Exception) {
+            logE("ORSDiag", "ORS EXCEPTION: ${e.message}")
+            0.0
         }
     }
 
@@ -68,43 +91,94 @@ class RmvDistanceService {
         coords: List<Pair<Double, Double>>,
         allStopCoords: List<Pair<Double, Double>> = emptyList(),
         fromIdx: Int = -1,
-        toIdx: Int = -1
-    ): Double {
-        if (coords.size < 2) return 0.0
+        toIdx: Int = -1,
+        polylineCoords: List<Pair<Double, Double>> = emptyList()
+    ): SegmentDistanceResult {
+        if (coords.size < 2) return SegmentDistanceResult(null, null)
         return withContext(Dispatchers.IO) {
-            val directKm = railRouteWithPairwise(coords)
-            if (directKm > 0.0) return@withContext directKm
-
-            if (allStopCoords.size >= 3 && fromIdx >= 0 && toIdx >= 0) {
-                val paddings = intArrayOf(2, 4, 8, 15, allStopCoords.size)
-                for (pad in paddings) {
-                    val extFrom = maxOf(0, fromIdx - pad)
-                    val extTo = minOf(allStopCoords.size - 1, toIdx + pad)
-                    if (extFrom == fromIdx && extTo == toIdx) continue
-
-                    val pStart = allStopCoords[extFrom]
-                    val pEnd = allStopCoords[extTo]
-
-                    logD("RailDist", "Retry endpoints only: pad=$pad extFrom=$extFrom extTo=$extTo")
-                    val polyline = railRoutePolyline(pStart, pEnd)
-                    if (polyline.size > 1) {
-                        val actualStart = allStopCoords[fromIdx]
-                        val actualEnd = allStopCoords[toIdx]
-                        val distA = closestVertexDistance(polyline, actualStart)
-                        val distB = closestVertexDistance(polyline, actualEnd)
-                        val segDist = kotlin.math.abs(distB - distA)
-                        logD(
-                            "RailDist",
-                            "Endpoints succeeded. segDist=${String.format(java.util.Locale.US, "%.2f", segDist)}"
-                        )
-                        if (segDist > 0.01) return@withContext segDist
-                    }
-                }
+            val exactStart = coords.first()
+            val exactEnd = coords.last()
+            val apiDistanceKm = try {
+                (railDistanceCalculator?.invoke(coords) ?: railRouteWithPairwise(coords))
+                    .takeIf { it > 0.0 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logD("RailDist", "API route failed: ${e.message}")
+                null
             }
-            0.0
+            val polyDistanceKm = calculateDistanceFromPoly(polylineCoords, exactStart, exactEnd)
+
+            if (polyDistanceKm == null) {
+                logD(
+                    "RailDist",
+                    "No usable HAFAS polyline distance. directKm=${formatKm(haversineKm(exactStart, exactEnd))} " +
+                        "fromIdx=$fromIdx toIdx=$toIdx allStops=${allStopCoords.size} " +
+                        "polylineCoords=${polylineCoords.size}"
+                )
+            }
+            SegmentDistanceResult(apiDistanceKm, polyDistanceKm)
         }
     }
 
+    fun calculateDistanceFromPoly(
+        polylineCoords: List<Pair<Double, Double>>,
+        fromExact: Pair<Double, Double>,
+        toExact: Pair<Double, Double>
+    ): Double? {
+        return try {
+            if (polylineCoords.size < 2) return null
+
+            val fromIdx = closestVertexIndex(polylineCoords, fromExact)
+            val toIdx = closestVertexIndex(polylineCoords, toExact)
+            val slice = when {
+                fromIdx <= toIdx -> polylineCoords.subList(fromIdx, toIdx + 1)
+                else -> polylineCoords.subList(toIdx, fromIdx + 1).asReversed()
+            }
+            if (slice.isEmpty()) return null
+
+            val route = buildList {
+                add(fromExact)
+                addAll(slice)
+                add(toExact)
+            }
+
+            var distance = 0.0
+            for (i in 0 until route.size - 1) {
+                distance += haversineKm(route[i], route[i + 1])
+            }
+
+            val directKm = haversineKm(fromExact, toExact)
+            if (directKm < 3.0 && distance > directKm * 3.0) {
+                logW(
+                    "PolyDist",
+                    "Suspicious HAFAS polyline distance. directKm=${formatKm(directKm)} " +
+                        "polylineKm=${formatKm(distance)} polylineCoords=${polylineCoords.size}"
+                )
+                return null
+            }
+
+            distance.takeIf { it > 0.0 && !it.isNaN() && !it.isInfinite() }
+        } catch (e: Exception) {
+            logD("PolyDist", "Polyline distance failed: ${e.message}")
+            null
+        }
+    }
+
+    private fun closestVertexIndex(polylineCoords: List<Pair<Double, Double>>, point: Pair<Double, Double>): Int {
+        var minIdx = 0
+        var minDist = Double.MAX_VALUE
+        for (i in polylineCoords.indices) {
+            val distance = haversineKm(point, polylineCoords[i])
+            if (distance < minDist) {
+                minDist = distance
+                minIdx = i
+            }
+        }
+        return minIdx
+    }
+
+    // API/legacy mesafe kaynağı, orsMesafeKm'i besler.
     private fun railRouteMultiWaypoint(coords: List<Pair<Double, Double>>): Double {
         if (coords.size < 2) return 0.0
         return try {
@@ -132,6 +206,7 @@ class RmvDistanceService {
         }
     }
 
+    // API/legacy mesafe kaynağı, orsMesafeKm'i besler.
     private fun railRouteWithPairwise(coords: List<Pair<Double, Double>>): Double {
         if (coords.size < 2) return 0.0
         val multiKm = railRouteMultiWaypoint(coords)
@@ -158,6 +233,7 @@ class RmvDistanceService {
         return totalMeters / 1000.0
     }
 
+    // API/legacy mesafe kaynağı, orsMesafeKm'i besler.
     private fun railRoutePolyline(
         pStart: Pair<Double, Double>,
         pEnd: Pair<Double, Double>
@@ -222,13 +298,34 @@ class RmvDistanceService {
         return radiusKm * c
     }
 
+    private fun formatKm(value: Double): String =
+        String.format(java.util.Locale.US, "%.3f", value)
+
     private fun logD(tag: String, msg: String) {
-        if (BuildConfig.DEBUG) Log.d(tag, msg)
+        if (!BuildConfig.DEBUG) return
+        try {
+            Log.d(tag, msg)
+        } catch (_: Throwable) {
+        }
     }
 
     private fun logE(tag: String, msg: String, t: Throwable? = null) {
-        if (BuildConfig.DEBUG) {
-            if (t != null) Log.e(tag, msg, t) else Log.e(tag, msg)
+        if (!BuildConfig.DEBUG) return
+        try {
+            if (t != null) {
+                Log.e(tag, msg, t)
+            } else {
+                Log.e(tag, msg)
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun logW(tag: String, msg: String) {
+        if (!BuildConfig.DEBUG) return
+        try {
+            Log.w(tag, msg)
+        } catch (_: Throwable) {
         }
     }
 }

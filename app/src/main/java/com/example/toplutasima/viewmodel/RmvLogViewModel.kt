@@ -97,6 +97,7 @@ class RmvLogViewModel(
         val hasResolvedRange = details.fromIdx >= 0 && details.toIdx >= 0
         return seg.copy(
             distanceKm = if (details.distanceKm > 0) details.distanceKm else seg.distanceKm,
+            polyDistanceKm = details.distanceResult.polyDistanceKm ?: seg.polyDistanceKm,
             stopCount = if (details.stopCount > 0) details.stopCount else seg.stopCount,
             stopNames = stopNames,
             stopTimes = stopTimes,
@@ -863,8 +864,17 @@ class RmvLogViewModel(
             try {
                 val s = _uiState.value
                 _uiState.value = s.copy(status = S.savingStopChange(lang()))
-                _uiState.value = stopSelectionUseCase.confirmChangeStop(s, lang()) { id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi ->
-                    transitRecordRepository.updateStops(id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi)
+                _uiState.value = stopSelectionUseCase.confirmChangeStop(s, lang()) { id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi, distanceResult ->
+                    transitRecordRepository.updateStops(
+                        id,
+                        binisDuragi,
+                        binisTime,
+                        inisDuragi,
+                        inisTime,
+                        mesafe,
+                        durakSayisi,
+                        distanceResult
+                    )
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")

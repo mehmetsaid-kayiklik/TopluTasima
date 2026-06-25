@@ -28,10 +28,10 @@ import com.example.toplutasima.ui.theme.isAppInDarkTheme
 private fun isDark() = isAppInDarkTheme()
 
 @Composable
-fun SummaryCard(title: String, value: String) {
+fun SummaryCard(title: String, value: String, modifier: Modifier = Modifier) {
     val dark = isDark()
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = if (dark) SurfaceD2 else SurfaceL2)

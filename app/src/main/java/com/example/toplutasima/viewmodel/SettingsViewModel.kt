@@ -1,11 +1,17 @@
 package com.example.toplutasima.viewmodel
 
 import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
+import com.example.toplutasima.usecase.RmvMesafeBackfillUseCase
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,10 +25,20 @@ data class SettingsUiState(
     val message: String = ""
 )
 
-class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+class SettingsViewModel(
+    application: Application,
+    private val backfillUseCase: RmvMesafeBackfillUseCase
+) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    var isBackfillRunning by mutableStateOf(false)
+        private set
+    var backfillProgress by mutableStateOf("")
+        private set
+    var backfillResultMessage by mutableStateOf("")
+        private set
 
     // ── Theme ────────────────────────────────────────────────────────────────
 
@@ -71,6 +87,28 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun cancelDelete() {
         _uiState.value = _uiState.value.copy(showDeleteConfirm = null)
+    }
+
+    fun runMesafeBackfill() {
+        if (isBackfillRunning) return
+        isBackfillRunning = true
+        backfillProgress = ""
+        backfillResultMessage = ""
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val result = backfillUseCase.run { current, total ->
+                    backfillProgress = "$current/$total"
+                }
+                backfillResultMessage = "${result.updated} güncellendi, ${result.failed} hata"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                backfillResultMessage = "Backfill hata: ${e.message ?: "bilinmeyen hata"}"
+            } finally {
+                isBackfillRunning = false
+            }
+        }
     }
 
 }

@@ -39,6 +39,7 @@ import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.RmvFooter
 import com.example.toplutasima.ui.screens.MaintenanceScreen
+import com.example.toplutasima.viewmodel.SettingsViewModel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.rememberScrollState
@@ -51,7 +52,8 @@ import java.io.File
 
 @Composable
 internal fun DiagnosticsSection(
-    lang: AppLanguage
+    lang: AppLanguage,
+    settingsViewModel: SettingsViewModel
 ) {
     val context = LocalContext.current
     var showMaintenance by remember { mutableStateOf(false) }
@@ -80,6 +82,32 @@ internal fun DiagnosticsSection(
                     contentPadding = PaddingValues(vertical = 14.dp)
                 ) {
                     Text(S.maintenanceButton(lang), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                }
+
+                OutlinedButton(
+                    onClick = { settingsViewModel.runMesafeBackfill() },
+                    enabled = !settingsViewModel.isBackfillRunning,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    val progress = settingsViewModel.backfillProgress.ifBlank { "0/0" }
+                    Text(
+                        if (settingsViewModel.isBackfillRunning) {
+                            "rmvMesafeKm Backfill ($progress)"
+                        } else {
+                            "rmvMesafeKm Backfill"
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                if (settingsViewModel.backfillResultMessage.isNotBlank()) {
+                    Text(
+                        settingsViewModel.backfillResultMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))

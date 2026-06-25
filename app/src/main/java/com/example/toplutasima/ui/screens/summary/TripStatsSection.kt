@@ -502,6 +502,25 @@ internal fun LazyListScope.TripStatsSection(
             SummaryCard(S.totalDistance(lang), formatDistanceKm(s.totalDistanceKm))
         }
     }
+    if (s.totalOrsDistanceKm > 0 || s.totalRmvDistanceKm > 0) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SummaryCard(
+                    S.apiDistance(lang),
+                    formatDistanceKm(s.totalOrsDistanceKm),
+                    modifier = Modifier.weight(1f)
+                )
+                SummaryCard(
+                    S.polyDistance(lang),
+                    formatDistanceKm(s.totalRmvDistanceKm),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
 
     item {
         Text(

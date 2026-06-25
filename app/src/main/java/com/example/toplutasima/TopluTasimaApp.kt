@@ -20,12 +20,14 @@ import com.example.toplutasima.diagnostics.AppErrorReporter
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.service.PersonalTripActivityTransitionReceiver
 import com.example.toplutasima.ui.LocaleManager
+import com.example.toplutasima.ui.util.CrashLogger
 import com.example.toplutasima.worker.PeriodicSyncWorker
 import com.example.toplutasima.worker.TopluTasimaWorkerFactory
 import com.example.toplutasima.worker.TransitActionWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import java.util.concurrent.TimeUnit
@@ -38,7 +40,12 @@ class TopluTasimaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLogger.init(this)
+        CrashLogger.checkExitReasons(this)
         AppErrorReporter.install(this)
+        appScope.launch {
+            AppErrorReporter.uploadPendingCrashReport(this@TopluTasimaApp)
+        }
         TransitTrackerLogger.init(this)
 
         // PrefsManager ve LocaleManager'ı burada başlat.
@@ -57,10 +64,16 @@ class TopluTasimaApp : Application() {
         val workerFactory: TopluTasimaWorkerFactory = koinApplication.koin.get()
         val workerFactoryClassName = workerFactory::class.java.name
         val workerFactoryMessage =
-            "WorkManager initialized with factory: $workerFactoryClassName; " +
+            "WorkManager initialized with factory: $workerFactoryClassName " +
+                "factoryId=${workerFactory.instanceId}; " +
                 "expected=com.example.toplutasima.worker.TopluTasimaWorkerFactory"
 
-        TransitTrackerLogger.log(this, "WorkerFactory", "About to initialize WorkManager with factory: ${workerFactory::class.java.name}")
+        TransitTrackerLogger.log(
+            this,
+            "WorkerFactory",
+            "About to initialize WorkManager with factory: ${workerFactory::class.java.name} " +
+                "factoryId=${workerFactory.instanceId}"
+        )
         WorkManager.initialize(
             this,
             Configuration.Builder()
@@ -79,7 +92,8 @@ class TopluTasimaApp : Application() {
         TransitTrackerLogger.log(
             this,
             "WorkerFactory",
-            "App WorkManager instance hash=${System.identityHashCode(workManagerInstance)}"
+            "App WorkManager instance hash=${System.identityHashCode(workManagerInstance)} " +
+                "factoryId=${workerFactory.instanceId}"
         )
         Log.d("WorkerFactory", workerFactoryMessage)
         TransitTrackerLogger.log(this, "WorkerFactory", workerFactoryMessage)

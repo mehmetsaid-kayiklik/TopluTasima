@@ -66,6 +66,30 @@ class SummaryCalculatorTest {
     }
 
     @Test
+    fun `computeSummary excludes failed rmv distance from poly total`() {
+        val record = rmvRecord(
+            tarih = "22.05.2026",
+            tur = VehicleType.BUS.key,
+            hat = "X26",
+            binisDuragi = "Frankfurt Flughafen Terminal 1",
+            inisDuragi = "Frankfurt Südbahnhof",
+            gun = "Cuma",
+            planlananBinis = "07:10",
+            planlananYolSuresi = 35,
+            gercekYolSuresi = 38,
+            gecikme = 3,
+            orsDistanceKm = 14.25,
+            rmvDistanceKm = 14.10,
+            rmvDistanceStatus = TransitRecordCalculations.RMV_DISTANCE_FAILED
+        )
+
+        val (summary, _) = SummaryCalculator.computeSummary(listOf(record))
+
+        assertEquals(14.25, summary.totalOrsDistanceKm, 0.0)
+        assertEquals(0.0, summary.totalRmvDistanceKm, 0.0)
+    }
+
+    @Test
     fun `computeSummary aggregates multiple RMV records`() {
         val records = listOf(
             rmvRecord(
@@ -419,6 +443,7 @@ class SummaryCalculatorTest {
         gecikme: Int,
         orsDistanceKm: Double,
         rmvDistanceKm: Double,
+        rmvDistanceStatus: String = TransitRecordCalculations.RMV_DISTANCE_READY,
         oturabildimMi: String = SeatingStatus.NO.key,
         biletKontrolu: String = TicketStatus.DID_NOT.key
     ): Map<String, Any> = mapOf(
@@ -436,6 +461,7 @@ class SummaryCalculatorTest {
         TransitRecordCalculations.FIELD_ORS_DISTANCE_TEXT to TransitRecordCalculations.formatDistanceKm(orsDistanceKm),
         TransitRecordCalculations.FIELD_RMV_DISTANCE_KM to rmvDistanceKm,
         TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT to TransitRecordCalculations.formatDistanceKm(rmvDistanceKm),
+        TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS to rmvDistanceStatus,
         "oturabildimMi" to oturabildimMi,
         "biletKontrolü" to biletKontrolu
     )

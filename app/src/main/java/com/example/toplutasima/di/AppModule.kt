@@ -16,6 +16,7 @@ import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.usecase.JourneyMatchUseCase
 import com.example.toplutasima.usecase.ManualEntryUseCase
 import com.example.toplutasima.usecase.RecordSaveUseCase
+import com.example.toplutasima.usecase.RmvMesafeBackfillUseCase
 import com.example.toplutasima.usecase.StopSelectionUseCase
 import com.example.toplutasima.usecase.TripPlanningUseCase
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
@@ -68,6 +69,7 @@ val appModule = module {
     single { JourneyMatchUseCase(get()) }
     single { RecordSaveUseCase(get(), get()) }
     single { ManualEntryUseCase() }
+    single { RmvMesafeBackfillUseCase(get()) }
 
     // ── Location ────────────────────────────────────────────────────────────
     single { NearbyStopsManager(androidContext(), get()) }
@@ -91,6 +93,6 @@ val appModule = module {
     viewModel { SummaryViewModel(androidApplication()) }
     viewModel { RecordsViewModel(androidApplication(), get()) }
     viewModel { BulkUpdateViewModel(androidApplication(), get()) }
-    viewModel { SettingsViewModel(androidApplication()) }
+    viewModel { SettingsViewModel(androidApplication(), get()) }
     viewModel { PersonalTripViewModel(androidApplication(), get()) }  // Kişisel Araç
 }

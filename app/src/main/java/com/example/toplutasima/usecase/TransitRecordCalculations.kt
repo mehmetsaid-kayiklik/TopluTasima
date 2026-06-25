@@ -1,10 +1,12 @@
 package com.example.toplutasima.usecase
 
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -147,6 +149,31 @@ object TransitRecordCalculations {
             FIELD_ORS_DISTANCE_TEXT to formatDistanceKm(distanceKm)
         )
         if (resetRmvDistance) fields.putAll(rmvPendingDistanceFields())
+        return fields
+    }
+
+    fun calculatedDistanceFields(
+        result: SegmentDistanceResult
+    ): LinkedHashMap<String, Any> {
+        val apiDistanceKm = result.apiDistanceKm?.takeIf { it > 0.0 } ?: 0.0
+        val polyDistanceKm = result.polyDistanceKm?.takeIf { it > 0.0 }
+        val fields = linkedMapOf<String, Any>(
+            FIELD_ORS_DISTANCE_KM to apiDistanceKm,
+            FIELD_ORS_DISTANCE_TEXT to formatDistanceKm(apiDistanceKm)
+        )
+        if (polyDistanceKm != null) {
+            fields[FIELD_RMV_DISTANCE_KM] = polyDistanceKm
+            fields[FIELD_RMV_DISTANCE_METERS] = (polyDistanceKm * 1000.0).roundToInt()
+            fields[FIELD_RMV_DISTANCE_TEXT] = formatDistanceKm(polyDistanceKm)
+            fields[FIELD_RMV_DISTANCE_STATUS] = RMV_DISTANCE_READY
+        } else {
+            fields[FIELD_RMV_DISTANCE_KM] = 0.0
+            fields[FIELD_RMV_DISTANCE_METERS] = 0
+            fields[FIELD_RMV_DISTANCE_TEXT] = ""
+            fields[FIELD_RMV_DISTANCE_STATUS] = RMV_DISTANCE_FAILED
+        }
+        fields[FIELD_RMV_DISTANCE_UPDATED_AT] = ""
+        fields[FIELD_RMV_API_VERSION] = ""
         return fields
     }
 

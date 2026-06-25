@@ -120,6 +120,8 @@ object S {
     fun busier(l: AppLanguage) = m(l, "Daha yoğun", "Stärker genutzt", "Busier")
     fun equalDensity(l: AppLanguage) = m(l, "Dengeli", "Ausgeglichen", "Balanced")
     fun avgDistance(l: AppLanguage) = m(l, "Ort. mesafe", "Ø Entfernung", "Avg. distance")
+    fun apiDistance(l: AppLanguage) = m(l, "API mesafe", "API-Distanz", "API distance")
+    fun polyDistance(l: AppLanguage) = m(l, "Poly mesafe", "Poly-Distanz", "Poly distance")
     fun tripsByLine(l: AppLanguage) = m(l, "Hatlara Göre Sefer", "Fahrten nach Linie", "Trips by Line")
     fun personalRecords(l: AppLanguage) = m(l, "Kişisel Rekorlar", "Persönliche Rekorde", "Personal Records")
     fun recordLongestDay(l: AppLanguage) = m(l, "En Uzun Yolculuk Günü", "Längster Reisetag", "Longest Travel Day")

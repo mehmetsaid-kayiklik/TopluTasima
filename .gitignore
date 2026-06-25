@@ -20,6 +20,8 @@ local.properties
 *.py
 google-services.json
 app/release/
+tmp/
+reports/
 # Captured Gradle/build log files — temporary debug artifacts, not source code
 build_errors.txt
 # Kotlin compiler session files — transient, never should be tracked

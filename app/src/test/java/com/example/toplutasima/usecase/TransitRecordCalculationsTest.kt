@@ -1,5 +1,6 @@
 package com.example.toplutasima.usecase
 
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -106,5 +107,32 @@ class TransitRecordCalculationsTest {
         )
 
         assertEquals(17.90, TransitRecordCalculations.rmvDistanceKm(row) ?: 0.0, 0.0)
+    }
+
+    @Test
+    fun `calculatedDistanceFields writes ready rmv fields from poly distance`() {
+        val fields = TransitRecordCalculations.calculatedDistanceFields(
+            SegmentDistanceResult(apiDistanceKm = 8.5, polyDistanceKm = 0.70)
+        )
+
+        assertEquals(8.5, fields[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM] as Double, 0.0)
+        assertEquals("8.50 km", fields[TransitRecordCalculations.FIELD_ORS_DISTANCE_TEXT])
+        assertEquals(0.70, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM] as Double, 0.0)
+        assertEquals("0.70 km", fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT])
+        assertEquals(700, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS])
+        assertEquals(TransitRecordCalculations.RMV_DISTANCE_READY, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS])
+    }
+
+    @Test
+    fun `calculatedDistanceFields writes failed rmv fields when poly distance is missing`() {
+        val fields = TransitRecordCalculations.calculatedDistanceFields(
+            SegmentDistanceResult(apiDistanceKm = 8.5, polyDistanceKm = null)
+        )
+
+        assertEquals(8.5, fields[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM] as Double, 0.0)
+        assertEquals(0.0, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM] as Double, 0.0)
+        assertEquals("", fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT])
+        assertEquals(0, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS])
+        assertEquals(TransitRecordCalculations.RMV_DISTANCE_FAILED, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS])
     }
 }

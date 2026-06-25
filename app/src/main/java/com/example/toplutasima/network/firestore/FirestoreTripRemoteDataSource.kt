@@ -3,6 +3,7 @@ package com.example.toplutasima.network.firestore
 import android.util.Log
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.model.BulkUpdateRow
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import kotlinx.coroutines.tasks.await
 
@@ -241,7 +242,8 @@ class FirestoreTripRemoteDataSource {
         inisDuragi: String?,
         inisTime: String?,
         mesafe: String? = null,
-        durakSayisi: String? = null
+        durakSayisi: String? = null,
+        distanceResult: SegmentDistanceResult? = null
     ): Boolean {
         val snapshot = collection()
             .whereEqualTo("id", tripId)
@@ -265,13 +267,17 @@ class FirestoreTripRemoteDataSource {
         if (!inisTime.isNullOrBlank()) updates["planlananInis"] = inisTime
         if (mesafe != null) {
             updates["mesafe"] = mesafe
-            val distanceKm = TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
-            updates.putAll(
-                TransitRecordCalculations.calculatedDistanceFields(
-                    distanceKm,
-                    resetRmvDistance = true
+            if (distanceResult != null) {
+                updates.putAll(TransitRecordCalculations.calculatedDistanceFields(distanceResult))
+            } else {
+                val distanceKm = TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
+                updates.putAll(
+                    TransitRecordCalculations.calculatedDistanceFields(
+                        distanceKm,
+                        resetRmvDistance = true
+                    )
                 )
-            )
+            }
         }
         if (durakSayisi != null) updates["durakSayisi"] = durakSayisi
 
@@ -299,7 +305,12 @@ class FirestoreTripRemoteDataSource {
         }
     }
 
-    suspend fun bulkUpdate(tripId: String, mesafe: String, durakSayisi: Int): Boolean {
+    suspend fun bulkUpdate(
+        tripId: String,
+        mesafe: String,
+        durakSayisi: Int,
+        distanceResult: SegmentDistanceResult? = null
+    ): Boolean {
         val snapshot = collection()
             .whereEqualTo("id", tripId)
             .get()
@@ -309,12 +320,16 @@ class FirestoreTripRemoteDataSource {
         val docRef = snapshot.documents[0].reference
         docRef.update(
             buildMap {
-                putAll(
-                    TransitRecordCalculations.calculatedDistanceFields(
-                        TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0,
-                        resetRmvDistance = true
+                if (distanceResult != null) {
+                    putAll(TransitRecordCalculations.calculatedDistanceFields(distanceResult))
+                } else {
+                    putAll(
+                        TransitRecordCalculations.calculatedDistanceFields(
+                            TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0,
+                            resetRmvDistance = true
+                        )
                     )
-                )
+                }
                 put("mesafe", mesafe)
                 put("durakSayisi", durakSayisi)
                 put("updatedAt", System.currentTimeMillis())

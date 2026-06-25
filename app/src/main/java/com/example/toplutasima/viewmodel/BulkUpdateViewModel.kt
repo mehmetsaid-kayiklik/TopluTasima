@@ -434,18 +434,28 @@ class BulkUpdateViewModel(
         }
 
         // 5) Calculate distance
-        val distanceKm = when (row.tur) {
+        val distanceResult = when (row.tur) {
             VehicleType.BUS.key -> {
                 checkOrsRateLimit()
-                val d = RmvApiService.calculateDistanceORS(journeySegment.coords)
+                val result = RmvApiService.calculateDistanceORS(
+                    journeySegment.coords,
+                    journeySegment.polylineCoords
+                )
                 recordOrsCall()
-                d
+                result
             }
-            else -> RmvApiService.calculateDistanceRail(journeySegment.coords, journeySegment.allStopCoords, journeySegment.fromIdx, journeySegment.toIdx)
+            else -> RmvApiService.calculateDistanceRail(
+                journeySegment.coords,
+                journeySegment.allStopCoords,
+                journeySegment.fromIdx,
+                journeySegment.toIdx,
+                journeySegment.polylineCoords
+            )
         }
+        val distanceKm = distanceResult.apiDistanceKm ?: 0.0
 
         val stopCount = journeySegment.stopCount
-        if (distanceKm <= 0.0 && stopCount <= 0) {
+        if (distanceKm <= 0.0 && distanceResult.polyDistanceKm == null && stopCount <= 0) {
             logD("No useful data for row ${row.rowIndex}")
             return false
         }
@@ -458,10 +468,7 @@ class BulkUpdateViewModel(
             "durakSayisi" to stopCountStr
         )
         updateFields.putAll(
-            TransitRecordCalculations.calculatedDistanceFields(
-                distanceKm,
-                resetRmvDistance = true
-            )
+            TransitRecordCalculations.calculatedDistanceFields(distanceResult)
         )
         val ok = tripRemoteDataSource.updateTrip(row.firestoreDocId, updateFields)
         logD("Row ${row.rowIndex} / doc ${row.firestoreDocId}: distance=$mesafeStr, stops=$stopCount, ok=$ok")

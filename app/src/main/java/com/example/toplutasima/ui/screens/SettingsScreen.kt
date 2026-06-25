@@ -50,7 +50,10 @@ fun SettingsScreen(
             )
             ColorPersonalSettingsSection(lang = lang)
             TransitNotificationSettingsSection(lang = lang)
-            DiagnosticsSection(lang = lang)
+            DiagnosticsSection(
+                lang = lang,
+                settingsViewModel = settingsViewModel
+            )
         }
     }
 }

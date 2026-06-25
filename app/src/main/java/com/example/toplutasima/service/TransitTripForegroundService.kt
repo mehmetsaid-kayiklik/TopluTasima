@@ -28,6 +28,7 @@ import com.example.toplutasima.service.transit.TransitNotificationBuilder
 import com.example.toplutasima.service.transit.TransitProximityTracker
 import com.example.toplutasima.service.transit.TransitReminderScheduler
 import com.example.toplutasima.service.transit.TransitServiceStateStore
+import com.example.toplutasima.worker.TopluTasimaWorkerFactory
 import com.example.toplutasima.worker.TransitActionWorker
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -675,6 +676,7 @@ class TransitTripForegroundService : Service() {
             TAG,
             "Service WorkManager instance hash=${System.identityHashCode(workManager)}"
         )
+        logWorkManagerFactoryConfiguration(workManager)
         TransitTrackerLogger.log(
             applicationContext,
             TAG,
@@ -712,6 +714,27 @@ class TransitTripForegroundService : Service() {
         )
         observeAutoAlightWork(uniqueName)
         return AutoAlightWorkRequest(uniqueName = uniqueName, workId = workRequest.id)
+    }
+
+    private fun logWorkManagerFactoryConfiguration(workManager: WorkManager) {
+        try {
+            val configuredFactory = workManager.configuration.workerFactory
+            val configuredFactoryId =
+                (configuredFactory as? TopluTasimaWorkerFactory)?.instanceId ?: "n/a"
+            TransitTrackerLogger.log(
+                applicationContext,
+                TAG,
+                "Service WorkManager configuration workerFactory=${configuredFactory::class.java.name} " +
+                    "factoryId=$configuredFactoryId"
+            )
+        } catch (e: Exception) {
+            TransitTrackerLogger.log(
+                applicationContext,
+                TAG,
+                "Service WorkManager configuration lookup FAILED: " +
+                    "${e::class.java.name}: ${e.message}"
+            )
+        }
     }
 
     private fun observeAutoAlightWork(uniqueName: String) {

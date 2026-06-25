@@ -162,7 +162,12 @@ object SummaryCalculator {
                 totalDistanceKm += distanceKm
                 totalOrsDistanceKm += distanceKm
             }
-            if (rmvKm != null) totalRmvDistanceKm += rmvKm
+            if (rmvKm != null &&
+                row[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS]?.toString() ==
+                TransitRecordCalculations.RMV_DISTANCE_READY
+            ) {
+                totalRmvDistanceKm += rmvKm
+            }
 
             val plannedMin = row["planlananYolSuresi"]?.toString()?.toDoubleOrNull()
             val actualMin = row["gercekYolSuresi"]?.toString()?.toDoubleOrNull()

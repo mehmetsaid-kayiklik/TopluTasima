@@ -6,6 +6,7 @@ import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.repository.toEntity
 import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.model.Segment
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import kotlinx.coroutines.CancellationException
@@ -163,7 +164,8 @@ class TransitRecordRepository(
         inisDuragi: String?,
         inisTime: String?,
         mesafe: String? = null,
-        durakSayisi: String? = null
+        durakSayisi: String? = null,
+        distanceResult: SegmentDistanceResult? = null
     ): Boolean = withContext(Dispatchers.IO) {
         val tripDao = getTripDao()
         if (tripDao != null) {
@@ -181,10 +183,14 @@ class TransitRecordRepository(
                 if (!inisTime.isNullOrBlank()) existing["planlananInis"] = inisTime
                 if (mesafe != null) {
                     existing["mesafe"] = mesafe
-                    val distanceKm = TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
-                    existing.putAll(
-                        TransitRecordCalculations.calculatedDistanceFields(distanceKm, resetRmvDistance = true)
-                    )
+                    if (distanceResult != null) {
+                        existing.putAll(TransitRecordCalculations.calculatedDistanceFields(distanceResult))
+                    } else {
+                        val distanceKm = TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0
+                        existing.putAll(
+                            TransitRecordCalculations.calculatedDistanceFields(distanceKm, resetRmvDistance = true)
+                        )
+                    }
                 }
                 if (durakSayisi != null) existing["durakSayisi"] = durakSayisi
 
@@ -196,7 +202,16 @@ class TransitRecordRepository(
                 tripDao.upsertAll(listOf(existing.toEntity()))
             }
         }
-        tripRemoteDataSource.updateStops(id, binisDuragi, binisTime, inisDuragi, inisTime, mesafe, durakSayisi)
+        tripRemoteDataSource.updateStops(
+            id,
+            binisDuragi,
+            binisTime,
+            inisDuragi,
+            inisTime,
+            mesafe,
+            durakSayisi,
+            distanceResult
+        )
     }
 
     suspend fun updateExistingRecord(id: String, fields: Map<String, Any>): Boolean =

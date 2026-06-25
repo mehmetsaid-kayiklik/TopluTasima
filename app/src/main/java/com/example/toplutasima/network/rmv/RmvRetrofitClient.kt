@@ -80,6 +80,7 @@ interface RmvApi {
     @GET("journeyDetail")
     suspend fun getJourneyDetail(
         @Query("id") ref: String,
+        @Query("poly") poly: String = "1",
         @Query("format") format: String = "json",
         @Query("requestId") requestId: String? = null
     ): kotlinx.serialization.json.JsonObject     // too polymorphic → parse manually

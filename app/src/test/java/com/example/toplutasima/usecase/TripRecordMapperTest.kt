@@ -69,7 +69,9 @@ class TripRecordMapperTest {
         assertEquals("18.40 km", data["mesafe"])
         assertEquals(18.40, data[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM] as Double, 0.0)
         assertEquals("18.40 km", data[TransitRecordCalculations.FIELD_ORS_DISTANCE_TEXT])
-        assertEquals(TransitRecordCalculations.RMV_DISTANCE_PENDING, data[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS])
+        assertEquals(17.90, data[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM] as Double, 0.0)
+        assertEquals("17.90 km", data[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT])
+        assertEquals(TransitRecordCalculations.RMV_DISTANCE_READY, data[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS])
         assertEquals("journey-s5", data[TransitRecordCalculations.FIELD_JOURNEY_REF])
         assertEquals("3000010", data[TransitRecordCalculations.FIELD_FROM_STOP_ID])
         assertEquals("3001234", data[TransitRecordCalculations.FIELD_TO_STOP_ID])
@@ -140,6 +142,7 @@ class TripRecordMapperTest {
         dep = "18:22:00",
         arr = "18:44:00",
         distanceKm = 18.40,
+        polyDistanceKm = 17.90,
         stopCount = 7,
         stopNames = listOf("Frankfurt Hauptbahnhof", "Frankfurt West", "Bad Homburg"),
         stopTimes = listOf("18:22", "18:31", "18:44"),
@@ -157,6 +160,7 @@ class TripRecordMapperTest {
         dep = "07:10:00",
         arr = "07:45:00",
         distanceKm = 14.25,
+        polyDistanceKm = 13.80,
         stopCount = 5,
         journeyRef = "journey-x26",
         fromStopId = "airport-1",

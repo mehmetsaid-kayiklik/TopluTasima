@@ -6,6 +6,7 @@ import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.RmvApiService
 import com.example.toplutasima.network.StopNameUtils
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.repository.RmvTripRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -102,6 +103,14 @@ class TripPlanningUseCase(private val repository: RmvTripRepository) {
             .coerceIn(0, exactJourney.stopNames.lastIndex)
 
         val toCoords = exactJourney.allStopCoords.getOrNull(segToIdx)
+        val distanceResult = calcDistance(
+            dep.typeTr,
+            exactJourney.coords,
+            exactJourney.allStopCoords,
+            exactJourney.fromIdx,
+            exactJourney.toIdx,
+            exactJourney.polylineCoords
+        )
 
         return Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
@@ -109,7 +118,8 @@ class TripPlanningUseCase(private val repository: RmvTripRepository) {
             toStop = exactJourney.stopNames.getOrElse(segToIdx) { input.to },
             dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = exactJourney.stopTimes.getOrElse(segToIdx) { "" },
-            distanceKm = calcDistance(dep.typeTr, exactJourney.coords, exactJourney.allStopCoords, exactJourney.fromIdx, exactJourney.toIdx), // coords zaten from→to arası
+            distanceKm = distanceResult.apiDistanceKm ?: 0.0, // coords zaten from→to arası
+            polyDistanceKm = distanceResult.polyDistanceKm,
             stopCount = kotlin.math.abs(segToIdx - segFromIdx),
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
@@ -150,6 +160,14 @@ class TripPlanningUseCase(private val repository: RmvTripRepository) {
         val result = mutableListOf<Segment>()
         val transferCoords = exactJourney.allStopCoords.getOrNull(transferIdx)
         val transferStopId = guideSegments.firstOrNull()?.toStopId.orEmpty()
+        val distanceResult = calcDistance(
+            dep.typeTr,
+            clippedLeg1Coords,
+            exactJourney.allStopCoords,
+            segFromIdx,
+            transferIdx,
+            exactJourney.polylineCoords
+        )
 
         result += Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
@@ -157,7 +175,8 @@ class TripPlanningUseCase(private val repository: RmvTripRepository) {
             toStop = exactJourney.stopNames.getOrElse(transferIdx) { transferStop },
             dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = exactJourney.stopTimes.getOrElse(transferIdx) { "" },
-            distanceKm = calcDistance(dep.typeTr, clippedLeg1Coords, exactJourney.allStopCoords, segFromIdx, transferIdx),
+            distanceKm = distanceResult.apiDistanceKm ?: 0.0,
+            polyDistanceKm = distanceResult.polyDistanceKm,
             stopCount = maxOf(0, transferIdx - segFromIdx),
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
@@ -182,7 +201,14 @@ class TripPlanningUseCase(private val repository: RmvTripRepository) {
         val segFromIdx = exactJourney.fromIdx.coerceIn(0, exactJourney.stopNames.lastIndex)
         val segToIdx = (if (exactJourney.toIdx >= 0) exactJourney.toIdx else exactJourney.stopNames.lastIndex)
             .coerceIn(0, exactJourney.stopNames.lastIndex)
-        val distanceKm = calcDistance(dep.typeTr, exactJourney.coords, exactJourney.allStopCoords, exactJourney.fromIdx, exactJourney.toIdx)
+        val distanceResult = calcDistance(
+            dep.typeTr,
+            exactJourney.coords,
+            exactJourney.allStopCoords,
+            exactJourney.fromIdx,
+            exactJourney.toIdx,
+            exactJourney.polylineCoords
+        )
         val toCoords = exactJourney.allStopCoords.getOrNull(segToIdx)
         return Segment(
             typeTr = dep.typeTr, line = dep.line, direction = dep.direction,
@@ -190,7 +216,8 @@ class TripPlanningUseCase(private val repository: RmvTripRepository) {
             toStop = input.to,
             dep = exactJourney.stopTimes.getOrElse(segFromIdx) { dep.time },
             arr = "",
-            distanceKm = distanceKm,
+            distanceKm = distanceResult.apiDistanceKm ?: 0.0,
+            polyDistanceKm = distanceResult.polyDistanceKm,
             stopCount = exactJourney.stopCount,
             stopNames = exactJourney.stopNames,
             stopTimes = exactJourney.stopTimes,
@@ -211,12 +238,13 @@ class TripPlanningUseCase(private val repository: RmvTripRepository) {
         coords: List<Pair<Double, Double>>,
         allStopCoords: List<Pair<Double, Double>> = emptyList(),
         fromIdx: Int = -1,
-        toIdx: Int = -1
-    ): Double {
-        if (coords.size < 2) return 0.0
+        toIdx: Int = -1,
+        polylineCoords: List<Pair<Double, Double>> = emptyList()
+    ): SegmentDistanceResult {
+        if (coords.size < 2) return SegmentDistanceResult(null, null)
         return withContext(Dispatchers.IO) {
-            if (typeTr == VehicleType.BUS.key) RmvApiService.calculateDistanceORS(coords)
-            else RmvApiService.calculateDistanceRail(coords, allStopCoords, fromIdx, toIdx)
+            if (typeTr == VehicleType.BUS.key) RmvApiService.calculateDistanceORS(coords, polylineCoords)
+            else RmvApiService.calculateDistanceRail(coords, allStopCoords, fromIdx, toIdx, polylineCoords)
         }
     }
 

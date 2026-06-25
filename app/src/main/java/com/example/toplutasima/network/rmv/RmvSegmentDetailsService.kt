@@ -217,10 +217,12 @@ class RmvSegmentDetailsService(
         val allNames = stopList.map { it.name }
         val allTimes = stopList.map { it.depTime }
         val allStopCoords = stopList.map { Pair(it.lat, it.lon) }
+        val polylineCoords = parseJourneyPolylineCoords(json)
 
         logD(
             "JourneyDiag",
-            "RETURN fromIdx=$resolvedFrom toIdx=$resolvedTo totalStops=${stopList.size} segStops=$segStopCount coordsSize=${segmentCoords.size}"
+            "RETURN fromIdx=$resolvedFrom toIdx=$resolvedTo totalStops=${stopList.size} " +
+                "segStops=$segStopCount coordsSize=${segmentCoords.size} polylineCoords=${polylineCoords.size}"
         )
         RmvApiService.JourneySegment(
             stopCount = segStopCount,
@@ -229,7 +231,8 @@ class RmvSegmentDetailsService(
             stopTimes = allTimes,
             fromIdx = resolvedFrom,
             toIdx = resolvedTo,
-            allStopCoords = allStopCoords
+            allStopCoords = allStopCoords,
+            polylineCoords = polylineCoords
         )
     }
 
@@ -259,19 +262,24 @@ class RmvSegmentDetailsService(
             seg.fromStopId,
             seg.toStopId
         )
-        val distanceKm = if (journeySegment.coords.size >= 2) {
+        val distanceResult = if (journeySegment.coords.size >= 2) {
             when (seg.typeTr) {
-                VehicleType.BUS.key -> distanceService.calculateDistanceORS(journeySegment.coords)
+                VehicleType.BUS.key -> distanceService.calculateDistanceORS(
+                    journeySegment.coords,
+                    journeySegment.polylineCoords
+                )
                 else -> distanceService.calculateDistanceRail(
                     journeySegment.coords,
                     journeySegment.allStopCoords,
                     journeySegment.fromIdx,
-                    journeySegment.toIdx
+                    journeySegment.toIdx,
+                    journeySegment.polylineCoords
                 )
             }
         } else {
-            0.0
+            SegmentDistanceResult(null, null)
         }
+        val distanceKm = distanceResult.apiDistanceKm ?: 0.0
         val toCoords = journeySegment.allStopCoords.getOrNull(journeySegment.toIdx)
         return RmvApiService.SegmentDetails(
             distanceKm = distanceKm,
@@ -281,7 +289,8 @@ class RmvSegmentDetailsService(
             fromIdx = journeySegment.fromIdx,
             toIdx = journeySegment.toIdx,
             toStopLat = toCoords?.first ?: Double.NaN,
-            toStopLng = toCoords?.second ?: Double.NaN
+            toStopLng = toCoords?.second ?: Double.NaN,
+            distanceResult = distanceResult
         )
     }
 
@@ -298,6 +307,38 @@ class RmvSegmentDetailsService(
             val apiError = ApiErrors.fromThrowable("RMV", endpoint, requestId, e)
             RmvEndpointAvailability.markFromException(endpoint, apiError)
             throw apiError
+        }
+    }
+
+    private fun parseJourneyPolylineCoords(json: JSONObject): List<Pair<Double, Double>> {
+        return try {
+            val polylineGroup = json.optJSONObject("PolylineGroup")
+                ?: json.optJSONObject("JourneyDetail")?.optJSONObject("PolylineGroup")
+                ?: return emptyList()
+            val descRaw = polylineGroup.opt("polylineDesc") ?: return emptyList()
+            val desc = when (descRaw) {
+                is JSONArray -> descRaw.optJSONObject(0)
+                is JSONObject -> descRaw
+                else -> null
+            } ?: return emptyList()
+            val crd = desc.optJSONArray("crd") ?: return emptyList()
+            val points = mutableListOf<Pair<Double, Double>>()
+            var i = 0
+            while (i + 1 < crd.length()) {
+                val lon = crd.optDouble(i, Double.NaN)
+                val lat = crd.optDouble(i + 1, Double.NaN)
+                if (!lat.isNaN() && !lon.isNaN() &&
+                    kotlin.math.abs(lat) <= 90.0 &&
+                    kotlin.math.abs(lon) <= 180.0
+                ) {
+                    points += Pair(lat, lon)
+                }
+                i += 2
+            }
+            points
+        } catch (e: Exception) {
+            logD("JourneyDiag", "Polyline parse failed: ${e.message}")
+            emptyList()
         }
     }
 

@@ -83,6 +83,7 @@ data class Segment(
     val dep: String,
     val arr: String,
     val distanceKm: Double = 0.0,
+    val polyDistanceKm: Double? = null,
     val stopCount: Int = 0,
     val stopNames: List<String> = emptyList(),
     val stopTimes: List<String> = emptyList(),

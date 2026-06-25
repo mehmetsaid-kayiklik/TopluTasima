@@ -10,6 +10,7 @@ import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.network.rmv.RmvDistanceService
 import com.example.toplutasima.network.rmv.RmvJourneyService
 import com.example.toplutasima.network.rmv.RmvSegmentDetailsService
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.network.rmv.RmvStopService
 import com.example.toplutasima.network.rmv.RmvTimeUtils
 
@@ -27,8 +28,10 @@ object RmvApiService {
         // Tüm hat listesi içinde kullanıcının biniş/iniş indeksleri
         val fromIdx: Int = 0,
         val toIdx: Int = -1,
-        // Tüm hat durak koordinatları (rail routing retry için)
-        val allStopCoords: List<Pair<Double, Double>> = emptyList()
+        // Tüm hat durak koordinatları
+        val allStopCoords: List<Pair<Double, Double>> = emptyList(),
+        // journeyDetail poly=1 PolylineGroup.polylineDesc[0].crd koordinatları
+        val polylineCoords: List<Pair<Double, Double>> = emptyList()
     )
 
     fun formatTimeDigits(digits: String): String =
@@ -89,8 +92,11 @@ object RmvApiService {
 
     // ── 4. ORS distance — OkHttp (suspend) ───────────────────────────────────
 
-    suspend fun calculateDistanceORS(coords: List<Pair<Double, Double>>): Double =
-        distanceService.calculateDistanceORS(coords)
+    suspend fun calculateDistanceORS(
+        coords: List<Pair<Double, Double>>,
+        polylineCoords: List<Pair<Double, Double>> = emptyList()
+    ): SegmentDistanceResult =
+        distanceService.calculateDistanceORS(coords, polylineCoords)
 
     // ── 5. Rail distance — OkHttp (suspend) ──────────────────────────────────
 
@@ -98,9 +104,10 @@ object RmvApiService {
         coords: List<Pair<Double, Double>>,
         allStopCoords: List<Pair<Double, Double>> = emptyList(),
         fromIdx: Int = -1,
-        toIdx: Int = -1
-    ): Double =
-        distanceService.calculateDistanceRail(coords, allStopCoords, fromIdx, toIdx)
+        toIdx: Int = -1,
+        polylineCoords: List<Pair<Double, Double>> = emptyList()
+    ): SegmentDistanceResult =
+        distanceService.calculateDistanceRail(coords, allStopCoords, fromIdx, toIdx, polylineCoords)
 
     // ── 6. Trip — OkHttp (suspend) ────────────────────────────────────────────
 
@@ -119,7 +126,11 @@ object RmvApiService {
         val fromIdx: Int = 0,
         val toIdx: Int = -1,
         val toStopLat: Double = Double.NaN,
-        val toStopLng: Double = Double.NaN
+        val toStopLng: Double = Double.NaN,
+        val distanceResult: SegmentDistanceResult = SegmentDistanceResult(
+            apiDistanceKm = distanceKm.takeIf { it > 0.0 },
+            polyDistanceKm = null
+        )
     )
 
     suspend fun fetchSegmentDetails(seg: Segment): SegmentDetails =

@@ -30,6 +30,17 @@ interface TripDao {
 
     @Query("""
         SELECT * FROM trips
+        WHERE rmvMesafeDurumu IS NULL
+        OR rmvMesafeDurumu = ''
+        OR rmvMesafeDurumu = 'bekliyor'
+        OR rmvMesafeDurumu = 'hata'
+        OR (rmvMesafeDurumu = 'hazir' AND rmvMesafeKm IS NULL)
+        ORDER BY sortDate DESC
+    """)
+    suspend fun getTripsNeedingMesafeBackfill(): List<TripEntity>
+
+    @Query("""
+        SELECT * FROM trips
         WHERE hat LIKE :query
         OR yon LIKE :query
         OR binisDuragi LIKE :query

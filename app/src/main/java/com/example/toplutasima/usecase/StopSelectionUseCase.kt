@@ -7,6 +7,7 @@ import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.TripResult
 import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.RmvApiService
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.repository.RmvTripRepository
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
@@ -179,7 +180,11 @@ class StopSelectionUseCase(
                     fromIdx = seg.stopFromIdx,
                     toIdx = seg.stopToIdx,
                     toStopLat = seg.toStopLat,
-                    toStopLng = seg.toStopLng
+                    toStopLng = seg.toStopLng,
+                    distanceResult = SegmentDistanceResult(
+                        apiDistanceKm = seg.distanceKm.takeIf { it > 0.0 },
+                        polyDistanceKm = seg.polyDistanceKm
+                    )
                 )
             } else {
                 runCatching { rmvTripRepository.fetchSegmentDetails(seg) }
@@ -244,6 +249,7 @@ class StopSelectionUseCase(
             stopFromIdx = if (detailRangeResolved) details.fromIdx else newSeg.stopFromIdx,
             stopToIdx = if (detailRangeResolved) details.toIdx else newSeg.stopToIdx,
             distanceKm = if (details.distanceKm > 0) details.distanceKm else newSeg.distanceKm,
+            polyDistanceKm = details.distanceResult.polyDistanceKm ?: newSeg.polyDistanceKm,
             stopCount = if (details.stopCount > 0) details.stopCount else newSeg.stopCount,
             toStopLat = if (!details.toStopLat.isNaN()) details.toStopLat else newSeg.toStopLat,
             toStopLng = if (!details.toStopLng.isNaN()) details.toStopLng else newSeg.toStopLng
@@ -278,7 +284,8 @@ class StopSelectionUseCase(
             inisDuragi: String?,
             inisTime: String?,
             mesafe: String?,
-            durakSayisi: String?
+            durakSayisi: String?,
+            distanceResult: SegmentDistanceResult?
         ) -> Boolean
     ): RmvLogUiState {
         val segIdx = state.changeStopSegIdx
@@ -306,6 +313,11 @@ class StopSelectionUseCase(
         }
         val newStopCount = kotlin.math.abs(currentToIdx - currentFromIdx)
         var newDistanceKm = seg.distanceKm
+        var newDistanceResult = SegmentDistanceResult(
+            apiDistanceKm = seg.distanceKm.takeIf { it > 0.0 },
+            polyDistanceKm = seg.polyDistanceKm
+        )
+        var calculatedDistanceResult: SegmentDistanceResult? = null
         if (seg.journeyRef.isNotBlank()) {
             val newFrom = if (isBinis) newStopName else seg.fromStop
             val newTo = if (!isBinis) newStopName else seg.toStop
@@ -314,18 +326,24 @@ class StopSelectionUseCase(
                     RmvApiService.fetchJourneyStops(seg.journeyRef, newFrom, newTo)
                 }
                 if (journeySegment.coords.size >= 2) {
-                    newDistanceKm = withContext(Dispatchers.IO) {
+                    newDistanceResult = withContext(Dispatchers.IO) {
                         if (seg.typeTr == VehicleType.BUS.key) {
-                            RmvApiService.calculateDistanceORS(journeySegment.coords)
+                            RmvApiService.calculateDistanceORS(
+                                journeySegment.coords,
+                                journeySegment.polylineCoords
+                            )
                         } else {
                             RmvApiService.calculateDistanceRail(
                                 journeySegment.coords,
                                 journeySegment.allStopCoords,
                                 journeySegment.fromIdx,
-                                journeySegment.toIdx
+                                journeySegment.toIdx,
+                                journeySegment.polylineCoords
                             )
                         }
                     }
+                    newDistanceKm = newDistanceResult.apiDistanceKm ?: 0.0
+                    calculatedDistanceResult = newDistanceResult
                 }
             } catch (_: Exception) {
             }
@@ -340,7 +358,8 @@ class StopSelectionUseCase(
             if (!isBinis) newStopName else null,
             if (!isBinis) newTime else null,
             newMesafe,
-            newDurakSayisi
+            newDurakSayisi,
+            calculatedDistanceResult
         )
         if (!ok) return state.copy(status = S.stopUpdateFailed(language))
 
@@ -349,6 +368,7 @@ class StopSelectionUseCase(
                 fromStop = newStopName,
                 dep = newTime.ifBlank { seg.dep },
                 distanceKm = newDistanceKm,
+                polyDistanceKm = newDistanceResult.polyDistanceKm,
                 stopCount = newStopCount,
                 fromStopId = "",
                 stopFromIdx = currentFromIdx
@@ -358,6 +378,7 @@ class StopSelectionUseCase(
                 toStop = newStopName,
                 arr = newTime.ifBlank { seg.arr },
                 distanceKm = newDistanceKm,
+                polyDistanceKm = newDistanceResult.polyDistanceKm,
                 stopCount = newStopCount,
                 toStopId = "",
                 stopToIdx = currentToIdx
@@ -391,6 +412,7 @@ class StopSelectionUseCase(
         val hasResolvedRange = details.fromIdx >= 0 && details.toIdx >= 0
         return seg.copy(
             distanceKm = if (details.distanceKm > 0) details.distanceKm else seg.distanceKm,
+            polyDistanceKm = details.distanceResult.polyDistanceKm ?: seg.polyDistanceKm,
             stopCount = if (details.stopCount > 0) details.stopCount else seg.stopCount,
             stopNames = stopNames,
             stopTimes = stopTimes,

@@ -3,6 +3,7 @@ package com.example.toplutasima.repository
 import com.example.toplutasima.model.SeatingStatus
 import com.example.toplutasima.model.Segment
 import com.example.toplutasima.model.TicketStatus
+import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
 import java.time.LocalDate
@@ -41,7 +42,19 @@ object TripRecordMapper {
         data["seatmateUuid"] = seatmateUuid
         val mesafeText = TransitRecordCalculations.formatDistanceKm(seg.distanceKm)
         data["mesafe"] = mesafeText
-        data.putAll(TransitRecordCalculations.calculatedDistanceFields(seg.distanceKm, resetRmvDistance = true))
+        val hasCalculatedDistance = seg.journeyRef.isNotBlank() || seg.polyDistanceKm != null
+        if (hasCalculatedDistance) {
+            data.putAll(
+                TransitRecordCalculations.calculatedDistanceFields(
+                    SegmentDistanceResult(
+                        apiDistanceKm = seg.distanceKm.takeIf { it > 0.0 },
+                        polyDistanceKm = seg.polyDistanceKm
+                    )
+                )
+            )
+        } else {
+            data.putAll(TransitRecordCalculations.calculatedDistanceFields(seg.distanceKm, resetRmvDistance = true))
+        }
         data[TransitRecordCalculations.FIELD_JOURNEY_REF] = seg.journeyRef
         data[TransitRecordCalculations.FIELD_FROM_STOP_ID] = seg.fromStopId
         data[TransitRecordCalculations.FIELD_TO_STOP_ID] = seg.toStopId

@@ -8,6 +8,7 @@ import androidx.work.WorkerParameters
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+import java.util.UUID
 
 class TopluTasimaWorkerFactory : WorkerFactory(), KoinComponent {
 
@@ -15,12 +16,18 @@ class TopluTasimaWorkerFactory : WorkerFactory(), KoinComponent {
         private const val TAG = "WorkerFactory"
     }
 
+    val instanceId: String = UUID.randomUUID().toString()
+
+    init {
+        Log.d(TAG, "TopluTasimaWorkerFactory init: instanceId=$instanceId")
+    }
+
     override fun createWorker(
         appContext: Context,
         workerClassName: String,
         workerParameters: WorkerParameters
     ): ListenableWorker? {
-        val msg = "createWorker() called: class=$workerClassName"
+        val msg = "createWorker() called: factoryId=$instanceId class=$workerClassName"
         Log.d(TAG, msg)
         TransitTrackerLogger.log(appContext, TAG, msg)
 
