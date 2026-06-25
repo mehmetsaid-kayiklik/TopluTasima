@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
+import com.example.toplutasima.ui.util.CrashLogEntry
+import com.example.toplutasima.ui.util.CrashLogger
 import com.example.toplutasima.usecase.RmvMesafeBackfillUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -33,12 +35,33 @@ class SettingsViewModel(
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+    private val appContext = application.applicationContext
+    private val _crashLogs = MutableStateFlow<List<CrashLogEntry>>(emptyList())
+    val crashLogs: StateFlow<List<CrashLogEntry>> = _crashLogs.asStateFlow()
+
     var isBackfillRunning by mutableStateOf(false)
         private set
     var backfillProgress by mutableStateOf("")
         private set
     var backfillResultMessage by mutableStateOf("")
         private set
+
+    init {
+        refreshCrashLogs()
+    }
+
+    fun refreshCrashLogs() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _crashLogs.value = CrashLogger.readLogs(appContext)
+        }
+    }
+
+    fun clearCrashLogs() {
+        viewModelScope.launch(Dispatchers.IO) {
+            CrashLogger.clearLogs(appContext)
+            _crashLogs.value = emptyList()
+        }
+    }
 
     // ── Theme ────────────────────────────────────────────────────────────────
 

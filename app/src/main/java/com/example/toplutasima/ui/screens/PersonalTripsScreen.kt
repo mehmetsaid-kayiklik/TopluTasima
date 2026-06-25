@@ -1,5 +1,8 @@
 package com.example.toplutasima.ui.screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -36,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
@@ -47,6 +51,7 @@ import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.WarningAmber
 import com.example.toplutasima.ui.components.AddPersonalTripDialog
 import com.example.toplutasima.ui.components.PersonalTripCard
+import com.example.toplutasima.ui.components.PlateCountryDropdown
 import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
@@ -61,6 +66,13 @@ fun PersonalTripsContent(
     lang: AppLanguage,
     viewModel: PersonalTripViewModel
 ) {
+    val context = LocalContext.current
+    val saveAndStartPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        viewModel.saveFromInlineForm(startTracking = true, context = context)
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -106,23 +118,38 @@ fun PersonalTripsContent(
                         value = uiState.formPlaka,
                         onValueChange = { viewModel.updateFormField("plaka", it) },
                         label = { Text(S.personalPlate(lang)) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1.15f),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                         placeholder = { Text("34 ABC 123", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     )
+                    PlateCountryDropdown(
+                        selectedCountry = uiState.formPlakaUlkesi,
+                        onCountrySelected = { viewModel.updateFormField("plakaUlkesi", it) },
+                        modifier = Modifier.weight(0.75f)
+                    )
                 }
 
-                if (uiState.readyPlates.isNotEmpty()) {
+                if (uiState.readyPlateSuggestions.isNotEmpty()) {
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        uiState.readyPlates.forEach { plate ->
+                        uiState.readyPlateSuggestions.forEach { suggestion ->
                             AssistChip(
-                                onClick = { viewModel.updateFormField("plaka", plate) },
-                                label = { Text(plate, fontSize = 12.sp, maxLines = 1) },
+                                onClick = { viewModel.selectPlateSuggestion(suggestion) },
+                                label = {
+                                    Text(
+                                        listOf(
+                                            suggestion.plaka,
+                                            suggestion.normalizedCountry,
+                                            suggestion.displayName
+                                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                                        fontSize = 12.sp,
+                                        maxLines = 1
+                                    )
+                                },
                                 shape = RoundedCornerShape(8.dp)
                             )
                         }
@@ -182,7 +209,18 @@ fun PersonalTripsContent(
 
                 // Kaydet
                 Button(
-                    onClick = { viewModel.saveFromInlineForm() },
+                    onClick = {
+                        if (viewModel.hasLocationPermission()) {
+                            viewModel.saveFromInlineForm(startTracking = true, context = context)
+                        } else {
+                            saveAndStartPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     contentPadding = PaddingValues(vertical = 13.dp),
@@ -278,7 +316,7 @@ fun PersonalTripsContent(
             editingTrip = uiState.editingTrip,
             lang = lang,
             viewModel = viewModel,
-            readyPlates = uiState.readyPlates,
+            readyPlateSuggestions = uiState.readyPlateSuggestions,
             onDismiss = { viewModel.closeDialog() }
         )
     }

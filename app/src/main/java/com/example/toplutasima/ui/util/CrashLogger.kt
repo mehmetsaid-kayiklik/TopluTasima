@@ -5,6 +5,8 @@ import android.content.Context
 import android.os.Build
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import kotlin.system.exitProcess
 
 object CrashLogger {
 
@@ -14,20 +16,20 @@ object CrashLogger {
 
     fun init(context: Context) {
         val appContext = context.applicationContext
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
 
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             try {
                 writeCrashEntry(
                     context = appContext,
-                    type = "CRASH",
-                    message = throwable.message ?: throwable.javaClass.simpleName,
+                    exceptionClass = throwable.javaClass.name,
+                    exceptionMessage = throwable.message ?: throwable.javaClass.simpleName,
                     stackTrace = throwable.stackTraceToString()
                 )
             } catch (loggingError: Throwable) {
-                // loglama basarisiz olsa da orijinal handler'i mutlaka cagir
+                // Crash kaydi basarisiz olsa bile normal crash kapanisini biz tamamlariz.
             }
-            defaultHandler?.uncaughtException(thread, throwable)
+            android.os.Process.killProcess(android.os.Process.myPid())
+            exitProcess(10)
         }
     }
 
@@ -48,9 +50,9 @@ object CrashLogger {
             exitReasonToString(info.reason)?.let { reasonName ->
                 writeCrashEntry(
                     context = appContext,
-                    type = "OS_KILL",
-                    message = "$reasonName: ${info.description ?: "açıklama yok"}",
-                    stackTrace = null
+                    exceptionClass = "ProcessExit.$reasonName",
+                    exceptionMessage = info.description ?: "aciklama yok",
+                    stackTrace = ""
                 )
             }
             if (info.timestamp > newestTimestamp) newestTimestamp = info.timestamp
@@ -69,14 +71,25 @@ object CrashLogger {
         else -> null
     }
 
-    private fun writeCrashEntry(context: Context, type: String, message: String, stackTrace: String?) {
+    private fun writeCrashEntry(
+        context: Context,
+        exceptionClass: String,
+        exceptionMessage: String,
+        stackTrace: String
+    ) {
         val entry = JSONObject().apply {
-            put("type", type)
             put("timestamp", System.currentTimeMillis())
-            put("message", message)
-            put("stackTrace", stackTrace ?: "")
+            put("exceptionClass", exceptionClass)
+            put("exceptionMessage", exceptionMessage)
+            put("stackTrace", stackTrace)
         }
-        File(context.filesDir, LOG_FILE_NAME).appendText(entry.toString() + "\n")
+        val outputStream = FileOutputStream(File(context.filesDir, LOG_FILE_NAME), true)
+        try {
+            outputStream.write((entry.toString() + "\n").toByteArray(Charsets.UTF_8))
+        } finally {
+            outputStream.flush()
+            outputStream.close()
+        }
     }
 
     fun readLogs(context: Context): List<CrashLogEntry> {
@@ -89,10 +102,16 @@ object CrashLogger {
                 try {
                     val json = JSONObject(line)
                     CrashLogEntry(
-                        type = json.getString("type"),
                         timestamp = json.getLong("timestamp"),
-                        message = json.getString("message"),
-                        stackTrace = json.optString("stackTrace").takeIf { it.isNotBlank() }
+                        exceptionClass = json.optString(
+                            "exceptionClass",
+                            json.optString("type", "Unknown")
+                        ),
+                        exceptionMessage = json.optString(
+                            "exceptionMessage",
+                            json.optString("message", "")
+                        ),
+                        stackTrace = json.optString("stackTrace")
                     )
                 } catch (e: Exception) {
                     null
@@ -100,11 +119,18 @@ object CrashLogger {
             }
             .sortedByDescending { it.timestamp }
     }
+
+    fun clearLogs(context: Context) {
+        val file = File(context.applicationContext.filesDir, LOG_FILE_NAME)
+        if (file.exists()) {
+            file.delete()
+        }
+    }
 }
 
 data class CrashLogEntry(
-    val type: String,
     val timestamp: Long,
-    val message: String,
-    val stackTrace: String?
+    val exceptionClass: String,
+    val exceptionMessage: String,
+    val stackTrace: String
 )

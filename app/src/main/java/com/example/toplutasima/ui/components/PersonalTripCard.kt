@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import com.example.toplutasima.model.PersonalTrip
+import com.example.toplutasima.model.PlateCountries
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.personaltrip.PersonalTripActionRow
@@ -137,7 +138,7 @@ fun PersonalTripCard(
                                     color = MaterialTheme.colorScheme.primaryContainer
                                 ) {
                                     Text(
-                                        trip.plaka,
+                                        "${PlateCountries.normalize(trip.plakaUlkesi)} ${trip.plaka}",
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,

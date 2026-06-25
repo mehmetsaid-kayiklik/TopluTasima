@@ -131,7 +131,7 @@ internal fun PersonalRecordsContent(
             editingTrip = uiState.editingTrip,
             lang = lang,
             viewModel = viewModel,
-            readyPlates = uiState.readyPlates,
+            readyPlateSuggestions = uiState.readyPlateSuggestions,
             onDismiss = { viewModel.closeDialog() }
         )
     }

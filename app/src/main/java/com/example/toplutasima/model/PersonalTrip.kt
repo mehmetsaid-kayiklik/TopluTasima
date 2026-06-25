@@ -13,6 +13,7 @@ data class PersonalTrip(
     val tarih: String = "",             // "DD.MM.YYYY"
     val aracTuru: String = "",          // "Otomobil", "Taksi", vb.
     val plaka: String = "",
+    val plakaUlkesi: String = PlateCountries.DEFAULT,
     val havaDurumu: String = "Bilinmiyor",
 
     // ── Kalkış ─────────────────────────────────────────────────────────────

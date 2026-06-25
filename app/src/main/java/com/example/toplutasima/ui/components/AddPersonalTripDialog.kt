@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
 import com.example.toplutasima.model.PersonalTrip
+import com.example.toplutasima.model.PersonPlateSuggestion
+import com.example.toplutasima.model.PlateCountries
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
@@ -52,7 +54,7 @@ fun AddPersonalTripDialog(
     editingTrip: PersonalTrip?,
     lang: AppLanguage,
     viewModel: PersonalTripViewModel,
-    readyPlates: List<String> = emptyList(),
+    readyPlateSuggestions: List<PersonPlateSuggestion> = emptyList(),
     onDismiss: () -> Unit
 ) {
     val todayStr = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
@@ -60,6 +62,7 @@ fun AddPersonalTripDialog(
 
     var aracTuru    by remember { mutableStateOf(editingTrip?.aracTuru ?: S.personalVehicleOptions.first().first) }
     var plaka       by remember { mutableStateOf(editingTrip?.plaka ?: "") }
+    var plakaUlkesi by remember { mutableStateOf(PlateCountries.normalize(editingTrip?.plakaUlkesi)) }
     var havaDurumu  by remember { mutableStateOf(editingTrip?.havaDurumu ?: "Bilinmiyor") }
     var tarih       by remember { mutableStateOf(editingTrip?.tarih ?: todayStr) }
     var surucu      by remember { mutableStateOf(editingTrip?.surucu) }
@@ -107,26 +110,49 @@ fun AddPersonalTripDialog(
                 }
 
                 // ── Plaka ───────────────────────────────────────────────
-                OutlinedTextField(
-                    value = plaka,
-                    onValueChange = { plaka = it.uppercase() },
-                    label = { Text(S.personalPlate(lang)) },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                    singleLine = true,
-                    placeholder = { Text("34 ABC 123", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                )
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = plaka,
+                        onValueChange = { plaka = it.uppercase() },
+                        label = { Text(S.personalPlate(lang)) },
+                        modifier = Modifier.weight(1.4f),
+                        shape = RoundedCornerShape(10.dp),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                        singleLine = true,
+                        placeholder = { Text("34 ABC 123", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    )
+                    PlateCountryDropdown(
+                        selectedCountry = plakaUlkesi,
+                        onCountrySelected = { plakaUlkesi = it },
+                        modifier = Modifier.weight(0.8f)
+                    )
+                }
 
-                if (readyPlates.isNotEmpty()) {
+                if (readyPlateSuggestions.isNotEmpty()) {
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        readyPlates.forEach { plate ->
+                        readyPlateSuggestions.forEach { suggestion ->
                             AssistChip(
-                                onClick = { plaka = plate },
-                                label = { Text(plate, fontSize = 12.sp, maxLines = 1) },
+                                onClick = {
+                                    plaka = suggestion.plaka
+                                    plakaUlkesi = suggestion.normalizedCountry
+                                },
+                                label = {
+                                    Text(
+                                        listOf(
+                                            suggestion.plaka,
+                                            suggestion.normalizedCountry,
+                                            suggestion.displayName
+                                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                                        fontSize = 12.sp,
+                                        maxLines = 1
+                                    )
+                                },
                                 shape = RoundedCornerShape(8.dp)
                             )
                         }
@@ -241,6 +267,7 @@ fun AddPersonalTripDialog(
                                 editingTrip.copy(
                                     aracTuru = aracTuru,
                                     plaka = plaka.uppercase(),
+                                    plakaUlkesi = PlateCountries.normalize(plakaUlkesi),
                                     havaDurumu = havaDurumu,
                                     tarih = tarih,
                                     kaldigiSaat = kaldigiSaat,
@@ -254,6 +281,7 @@ fun AddPersonalTripDialog(
                             viewModel.saveDraft(
                                 aracTuru = aracTuru,
                                 plaka = plaka.uppercase(),
+                                plakaUlkesi = PlateCountries.normalize(plakaUlkesi),
                                 havaDurumu = havaDurumu,
                                 tarih = tarih,
                                 surucu = surucu,

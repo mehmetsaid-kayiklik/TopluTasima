@@ -16,7 +16,6 @@ import androidx.work.WorkManager
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.di.appModule
-import com.example.toplutasima.diagnostics.AppErrorReporter
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.service.PersonalTripActivityTransitionReceiver
 import com.example.toplutasima.ui.LocaleManager
@@ -27,7 +26,6 @@ import com.example.toplutasima.worker.TransitActionWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import java.util.concurrent.TimeUnit
@@ -42,10 +40,6 @@ class TopluTasimaApp : Application() {
         super.onCreate()
         CrashLogger.init(this)
         CrashLogger.checkExitReasons(this)
-        AppErrorReporter.install(this)
-        appScope.launch {
-            AppErrorReporter.uploadPendingCrashReport(this@TopluTasimaApp)
-        }
         TransitTrackerLogger.init(this)
 
         // PrefsManager ve LocaleManager'ı burada başlat.

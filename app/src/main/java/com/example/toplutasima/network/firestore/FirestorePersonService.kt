@@ -1,6 +1,8 @@
 package com.example.toplutasima.network.firestore
 
 import com.example.toplutasima.data.local.entity.ProfileEntity
+import com.example.toplutasima.model.PersonPlateSuggestion
+import com.example.toplutasima.model.PlateCountries
 import kotlinx.coroutines.tasks.await
 
 object FirestorePersonService {
@@ -48,6 +50,22 @@ object FirestorePersonService {
     }
 
     /** Tüm kişileri çeker. */
+    suspend fun fetchPlateSuggestions(): List<PersonPlateSuggestion> {
+        val snap = collection().get().await()
+        return snap.documents.mapNotNull { doc ->
+            val d = doc.data.orEmpty()
+            if (d["archived"] as? Boolean == true) return@mapNotNull null
+            val plate = d["plaka"]?.toString()?.trim()?.uppercase().orEmpty()
+            if (plate.isBlank()) return@mapNotNull null
+            PersonPlateSuggestion(
+                personId = d["id"]?.toString() ?: doc.id,
+                displayName = d["displayName"]?.toString().orEmpty(),
+                plaka = plate,
+                plakaUlkesi = PlateCountries.normalize(d["plakaUlkesi"]?.toString())
+            )
+        }.distinctBy { "${it.plaka}|${it.normalizedCountry}" }
+    }
+
     suspend fun fetchAll(): List<Map<String, Any>> {
         val snap = collection().get().await()
         return snap.documents.mapNotNull { it.data }

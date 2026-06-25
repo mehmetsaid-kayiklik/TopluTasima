@@ -497,11 +497,6 @@ internal fun LazyListScope.TripStatsSection(
         }
     }
 
-    if (s.totalDistanceKm > 0) {
-        item {
-            SummaryCard(S.totalDistance(lang), formatDistanceKm(s.totalDistanceKm))
-        }
-    }
     if (s.totalOrsDistanceKm > 0 || s.totalRmvDistanceKm > 0) {
         item {
             Row(

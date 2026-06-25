@@ -7,6 +7,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.location.PersonalLocationHelper
 import com.example.toplutasima.model.PersonalTrip
+import com.example.toplutasima.model.PersonPlateSuggestion
+import com.example.toplutasima.model.PlateCountries
 import com.example.toplutasima.repository.PersonalTripRepository
 import com.example.toplutasima.service.PersonalTripForegroundService
 import com.example.toplutasima.usecase.TransitRecordCalculations
@@ -64,9 +66,17 @@ class PersonalTripViewModel(
                     repository.getForMonth(_uiState.value.selectedYearMonth!!)
                 else
                     repository.getAll()
+                val personPlateSuggestions = runCatching {
+                    repository.getPersonPlateSuggestions()
+                }.getOrDefault(emptyList())
+                val readyPlateSuggestions = buildReadyPlateSuggestions(
+                    trips = trips,
+                    personSuggestions = personPlateSuggestions
+                )
                 _uiState.value = _uiState.value.copy(
                     trips = trips,
-                    readyPlates = buildReadyPlates(trips),
+                    readyPlates = readyPlateSuggestions.map { it.plaka }.distinct(),
+                    readyPlateSuggestions = readyPlateSuggestions,
                     isLoading = false
                 )
             } catch (e: Exception) {
@@ -85,23 +95,43 @@ class PersonalTripViewModel(
 
     // ── İnline Form ──────────────────────────────────────────────────────────
 
-    private fun buildReadyPlates(trips: List<PersonalTrip>): List<String> =
-        trips.asSequence()
-            .map { it.plaka.trim().uppercase(Locale.ROOT) }
-            .filter { it.isNotBlank() }
-            .distinct()
+    private fun buildReadyPlateSuggestions(
+        trips: List<PersonalTrip>,
+        personSuggestions: List<PersonPlateSuggestion>
+    ): List<PersonPlateSuggestion> {
+        val tripSuggestions = trips.asSequence()
+            .mapNotNull { trip ->
+                val plate = trip.plaka.trim().uppercase(Locale.ROOT)
+                if (plate.isBlank()) return@mapNotNull null
+                PersonPlateSuggestion(
+                    plaka = plate,
+                    plakaUlkesi = PlateCountries.normalize(trip.plakaUlkesi)
+                )
+            }
             .toList()
+        return (personSuggestions + tripSuggestions)
+            .filter { it.plaka.isNotBlank() }
+            .distinctBy { "${it.plaka}|${it.normalizedCountry}" }
+    }
 
     fun updateFormField(field: String, value: String) {
         _uiState.value = _uiState.value.copy(
             formAracTuru      = if (field == "aracTuru") value else _uiState.value.formAracTuru,
             formPlaka         = if (field == "plaka") value.uppercase() else _uiState.value.formPlaka,
+            formPlakaUlkesi   = if (field == "plakaUlkesi") PlateCountries.normalize(value) else _uiState.value.formPlakaUlkesi,
             formHavaDurumu    = if (field == "hava") value else _uiState.value.formHavaDurumu,
             formTarih         = if (field == "tarih") value else _uiState.value.formTarih,
             formYolcuSayisi   = if (field == "yolcuSayisi") value else _uiState.value.formYolcuSayisi,
             formNot           = if (field == "not") value else _uiState.value.formNot,
             formAracMenuOpen  = if (field == "aracTuru") false else if (field == "aracMenu") value == "true" else _uiState.value.formAracMenuOpen,
             formHavaMenuOpen  = if (field == "hava") false else if (field == "havaMenu") value == "true" else _uiState.value.formHavaMenuOpen
+        )
+    }
+
+    fun selectPlateSuggestion(suggestion: PersonPlateSuggestion) {
+        _uiState.value = _uiState.value.copy(
+            formPlaka = suggestion.plaka.uppercase(Locale.ROOT),
+            formPlakaUlkesi = suggestion.normalizedCountry
         )
     }
 
@@ -114,6 +144,7 @@ class PersonalTripViewModel(
         _uiState.value = current.copy(
             formAracTuru = "Otomobil",
             formPlaka = if (keepPlate) current.formPlaka else "",
+            formPlakaUlkesi = if (keepPlate) current.formPlakaUlkesi else PlateCountries.DEFAULT,
             formHavaDurumu = if (keepWeather) current.formHavaDurumu else "Bilinmiyor",
             formTarih = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")),
             formSurucu = null,
@@ -125,7 +156,7 @@ class PersonalTripViewModel(
     }
 
     /** İnline formdan Firestore'a taslak kaydeder. */
-    fun saveFromInlineForm() {
+    fun saveFromInlineForm(startTracking: Boolean = false, context: Context? = null) {
         val s = _uiState.value
         if (s.formAracTuru.isBlank() || s.formTarih.isBlank()) {
             _uiState.value = s.copy(statusMessage = "Araç türü ve tarih zorunlu")
@@ -138,14 +169,19 @@ class PersonalTripViewModel(
                     tarih       = s.formTarih,
                     aracTuru    = s.formAracTuru,
                     plaka       = s.formPlaka,
+                    plakaUlkesi = PlateCountries.normalize(s.formPlakaUlkesi),
                     havaDurumu  = s.formHavaDurumu,
                     surucu      = s.formSurucu,
                     yolcuSayisi = s.formYolcuSayisi.toIntOrNull(),
                     not         = s.formNot
                 )
-                repository.saveDraft(trip)
+                val docId = repository.saveDraft(trip)
                 resetForm(keepPlate = true, keepWeather = true)
-                _uiState.value = _uiState.value.copy(statusMessage = "✅ Kayıt eklendi")
+                if (startTracking && context != null) {
+                    startTripTracking(context, docId)
+                } else {
+                    _uiState.value = _uiState.value.copy(statusMessage = "✅ Kayıt eklendi")
+                }
                 load()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(statusMessage = "Kaydedilemedi: ${e.message}")
@@ -175,6 +211,7 @@ class PersonalTripViewModel(
     fun saveDraft(
         aracTuru: String,
         plaka: String,
+        plakaUlkesi: String = PlateCountries.DEFAULT,
         havaDurumu: String,
         tarih: String,
         surucu: Boolean?,
@@ -188,6 +225,7 @@ class PersonalTripViewModel(
                     tarih    = tarih,
                     aracTuru = aracTuru,
                     plaka    = plaka.uppercase(),
+                    plakaUlkesi = PlateCountries.normalize(plakaUlkesi),
                     havaDurumu = havaDurumu,
                     surucu   = surucu,
                     yolcuSayisi = yolcuSayisi,
@@ -212,6 +250,7 @@ class PersonalTripViewModel(
                 val fields = mapOf(
                     "aracTuru"    to trip.aracTuru,
                     "plaka"       to trip.plaka.uppercase(),
+                    "plakaUlkesi" to PlateCountries.normalize(trip.plakaUlkesi),
                     "havaDurumu"  to trip.havaDurumu,
                     "tarih"       to trip.tarih,
                     "kaldigiSaat" to trip.kaldigiSaat,
@@ -253,6 +292,13 @@ class PersonalTripViewModel(
      *  4. Foreground Service başlatılır (waypoint takibi + ORS).
      */
     fun recordBindim(context: Context, docId: String) {
+        viewModelScope.launch {
+            startTripTracking(context, docId)
+            load()
+        }
+    }
+
+    private suspend fun startTripTracking(context: Context, docId: String) {
         if (!hasLocationPermission()) {
             _uiState.value = _uiState.value.copy(
                 isResolvingLocation = false,
@@ -261,45 +307,41 @@ class PersonalTripViewModel(
             return
         }
 
-        viewModelScope.launch {
+        _uiState.value = _uiState.value.copy(
+            isResolvingLocation = true,
+            statusMessage = "Konum alınıyor..."
+        )
+        val now = LocalTime.now().format(timeFormatter)
+        val location = locationHelper.resolveCurrentLocation()
+        val fields = mutableMapOf<String, Any?>(
+            "kaldigiSaat" to now,
+            "durum"       to PersonalTrip.DURUM_AKTIF
+        )
+        if (location != null) {
+            fields["kaldigiYer"] = location.first
+            fields["kaldigiLat"] = location.second
+            fields["kaldigiLng"] = location.third
+        }
+        repository.updateTrip(docId, fields)
+        _uiState.value = _uiState.value.copy(
+            isResolvingLocation = false,
+            activeDocId = docId,
+            statusMessage = if (location != null)
+                "Biniş kaydedildi — ${location.first}"
+            else
+                "Biniş kaydedildi (konum alınamadı)"
+        )
+        try {
+            val intent = Intent(context, PersonalTripForegroundService::class.java)
+                .setAction(PersonalTripForegroundService.ACTION_START)
+                .putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
+            context.startForegroundService(intent)
+        } catch (e: Exception) {
+            repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
             _uiState.value = _uiState.value.copy(
-                isResolvingLocation = true,
-                statusMessage = "Konum alınıyor..."
+                activeDocId = null,
+                statusMessage = "Takip başlatılamadı: ${e.message}"
             )
-            val now = LocalTime.now().format(timeFormatter)
-            val location = locationHelper.resolveCurrentLocation()
-            val fields = mutableMapOf<String, Any?>(
-                "kaldigiSaat" to now,
-                "durum"       to PersonalTrip.DURUM_AKTIF
-            )
-            if (location != null) {
-                fields["kaldigiYer"] = location.first
-                fields["kaldigiLat"] = location.second
-                fields["kaldigiLng"] = location.third
-            }
-            repository.updateTrip(docId, fields)
-            _uiState.value = _uiState.value.copy(
-                isResolvingLocation = false,
-                activeDocId = docId,
-                statusMessage = if (location != null)
-                    "Biniş kaydedildi — ${location.first}"
-                else
-                    "Biniş kaydedildi (konum alınamadı)"
-            )
-            // Foreground Service'i başlat
-            try {
-                val intent = Intent(context, PersonalTripForegroundService::class.java)
-                    .setAction(PersonalTripForegroundService.ACTION_START)
-                    .putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
-                context.startForegroundService(intent)
-            } catch (e: Exception) {
-                repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
-                _uiState.value = _uiState.value.copy(
-                    activeDocId = null,
-                    statusMessage = "Takip başlatılamadı: ${e.message}"
-                )
-            }
-            load()
         }
     }
 

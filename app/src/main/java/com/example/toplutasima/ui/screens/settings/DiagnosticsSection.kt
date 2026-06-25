@@ -1,6 +1,7 @@
 package com.example.toplutasima.ui.screens.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -34,7 +35,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.window.DialogProperties
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
-import com.example.toplutasima.diagnostics.AppErrorReporter
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.RmvFooter
@@ -45,10 +45,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.diagnostics.PersonalTripTrackerLogger
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
+import com.example.toplutasima.ui.util.CrashLogEntry
 import kotlinx.coroutines.delay
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 internal fun DiagnosticsSection(
@@ -60,8 +65,7 @@ internal fun DiagnosticsSection(
     var showTrackingLogs by remember { mutableStateOf(false) }
     var pendingQueueCount by remember { mutableStateOf(OfflineQueueStore.pendingCount(context)) }
     var stopCacheCount by remember { mutableStateOf(PrefsManager.stopSearchCacheSize()) }
-    var lastCrashReport by remember { mutableStateOf(AppErrorReporter.lastCrash(context)) }
-    var lastNonFatalReport by remember { mutableStateOf(AppErrorReporter.lastNonFatal(context)) }
+    val crashLogs by settingsViewModel.crashLogs.collectAsStateWithLifecycle()
         Text(
             S.settingsSectionAdvanced(lang),
             style = MaterialTheme.typography.titleSmall,
@@ -82,32 +86,6 @@ internal fun DiagnosticsSection(
                     contentPadding = PaddingValues(vertical = 14.dp)
                 ) {
                     Text(S.maintenanceButton(lang), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                }
-
-                OutlinedButton(
-                    onClick = { settingsViewModel.runMesafeBackfill() },
-                    enabled = !settingsViewModel.isBackfillRunning,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp)
-                ) {
-                    val progress = settingsViewModel.backfillProgress.ifBlank { "0/0" }
-                    Text(
-                        if (settingsViewModel.isBackfillRunning) {
-                            "rmvMesafeKm Backfill ($progress)"
-                        } else {
-                            "rmvMesafeKm Backfill"
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                if (settingsViewModel.backfillResultMessage.isNotBlank()) {
-                    Text(
-                        settingsViewModel.backfillResultMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
@@ -154,40 +132,16 @@ internal fun DiagnosticsSection(
                     shape = RoundedCornerShape(12.dp)
                 ) { Text(S.stopCacheClear(lang), fontSize = 12.sp) }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-
-                val reportPreview = lastCrashReport.ifBlank { lastNonFatalReport }
-                Text(
-                    if (reportPreview.isBlank()) S.noCrashReport(lang) else S.lastCrashReport(lang),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                if (reportPreview.isNotBlank()) {
-                    Text(
-                        reportPreview.lines().take(5).joinToString("\n"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    OutlinedButton(
-                        onClick = {
-                            AppErrorReporter.clear(context)
-                            lastCrashReport = ""
-                            lastNonFatalReport = ""
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text(S.clearCrashReport(lang), fontSize = 12.sp) }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-
                 val trackingLogsButtonText = when (lang) {
                     AppLanguage.TR -> "Takip günlüklerini aç"
                     AppLanguage.DE -> "Tracking-Logs öffnen"
                     else -> "Open tracking logs"
                 }
                 OutlinedButton(
-                    onClick = { showTrackingLogs = true },
+                    onClick = {
+                        settingsViewModel.refreshCrashLogs()
+                        showTrackingLogs = true
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
@@ -211,7 +165,8 @@ internal fun DiagnosticsSection(
                     color = MaterialTheme.colorScheme.background
                 ) {
                     MaintenanceScreen(
-                        onBack = { showMaintenance = false }
+                        onBack = { showMaintenance = false },
+                        settingsViewModel = settingsViewModel
                     )
                 }
             }
@@ -221,6 +176,9 @@ internal fun DiagnosticsSection(
             TrackingLogsDialog(
                 context = context,
                 lang = lang,
+                crashLogs = crashLogs,
+                onRefreshCrashLogs = settingsViewModel::refreshCrashLogs,
+                onClearCrashLogs = settingsViewModel::clearCrashLogs,
                 onDismiss = { showTrackingLogs = false }
             )
         }
@@ -231,8 +189,15 @@ internal fun DiagnosticsSection(
 private fun TrackingLogsDialog(
     context: android.content.Context,
     lang: AppLanguage,
+    crashLogs: List<CrashLogEntry>,
+    onRefreshCrashLogs: () -> Unit,
+    onClearCrashLogs: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    LaunchedEffect(Unit) {
+        onRefreshCrashLogs()
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -279,6 +244,14 @@ private fun TrackingLogsDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    CrashLogSection(
+                        lang = lang,
+                        crashLogs = crashLogs,
+                        onClearCrashLogs = onClearCrashLogs
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
                     TrackingLogSection(
                         context = context,
                         lang = lang,
@@ -339,6 +312,206 @@ private fun TrackingLogsDialog(
         }
     }
 }
+
+@Composable
+private fun CrashLogSection(
+    lang: AppLanguage,
+    crashLogs: List<CrashLogEntry>,
+    onClearCrashLogs: () -> Unit
+) {
+    var selectedCrashLog by remember { mutableStateOf<CrashLogEntry?>(null) }
+
+    Text(
+        when (lang) {
+            AppLanguage.TR -> "Crash kayıtları"
+            AppLanguage.DE -> "Crash-Protokolle"
+            else -> "Crash Logs"
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.SemiBold
+    )
+
+    if (crashLogs.isEmpty()) {
+        Text(
+            when (lang) {
+                AppLanguage.TR -> "Kayıtlı crash logu bulunamadı."
+                AppLanguage.DE -> "Keine Crash-Protokolle gefunden."
+                else -> "No crash logs found."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    } else {
+        OutlinedButton(
+            onClick = onClearCrashLogs,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                when (lang) {
+                    AppLanguage.TR -> "Logları Temizle"
+                    AppLanguage.DE -> "Logs löschen"
+                    else -> "Clear Logs"
+                },
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        crashLogs.forEach { entry ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .clickable { selectedCrashLog = entry }
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    formatCrashTimestamp(entry.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    entry.exceptionClass.substringAfterLast('.').ifBlank { entry.exceptionClass },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    crashMessagePreview(entry, lang),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    selectedCrashLog?.let { entry ->
+        CrashLogContentDialog(
+            lang = lang,
+            entry = entry,
+            onDismiss = { selectedCrashLog = null }
+        )
+    }
+}
+
+@Composable
+private fun CrashLogContentDialog(
+    lang: AppLanguage,
+    entry: CrashLogEntry,
+    onDismiss: () -> Unit
+) {
+    val detailLines = remember(entry) {
+        entry.stackTrace.ifBlank {
+            "${entry.exceptionClass}: ${entry.exceptionMessage}"
+        }.lines()
+    }
+    val listState = rememberLazyListState()
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp).fillMaxSize()
+            ) {
+                Text(
+                    when (lang) {
+                        AppLanguage.TR -> "Crash ayrıntısı"
+                        AppLanguage.DE -> "Crash-Details"
+                        else -> "Crash Details"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    formatCrashTimestamp(entry.timestamp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                Text(
+                    entry.exceptionClass,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                if (entry.exceptionMessage.isNotBlank()) {
+                    Text(
+                        entry.exceptionMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp))
+                        .padding(8.dp)
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(detailLines) { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text(
+                            when (lang) {
+                                AppLanguage.TR -> "Kapat"
+                                AppLanguage.DE -> "Schließen"
+                                else -> "Close"
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun crashMessagePreview(entry: CrashLogEntry, lang: AppLanguage): String {
+    val fallback = when (lang) {
+        AppLanguage.TR -> "Mesaj yok"
+        AppLanguage.DE -> "Keine Meldung"
+        else -> "No message"
+    }
+    val message = entry.exceptionMessage
+        .lineSequence()
+        .firstOrNull()
+        ?.trim()
+        .orEmpty()
+        .ifBlank { fallback }
+
+    return if (message.length > 140) message.take(140) + "..." else message
+}
+
+private fun formatCrashTimestamp(timestamp: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
 
 @Composable
 private fun TrackingLogSection(

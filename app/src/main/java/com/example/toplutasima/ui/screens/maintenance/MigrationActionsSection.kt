@@ -43,6 +43,10 @@ internal fun MigrationActionsSection(
     onRequestDistanceFields: () -> Unit,
     onConfirmDistanceFields: () -> Unit,
     onDismissDistanceFields: () -> Unit,
+    rmvMesafeBackfillRunning: Boolean,
+    rmvMesafeBackfillProgress: String,
+    rmvMesafeBackfillResult: String,
+    onRunRmvMesafeBackfill: () -> Unit,
     seatmateUuidRunning: Boolean,
     seatmateUuidResult: String,
     showSeatmateUuidDialog: Boolean,
@@ -173,6 +177,17 @@ internal fun MigrationActionsSection(
             onDismiss = onDismissDistanceFields
         )
     }
+
+    val backfillProgress = rmvMesafeBackfillProgress.ifBlank { "0/0" }
+    MaintenanceActionCard(
+        title = "rmvMesafeKm Backfill",
+        description = "RMV mesafesi bekleyen eski kayıtları rmvMesafeKm alanıyla doldurur.",
+        isRunning = rmvMesafeBackfillRunning,
+        runningText = "rmvMesafeKm Backfill ($backfillProgress)",
+        result = rmvMesafeBackfillResult,
+        buttonText = "rmvMesafeKm Backfill",
+        onClick = onRunRmvMesafeBackfill
+    )
 
     MaintenanceActionCard(
         title = "Yanıma Oturan Kişi UUID Güncelleme",

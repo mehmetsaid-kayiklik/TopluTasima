@@ -2,6 +2,7 @@ package com.example.toplutasima.repository
 
 import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.network.PersonalFirestoreService
+import com.example.toplutasima.network.firestore.FirestorePersonService
 
 /**
  * Kişisel araç yolculukları için repository.
@@ -24,4 +25,7 @@ class PersonalTripRepository {
 
     suspend fun getForMonth(yearMonth: String): List<PersonalTrip> =
         PersonalFirestoreService.fetchForMonth(yearMonth)
+
+    suspend fun getPersonPlateSuggestions() =
+        FirestorePersonService.fetchPlateSuggestions()
 }

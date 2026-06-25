@@ -43,6 +43,7 @@ import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.RmvFooter
 import com.example.toplutasima.ui.screens.maintenance.MigrationActionsSection
 import com.example.toplutasima.viewmodel.BulkUpdateViewModel
+import com.example.toplutasima.viewmodel.SettingsViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,7 +52,8 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun MaintenanceScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    settingsViewModel: SettingsViewModel
 ) {
     val lang = LocaleManager.currentLanguage
     val scope = rememberCoroutineScope()
@@ -292,6 +294,10 @@ fun MaintenanceScreen(
                     }
                 }
             },
+            rmvMesafeBackfillRunning = settingsViewModel.isBackfillRunning,
+            rmvMesafeBackfillProgress = settingsViewModel.backfillProgress,
+            rmvMesafeBackfillResult = settingsViewModel.backfillResultMessage,
+            onRunRmvMesafeBackfill = settingsViewModel::runMesafeBackfill,
             seatmateUuidRunning = seatmateUuidRunning,
             seatmateUuidResult = seatmateUuidResult,
             showSeatmateUuidDialog = showSeatmateUuidDialog,
