@@ -66,12 +66,12 @@ internal fun DiagnosticsSection(
     var pendingQueueCount by remember { mutableStateOf(OfflineQueueStore.pendingCount(context)) }
     var stopCacheCount by remember { mutableStateOf(PrefsManager.stopSearchCacheSize()) }
     val crashLogs by settingsViewModel.crashLogs.collectAsStateWithLifecycle()
-        Text(
-            S.settingsSectionAdvanced(lang),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+    Text(
+        S.settingsSectionAdvanced(lang),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
 
         Card(
             modifier = Modifier.fillMaxWidth(),
