@@ -132,6 +132,17 @@ class PersonalTripForegroundService : Service() {
                     "ACTION_START startId=$startId flags=$flags alreadyTracking=${_isTracking.value} " +
                         "jobActive=${orsBatchJob?.isActive == true} pending=${pendingCount()} totalKm=${formatKm(totalDistanceMeters)}"
                 )
+                if (!PersonalTripPermissionGuard.hasLocationPermission(this)) {
+                    Log.w(TAG, "Konum izni yok, foreground takip başlatılmadı")
+                    logD("ACTION_START aborted reason=no_location_permission before_start_foreground")
+                    PersonalTripPermissionGuard.handleMissingLocationPermission(
+                        context = this,
+                        source = "service_on_start",
+                        notifyUser = false
+                    )
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
                 startTracking()
             }
             ACTION_STOP  -> {
@@ -179,8 +190,6 @@ class PersonalTripForegroundService : Service() {
         }
 
         logD("Takip başlıyor")
-        _isTracking.value = true
-        PersonalTripTrackingState.setTracking(this, true)
         _liveDistanceKm.value = 0.0
         totalDistanceMeters = 0.0
         rawWaypointCount = 0
@@ -189,7 +198,19 @@ class PersonalTripForegroundService : Service() {
         synchronized(pendingWaypoints) { pendingWaypoints.clear() }
         logD("tracking state reset pending=0 totalKm=0.000")
 
-        startForeground(NOTIF_ID, buildNotification("0.0 km"))
+        try {
+            startForeground(NOTIF_ID, buildNotification("0.0 km"))
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Foreground location service başlatılamadı: ${e.message}")
+            logD("startForeground failed reason=security_exception message=${e.message}")
+            _isTracking.value = false
+            PersonalTripTrackingState.setTracking(this, false)
+            stopSelf()
+            return
+        }
+
+        _isTracking.value = true
+        PersonalTripTrackingState.setTracking(this, true)
 
         val intervalMs = (PrefsManager.waypointIntervalSeconds * 1000L).coerceAtLeast(5_000L)
         logD("requestLocationUpdates intervalMs=$intervalMs minUpdateMs=${intervalMs / 2}")

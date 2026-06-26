@@ -1,5 +1,6 @@
 package com.example.toplutasima.network
 
+import org.json.JSONObject
 import retrofit2.HttpException
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -13,6 +14,7 @@ class ApiRequestException(
     val statusCode: Int? = null,
     val retryAfterSeconds: Long? = null,
     val bodyPreview: String = "",
+    val errorCode: String? = null,
     override val cause: Throwable? = null
 ) : Exception(
     buildMessage(provider, endpoint, requestId, statusCode, retryAfterSeconds, bodyPreview, cause),
@@ -21,6 +23,7 @@ class ApiRequestException(
     val isRateLimited: Boolean get() = statusCode == 429
     val isAccessDenied: Boolean get() = statusCode == 403
     val isEndpointUnsupported: Boolean get() = statusCode in setOf(404, 405, 501)
+    val isSvcParamInvalid: Boolean get() = statusCode == 400 && errorCode == "SVC_PARAM"
 
     companion object {
         private fun buildMessage(
@@ -94,12 +97,17 @@ object ApiErrors {
             statusCode = statusCode,
             retryAfterSeconds = parseRetryAfterSeconds(retryAfterHeader),
             bodyPreview = preview(body),
+            errorCode = parseErrorCode(body),
             cause = cause
         )
     }
 
     private fun parseRetryAfterSeconds(value: String?): Long? =
         value?.trim()?.toLongOrNull()?.takeIf { it >= 0 }
+
+    private fun parseErrorCode(body: String): String? =
+        runCatching { JSONObject(body).optString("errorCode").takeIf { it.isNotBlank() } }
+            .getOrNull()
 
     private fun preview(body: String): String =
         body.replace(Regex("\\s+"), " ").trim().take(240)

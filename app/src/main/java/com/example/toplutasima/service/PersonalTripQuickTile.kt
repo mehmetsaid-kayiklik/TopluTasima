@@ -31,9 +31,22 @@ class PersonalTripQuickTile : TileService() {
         } else {
             log("Quick Settings manual START requested")
             PersonalTripTrackingState.clearManualStop(this)
+            if (!PersonalTripPermissionGuard.hasLocationPermission(this)) {
+                PersonalTripPermissionGuard.handleMissingLocationPermission(
+                    context = this,
+                    source = "quick_settings_tile",
+                    notifyUser = true
+                )
+                updateTile()
+                return
+            }
             try {
-                PersonalTripActionIntents.startPersonalTripService(this)
-                PersonalTripTrackingState.setTracking(this, true)
+                val started = PersonalTripActionIntents.startPersonalTripService(
+                    context = this,
+                    source = "quick_settings_tile",
+                    notifyUser = true
+                )
+                PersonalTripTrackingState.setTracking(this, started)
             } catch (e: Exception) {
                 PersonalTripTrackingState.setTracking(this, false)
                 log("Quick Settings manual START failed: ${e.message}")

@@ -25,7 +25,15 @@ object TransitRecordCalculations {
 
     const val RMV_DISTANCE_PENDING = "bekliyor"
     const val RMV_DISTANCE_READY = "hazir"
+    const val RMV_DISTANCE_READY_FALLBACK = "hazir_fallback"
     const val RMV_DISTANCE_FAILED = "hata"
+    const val RMV_DISTANCE_FAILED_RATE_LIMIT = "hata_rate_limit_429"
+    const val RMV_DISTANCE_FAILED_TIMEOUT = "hata_timeout"
+    const val RMV_DISTANCE_FAILED_NO_RESULT = "hata_sonuc_yok"
+    const val RMV_DISTANCE_FAILED_PARSE_EXCEPTION = "hata_parse_exception"
+    const val RMV_DISTANCE_MISSING_REFERENCE = "referans_eksik"
+    const val RMV_DISTANCE_INVALID_REFERENCE = "referans_gecersiz"
+    const val RMV_DISTANCE_FALLBACK_FAILED = "hata_fallback_basarisiz"
 
     private val dayNames = mapOf(
         java.time.DayOfWeek.MONDAY to "Pazartesi",

@@ -69,8 +69,14 @@ fun PersonalTripsContent(
     val context = LocalContext.current
     val saveAndStartPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) {
-        viewModel.saveFromInlineForm(startTracking = true, context = context)
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            viewModel.saveFromInlineForm(startTracking = true, context = context)
+        } else {
+            viewModel.noteLocationPermissionRequired()
+        }
     }
 
     Column(

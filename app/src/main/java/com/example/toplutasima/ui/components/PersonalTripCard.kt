@@ -70,7 +70,7 @@ fun PersonalTripCard(
         if (granted) {
             viewModel.recordBindim(context, trip.firestoreDocId)
         } else {
-            viewModel.recordBindim(context, trip.firestoreDocId)
+            viewModel.noteLocationPermissionRequired()
         }
     }
 

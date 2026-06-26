@@ -131,8 +131,20 @@ class PersonalTripActivityTransitionReceiver : BroadcastReceiver() {
             }
 
             log(context, "IN_VEHICLE ENTER detected, starting trip")
+            if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
+                PersonalTripPermissionGuard.handleMissingLocationPermission(
+                    context = context,
+                    source = "activity_transition_enter",
+                    notifyUser = true
+                )
+                return
+            }
             try {
-                PersonalTripActionIntents.startPersonalTripService(context)
+                PersonalTripActionIntents.startPersonalTripService(
+                    context = context,
+                    source = "activity_transition_enter",
+                    notifyUser = true
+                )
             } catch (e: Exception) {
                 log(context, "IN_VEHICLE ENTER start failed: ${e.message}")
             }

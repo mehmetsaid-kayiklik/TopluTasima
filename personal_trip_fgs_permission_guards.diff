@@ -1,0 +1,435 @@
+diff --git a/app/src/main/java/com/example/toplutasima/service/PersonalTripActionIntents.kt b/app/src/main/java/com/example/toplutasima/service/PersonalTripActionIntents.kt
+index edcb6c0..12aec90 100644
+--- a/app/src/main/java/com/example/toplutasima/service/PersonalTripActionIntents.kt
++++ b/app/src/main/java/com/example/toplutasima/service/PersonalTripActionIntents.kt
+@@ -3,7 +3,7 @@ package com.example.toplutasima.service
+ import android.app.PendingIntent
+ import android.content.Context
+ import android.content.Intent
+-import android.os.Build
++import androidx.core.content.ContextCompat
+ 
+ object PersonalTripActionIntents {
+     const val ACTION_ACTIVITY_TRANSITION_UPDATE =
+@@ -19,13 +19,22 @@ object PersonalTripActionIntents {
+             this.action = action
+         }
+ 
+-    fun startPersonalTripService(context: Context) {
+-        val intent = serviceIntent(context, PersonalTripForegroundService.ACTION_START)
+-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+-            context.startForegroundService(intent)
+-        } else {
+-            context.startService(intent)
++    fun startPersonalTripService(
++        context: Context,
++        source: String = "unknown",
++        notifyUser: Boolean = false
++    ): Boolean {
++        if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
++            PersonalTripPermissionGuard.handleMissingLocationPermission(
++                context = context,
++                source = source,
++                notifyUser = notifyUser
++            )
++            return false
+         }
++        val intent = serviceIntent(context, PersonalTripForegroundService.ACTION_START)
++        ContextCompat.startForegroundService(context, intent)
++        return true
+     }
+ 
+     fun stopPersonalTripService(context: Context) {
+diff --git a/app/src/main/java/com/example/toplutasima/service/PersonalTripActivityTransitionReceiver.kt b/app/src/main/java/com/example/toplutasima/service/PersonalTripActivityTransitionReceiver.kt
+index 72c5968..cc4a3f6 100644
+--- a/app/src/main/java/com/example/toplutasima/service/PersonalTripActivityTransitionReceiver.kt
++++ b/app/src/main/java/com/example/toplutasima/service/PersonalTripActivityTransitionReceiver.kt
+@@ -131,8 +131,20 @@ class PersonalTripActivityTransitionReceiver : BroadcastReceiver() {
+             }
+ 
+             log(context, "IN_VEHICLE ENTER detected, starting trip")
++            if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
++                PersonalTripPermissionGuard.handleMissingLocationPermission(
++                    context = context,
++                    source = "activity_transition_enter",
++                    notifyUser = true
++                )
++                return
++            }
+             try {
+-                PersonalTripActionIntents.startPersonalTripService(context)
++                PersonalTripActionIntents.startPersonalTripService(
++                    context = context,
++                    source = "activity_transition_enter",
++                    notifyUser = true
++                )
+             } catch (e: Exception) {
+                 log(context, "IN_VEHICLE ENTER start failed: ${e.message}")
+             }
+diff --git a/app/src/main/java/com/example/toplutasima/service/PersonalTripForegroundService.kt b/app/src/main/java/com/example/toplutasima/service/PersonalTripForegroundService.kt
+index ebba018..2def2e4 100644
+--- a/app/src/main/java/com/example/toplutasima/service/PersonalTripForegroundService.kt
++++ b/app/src/main/java/com/example/toplutasima/service/PersonalTripForegroundService.kt
+@@ -132,6 +132,17 @@ class PersonalTripForegroundService : Service() {
+                     "ACTION_START startId=$startId flags=$flags alreadyTracking=${_isTracking.value} " +
+                         "jobActive=${orsBatchJob?.isActive == true} pending=${pendingCount()} totalKm=${formatKm(totalDistanceMeters)}"
+                 )
++                if (!PersonalTripPermissionGuard.hasLocationPermission(this)) {
++                    Log.w(TAG, "Konum izni yok, foreground takip başlatılmadı")
++                    logD("ACTION_START aborted reason=no_location_permission before_start_foreground")
++                    PersonalTripPermissionGuard.handleMissingLocationPermission(
++                        context = this,
++                        source = "service_on_start",
++                        notifyUser = false
++                    )
++                    stopSelf(startId)
++                    return START_NOT_STICKY
++                }
+                 startTracking()
+             }
+             ACTION_STOP  -> {
+@@ -179,8 +190,6 @@ class PersonalTripForegroundService : Service() {
+         }
+ 
+         logD("Takip başlıyor")
+-        _isTracking.value = true
+-        PersonalTripTrackingState.setTracking(this, true)
+         _liveDistanceKm.value = 0.0
+         totalDistanceMeters = 0.0
+         rawWaypointCount = 0
+@@ -189,7 +198,19 @@ class PersonalTripForegroundService : Service() {
+         synchronized(pendingWaypoints) { pendingWaypoints.clear() }
+         logD("tracking state reset pending=0 totalKm=0.000")
+ 
+-        startForeground(NOTIF_ID, buildNotification("0.0 km"))
++        try {
++            startForeground(NOTIF_ID, buildNotification("0.0 km"))
++        } catch (e: SecurityException) {
++            Log.e(TAG, "Foreground location service başlatılamadı: ${e.message}")
++            logD("startForeground failed reason=security_exception message=${e.message}")
++            _isTracking.value = false
++            PersonalTripTrackingState.setTracking(this, false)
++            stopSelf()
++            return
++        }
++
++        _isTracking.value = true
++        PersonalTripTrackingState.setTracking(this, true)
+ 
+         val intervalMs = (PrefsManager.waypointIntervalSeconds * 1000L).coerceAtLeast(5_000L)
+         logD("requestLocationUpdates intervalMs=$intervalMs minUpdateMs=${intervalMs / 2}")
+diff --git a/app/src/main/java/com/example/toplutasima/service/PersonalTripQuickTile.kt b/app/src/main/java/com/example/toplutasima/service/PersonalTripQuickTile.kt
+index e0dbd45..c4f7920 100644
+--- a/app/src/main/java/com/example/toplutasima/service/PersonalTripQuickTile.kt
++++ b/app/src/main/java/com/example/toplutasima/service/PersonalTripQuickTile.kt
+@@ -31,9 +31,22 @@ class PersonalTripQuickTile : TileService() {
+         } else {
+             log("Quick Settings manual START requested")
+             PersonalTripTrackingState.clearManualStop(this)
++            if (!PersonalTripPermissionGuard.hasLocationPermission(this)) {
++                PersonalTripPermissionGuard.handleMissingLocationPermission(
++                    context = this,
++                    source = "quick_settings_tile",
++                    notifyUser = true
++                )
++                updateTile()
++                return
++            }
+             try {
+-                PersonalTripActionIntents.startPersonalTripService(this)
+-                PersonalTripTrackingState.setTracking(this, true)
++                val started = PersonalTripActionIntents.startPersonalTripService(
++                    context = this,
++                    source = "quick_settings_tile",
++                    notifyUser = true
++                )
++                PersonalTripTrackingState.setTracking(this, started)
+             } catch (e: Exception) {
+                 PersonalTripTrackingState.setTracking(this, false)
+                 log("Quick Settings manual START failed: ${e.message}")
+diff --git a/app/src/main/java/com/example/toplutasima/service/PersonalTripTrackingState.kt b/app/src/main/java/com/example/toplutasima/service/PersonalTripTrackingState.kt
+index f28c1ae..6b2fe9f 100644
+--- a/app/src/main/java/com/example/toplutasima/service/PersonalTripTrackingState.kt
++++ b/app/src/main/java/com/example/toplutasima/service/PersonalTripTrackingState.kt
+@@ -12,6 +12,7 @@ object PersonalTripTrackingState {
+     private const val KEY_IN_VEHICLE_SESSION = "in_vehicle_session"
+     private const val KEY_MANUALLY_STOPPED_THIS_SESSION = "manually_stopped_this_session"
+     private const val KEY_PENDING_EXIT_DEADLINE_MS = "pending_exit_deadline_ms"
++    private const val KEY_LOCATION_PERMISSION_REMINDER = "location_permission_reminder"
+ 
+     fun isTracking(context: Context): Boolean =
+         prefs(context).getBoolean(KEY_IS_TRACKING, false)
+@@ -72,6 +73,23 @@ object PersonalTripTrackingState {
+             .apply()
+     }
+ 
++    fun markLocationPermissionReminder(context: Context) {
++        prefs(context).edit()
++            .putBoolean(KEY_LOCATION_PERMISSION_REMINDER, true)
++            .apply()
++    }
++
++    fun consumeLocationPermissionReminder(context: Context): Boolean {
++        val prefs = prefs(context)
++        val shouldShow = prefs.getBoolean(KEY_LOCATION_PERMISSION_REMINDER, false)
++        if (shouldShow) {
++            prefs.edit()
++                .remove(KEY_LOCATION_PERMISSION_REMINDER)
++                .apply()
++        }
++        return shouldShow
++    }
++
+     private fun prefs(context: Context) =
+         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+ 
+diff --git a/app/src/main/java/com/example/toplutasima/ui/components/PersonalTripCard.kt b/app/src/main/java/com/example/toplutasima/ui/components/PersonalTripCard.kt
+index ce1920c..643fd96 100644
+--- a/app/src/main/java/com/example/toplutasima/ui/components/PersonalTripCard.kt
++++ b/app/src/main/java/com/example/toplutasima/ui/components/PersonalTripCard.kt
+@@ -70,7 +70,7 @@ fun PersonalTripCard(
+         if (granted) {
+             viewModel.recordBindim(context, trip.firestoreDocId)
+         } else {
+-            viewModel.recordBindim(context, trip.firestoreDocId)
++            viewModel.noteLocationPermissionRequired()
+         }
+     }
+ 
+diff --git a/app/src/main/java/com/example/toplutasima/ui/screens/PersonalTripsScreen.kt b/app/src/main/java/com/example/toplutasima/ui/screens/PersonalTripsScreen.kt
+index 5baed55..5829f54 100644
+--- a/app/src/main/java/com/example/toplutasima/ui/screens/PersonalTripsScreen.kt
++++ b/app/src/main/java/com/example/toplutasima/ui/screens/PersonalTripsScreen.kt
+@@ -69,8 +69,14 @@ fun PersonalTripsContent(
+     val context = LocalContext.current
+     val saveAndStartPermissionLauncher = rememberLauncherForActivityResult(
+         ActivityResultContracts.RequestMultiplePermissions()
+-    ) {
+-        viewModel.saveFromInlineForm(startTracking = true, context = context)
++    ) { permissions ->
++        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
++            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
++        if (granted) {
++            viewModel.saveFromInlineForm(startTracking = true, context = context)
++        } else {
++            viewModel.noteLocationPermissionRequired()
++        }
+     }
+ 
+     Column(
+diff --git a/app/src/main/java/com/example/toplutasima/viewmodel/PersonalTripViewModel.kt b/app/src/main/java/com/example/toplutasima/viewmodel/PersonalTripViewModel.kt
+index 3d5da7c..ea6ddb4 100644
+--- a/app/src/main/java/com/example/toplutasima/viewmodel/PersonalTripViewModel.kt
++++ b/app/src/main/java/com/example/toplutasima/viewmodel/PersonalTripViewModel.kt
+@@ -3,6 +3,7 @@ package com.example.toplutasima.viewmodel
+ import android.app.Application
+ import android.content.Context
+ import android.content.Intent
++import androidx.core.content.ContextCompat
+ import androidx.lifecycle.AndroidViewModel
+ import androidx.lifecycle.viewModelScope
+ import com.example.toplutasima.location.PersonalLocationHelper
+@@ -11,6 +12,8 @@ import com.example.toplutasima.model.PersonPlateSuggestion
+ import com.example.toplutasima.model.PlateCountries
+ import com.example.toplutasima.repository.PersonalTripRepository
+ import com.example.toplutasima.service.PersonalTripForegroundService
++import com.example.toplutasima.service.PersonalTripPermissionGuard
++import com.example.toplutasima.service.PersonalTripTrackingState
+ import com.example.toplutasima.usecase.TransitRecordCalculations
+ import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
+ import kotlinx.coroutines.flow.MutableStateFlow
+@@ -43,6 +46,9 @@ class PersonalTripViewModel(
+ 
+     init {
+         load()
++        if (PersonalTripTrackingState.consumeLocationPermissionReminder(application)) {
++            noteLocationPermissionRequired()
++        }
+         // Servis StateFlow'larını gözlemle
+         viewModelScope.launch {
+             PersonalTripForegroundService.liveDistanceKm.collect { km ->
+@@ -299,11 +305,8 @@ class PersonalTripViewModel(
+     }
+ 
+     private suspend fun startTripTracking(context: Context, docId: String) {
+-        if (!hasLocationPermission()) {
+-            _uiState.value = _uiState.value.copy(
+-                isResolvingLocation = false,
+-                statusMessage = "Konum izni gerekli"
+-            )
++        if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
++            noteLocationPermissionRequired()
+             return
+         }
+ 
+@@ -335,7 +338,20 @@ class PersonalTripViewModel(
+             val intent = Intent(context, PersonalTripForegroundService::class.java)
+                 .setAction(PersonalTripForegroundService.ACTION_START)
+                 .putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
+-            context.startForegroundService(intent)
++            if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
++                PersonalTripPermissionGuard.handleMissingLocationPermission(
++                    context = context,
++                    source = "manual_start",
++                    notifyUser = false
++                )
++                repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
++                _uiState.value = _uiState.value.copy(
++                    activeDocId = null,
++                    statusMessage = LOCATION_PERMISSION_REQUIRED_MESSAGE
++                )
++                return
++            }
++            ContextCompat.startForegroundService(context, intent)
+         } catch (e: Exception) {
+             repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
+             _uiState.value = _uiState.value.copy(
+@@ -414,5 +430,19 @@ class PersonalTripViewModel(
+         _uiState.value = _uiState.value.copy(statusMessage = "")
+     }
+ 
+-    fun hasLocationPermission() = locationHelper.hasPermission()
++    fun noteLocationPermissionRequired() {
++        PersonalTripTrackingState.markLocationPermissionReminder(getApplication())
++        _uiState.value = _uiState.value.copy(
++            isResolvingLocation = false,
++            statusMessage = LOCATION_PERMISSION_REQUIRED_MESSAGE
++        )
++    }
++
++    fun hasLocationPermission() =
++        PersonalTripPermissionGuard.hasLocationPermission(getApplication())
++
++    private companion object {
++        const val LOCATION_PERMISSION_REQUIRED_MESSAGE =
++            "Kişisel seyahat takibi için konum izni gerekli"
++    }
+ }
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index cd1caf9..485aa64 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -4,4 +4,6 @@
+     <string name="personal_trip_tile_label_active">Seyahat Aktif</string>
+     <string name="personal_trip_tile_subtitle_active">Takip açık</string>
+     <string name="personal_trip_tile_subtitle_inactive">Takip kapalı</string>
++    <string name="personal_trip_location_permission_title">Konum izni gerekli</string>
++    <string name="personal_trip_location_permission_text">Kişisel seyahat takibini başlatmak için konum izni verin.</string>
+ </resources>
+diff --git a/app/src/main/java/com/example/toplutasima/service/PersonalTripPermissionGuard.kt b/app/src/main/java/com/example/toplutasima/service/PersonalTripPermissionGuard.kt
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/app/src/main/java/com/example/toplutasima/service/PersonalTripPermissionGuard.kt
+@@ -0,0 +1,111 @@
++package com.example.toplutasima.service
++
++import android.Manifest
++import android.annotation.SuppressLint
++import android.app.NotificationChannel
++import android.app.NotificationManager
++import android.app.PendingIntent
++import android.content.Context
++import android.content.Intent
++import android.content.pm.PackageManager
++import android.os.Build
++import android.util.Log
++import androidx.core.app.NotificationCompat
++import androidx.core.content.ContextCompat
++import com.example.toplutasima.BuildConfig
++import com.example.toplutasima.MainActivity
++import com.example.toplutasima.R
++import com.example.toplutasima.diagnostics.PersonalTripTrackerLogger
++
++object PersonalTripPermissionGuard {
++    private const val TAG = "PersonalTripPermission"
++    private const val CHANNEL_ID = "personal_trip_permission"
++    private const val NOTIF_ID = 9002
++    private const val OPEN_APP_REQUEST_CODE = 9201
++
++    fun hasLocationPermission(context: Context): Boolean {
++        val appContext = context.applicationContext
++        return ContextCompat.checkSelfPermission(
++            appContext,
++            Manifest.permission.ACCESS_FINE_LOCATION
++        ) == PackageManager.PERMISSION_GRANTED ||
++            ContextCompat.checkSelfPermission(
++                appContext,
++                Manifest.permission.ACCESS_COARSE_LOCATION
++            ) == PackageManager.PERMISSION_GRANTED
++    }
++
++    fun handleMissingLocationPermission(
++        context: Context,
++        source: String,
++        notifyUser: Boolean
++    ) {
++        val appContext = context.applicationContext
++        PersonalTripTrackingState.setTracking(appContext, false)
++        PersonalTripTrackingState.markLocationPermissionReminder(appContext)
++        log(appContext, "$source start skipped: location permission missing")
++        if (notifyUser) {
++            showLocationPermissionNotification(appContext)
++        }
++    }
++
++    @SuppressLint("MissingPermission")
++    private fun showLocationPermissionNotification(context: Context) {
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
++            ContextCompat.checkSelfPermission(
++                context,
++                Manifest.permission.POST_NOTIFICATIONS
++            ) != PackageManager.PERMISSION_GRANTED
++        ) {
++            log(context, "Location permission notification skipped: POST_NOTIFICATIONS missing")
++            return
++        }
++
++        val notificationManager =
++            ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
++        createNotificationChannel(notificationManager)
++
++        val openAppIntent = context.packageManager
++            .getLaunchIntentForPackage(context.packageName)
++            ?.apply {
++                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
++            }
++            ?: Intent(context, MainActivity::class.java).apply {
++                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
++            }
++        val pendingIntent = PendingIntent.getActivity(
++            context,
++            OPEN_APP_REQUEST_CODE,
++            openAppIntent,
++            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
++        )
++
++        val text = context.getString(R.string.personal_trip_location_permission_text)
++        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
++            .setSmallIcon(R.drawable.ic_personal_trip_tile)
++            .setContentTitle(context.getString(R.string.personal_trip_location_permission_title))
++            .setContentText(text)
++            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
++            .setContentIntent(pendingIntent)
++            .setAutoCancel(true)
++            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
++            .build()
++
++        notificationManager.notify(NOTIF_ID, notification)
++    }
++
++    private fun createNotificationChannel(notificationManager: NotificationManager) {
++        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
++        val channel = NotificationChannel(
++            CHANNEL_ID,
++            "Personal trip permission",
++            NotificationManager.IMPORTANCE_DEFAULT
++        )
++        notificationManager.createNotificationChannel(channel)
++    }
++
++    private fun log(context: Context, message: String) {
++        if (BuildConfig.DEBUG) Log.w(TAG, message)
++        PersonalTripTrackerLogger.log(context, TAG, message)
++    }
++}

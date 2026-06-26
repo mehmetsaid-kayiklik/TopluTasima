@@ -12,6 +12,7 @@ object PersonalTripTrackingState {
     private const val KEY_IN_VEHICLE_SESSION = "in_vehicle_session"
     private const val KEY_MANUALLY_STOPPED_THIS_SESSION = "manually_stopped_this_session"
     private const val KEY_PENDING_EXIT_DEADLINE_MS = "pending_exit_deadline_ms"
+    private const val KEY_LOCATION_PERMISSION_REMINDER = "location_permission_reminder"
 
     fun isTracking(context: Context): Boolean =
         prefs(context).getBoolean(KEY_IS_TRACKING, false)
@@ -70,6 +71,23 @@ object PersonalTripTrackingState {
         prefs(context).edit()
             .remove(KEY_PENDING_EXIT_DEADLINE_MS)
             .apply()
+    }
+
+    fun markLocationPermissionReminder(context: Context) {
+        prefs(context).edit()
+            .putBoolean(KEY_LOCATION_PERMISSION_REMINDER, true)
+            .apply()
+    }
+
+    fun consumeLocationPermissionReminder(context: Context): Boolean {
+        val prefs = prefs(context)
+        val shouldShow = prefs.getBoolean(KEY_LOCATION_PERMISSION_REMINDER, false)
+        if (shouldShow) {
+            prefs.edit()
+                .remove(KEY_LOCATION_PERMISSION_REMINDER)
+                .apply()
+        }
+        return shouldShow
     }
 
     private fun prefs(context: Context) =

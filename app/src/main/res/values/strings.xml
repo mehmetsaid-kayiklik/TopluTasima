@@ -4,4 +4,6 @@
     <string name="personal_trip_tile_label_active">Seyahat Aktif</string>
     <string name="personal_trip_tile_subtitle_active">Takip açık</string>
     <string name="personal_trip_tile_subtitle_inactive">Takip kapalı</string>
+    <string name="personal_trip_location_permission_title">Konum izni gerekli</string>
+    <string name="personal_trip_location_permission_text">Kişisel seyahat takibini başlatmak için konum izni verin.</string>
 </resources>

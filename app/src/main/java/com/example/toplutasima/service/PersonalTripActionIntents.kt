@@ -3,7 +3,7 @@ package com.example.toplutasima.service
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
+import androidx.core.content.ContextCompat
 
 object PersonalTripActionIntents {
     const val ACTION_ACTIVITY_TRANSITION_UPDATE =
@@ -19,13 +19,22 @@ object PersonalTripActionIntents {
             this.action = action
         }
 
-    fun startPersonalTripService(context: Context) {
-        val intent = serviceIntent(context, PersonalTripForegroundService.ACTION_START)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
+    fun startPersonalTripService(
+        context: Context,
+        source: String = "unknown",
+        notifyUser: Boolean = false
+    ): Boolean {
+        if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
+            PersonalTripPermissionGuard.handleMissingLocationPermission(
+                context = context,
+                source = source,
+                notifyUser = notifyUser
+            )
+            return false
         }
+        val intent = serviceIntent(context, PersonalTripForegroundService.ACTION_START)
+        ContextCompat.startForegroundService(context, intent)
+        return true
     }
 
     fun stopPersonalTripService(context: Context) {

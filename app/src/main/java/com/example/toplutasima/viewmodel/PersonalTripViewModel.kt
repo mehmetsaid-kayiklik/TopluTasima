@@ -3,6 +3,7 @@ package com.example.toplutasima.viewmodel
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.location.PersonalLocationHelper
@@ -11,6 +12,8 @@ import com.example.toplutasima.model.PersonPlateSuggestion
 import com.example.toplutasima.model.PlateCountries
 import com.example.toplutasima.repository.PersonalTripRepository
 import com.example.toplutasima.service.PersonalTripForegroundService
+import com.example.toplutasima.service.PersonalTripPermissionGuard
+import com.example.toplutasima.service.PersonalTripTrackingState
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +46,9 @@ class PersonalTripViewModel(
 
     init {
         load()
+        if (PersonalTripTrackingState.consumeLocationPermissionReminder(application)) {
+            noteLocationPermissionRequired()
+        }
         // Servis StateFlow'larını gözlemle
         viewModelScope.launch {
             PersonalTripForegroundService.liveDistanceKm.collect { km ->
@@ -299,11 +305,8 @@ class PersonalTripViewModel(
     }
 
     private suspend fun startTripTracking(context: Context, docId: String) {
-        if (!hasLocationPermission()) {
-            _uiState.value = _uiState.value.copy(
-                isResolvingLocation = false,
-                statusMessage = "Konum izni gerekli"
-            )
+        if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
+            noteLocationPermissionRequired()
             return
         }
 
@@ -335,7 +338,20 @@ class PersonalTripViewModel(
             val intent = Intent(context, PersonalTripForegroundService::class.java)
                 .setAction(PersonalTripForegroundService.ACTION_START)
                 .putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
-            context.startForegroundService(intent)
+            if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
+                PersonalTripPermissionGuard.handleMissingLocationPermission(
+                    context = context,
+                    source = "manual_start",
+                    notifyUser = false
+                )
+                repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
+                _uiState.value = _uiState.value.copy(
+                    activeDocId = null,
+                    statusMessage = LOCATION_PERMISSION_REQUIRED_MESSAGE
+                )
+                return
+            }
+            ContextCompat.startForegroundService(context, intent)
         } catch (e: Exception) {
             repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
             _uiState.value = _uiState.value.copy(
@@ -414,5 +430,19 @@ class PersonalTripViewModel(
         _uiState.value = _uiState.value.copy(statusMessage = "")
     }
 
-    fun hasLocationPermission() = locationHelper.hasPermission()
+    fun noteLocationPermissionRequired() {
+        PersonalTripTrackingState.markLocationPermissionReminder(getApplication())
+        _uiState.value = _uiState.value.copy(
+            isResolvingLocation = false,
+            statusMessage = LOCATION_PERMISSION_REQUIRED_MESSAGE
+        )
+    }
+
+    fun hasLocationPermission() =
+        PersonalTripPermissionGuard.hasLocationPermission(getApplication())
+
+    private companion object {
+        const val LOCATION_PERMISSION_REQUIRED_MESSAGE =
+            "Kişisel seyahat takibi için konum izni gerekli"
+    }
 }
