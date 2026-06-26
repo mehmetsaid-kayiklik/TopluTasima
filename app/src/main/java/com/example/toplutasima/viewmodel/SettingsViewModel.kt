@@ -1,6 +1,7 @@
 package com.example.toplutasima.viewmodel
 
 import android.app.Application
+import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SettingsUiState(
     val editingFavId: String? = null,
@@ -44,6 +46,10 @@ class SettingsViewModel(
     var backfillProgress by mutableStateOf("")
         private set
     var backfillResultMessage by mutableStateOf("")
+        private set
+    var isBackfillResetRunning by mutableStateOf(false)
+        private set
+    var backfillResetResultMessage by mutableStateOf("")
         private set
 
     init {
@@ -130,6 +136,30 @@ class SettingsViewModel(
                 backfillResultMessage = "Backfill hata: ${e.message ?: "bilinmeyen hata"}"
             } finally {
                 isBackfillRunning = false
+            }
+        }
+    }
+
+    fun resetAllMesafeBackfillState() {
+        if (isBackfillResetRunning || isBackfillRunning) return
+        isBackfillResetRunning = true
+        backfillResetResultMessage = ""
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resetCount = backfillUseCase.resetAllMesafeBackfillState()
+                val message = "$resetCount seyahatin RMV mesafe hesapları sıfırlandı"
+                backfillResetResultMessage = message
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(appContext, message, Toast.LENGTH_LONG).show()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                backfillResetResultMessage =
+                    "RMV mesafe sıfırlama hata: ${e.message ?: "bilinmeyen hata"}"
+            } finally {
+                isBackfillResetRunning = false
             }
         }
     }

@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -622,8 +623,8 @@ private fun LogFileContentDialog(
     onDismiss: () -> Unit
 ) {
     var content by remember(file) { mutableStateOf("") }
-    val logLines = remember(content) {
-        if (content.isBlank()) emptyList() else content.lines()
+    val logEntries = remember(content) {
+        splitTrackingLogEntries(content)
     }
     val listState = rememberLazyListState()
 
@@ -634,9 +635,9 @@ private fun LogFileContentDialog(
         }
     }
 
-    LaunchedEffect(logLines.size) {
-        if (logLines.isNotEmpty()) {
-            listState.animateScrollToItem(logLines.size - 1)
+    LaunchedEffect(logEntries.size) {
+        if (logEntries.isNotEmpty()) {
+            listState.animateScrollToItem(logEntries.size - 1)
         }
     }
 
@@ -666,32 +667,35 @@ private fun LogFileContentDialog(
                         .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp))
                         .padding(8.dp)
                 ) {
-                    if (logLines.isEmpty()) {
-                    val scrollState = rememberScrollState()
-                    Text(
-                        text = content.ifBlank {
-                            when (lang) {
-                                AppLanguage.TR -> "Dosya boş."
-                                AppLanguage.DE -> "Datei ist leer."
-                                else -> "File is empty."
-                            }
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(scrollState)
-                    )
+                    if (logEntries.isEmpty()) {
+                        val scrollState = rememberScrollState()
+                        Text(
+                            text = content.ifBlank {
+                                when (lang) {
+                                    AppLanguage.TR -> "Dosya boş."
+                                    AppLanguage.DE -> "Datei ist leer."
+                                    else -> "File is empty."
+                                }
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scrollState)
+                        )
                     } else {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(logLines) { line ->
+                            items(logEntries) { entry ->
                                 Text(
-                                    text = line,
+                                    text = entry,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    softWrap = true,
+                                    overflow = TextOverflow.Clip
                                 )
                             }
                         }
@@ -714,6 +718,31 @@ private fun LogFileContentDialog(
             }
         }
     }
+}
+
+private val trackingLogEntryStartRegex = Regex("""^\[\d{2}:\d{2}:\d{2}\] \[[^\]]+\] """)
+
+private fun splitTrackingLogEntries(content: String): List<String> {
+    if (content.isBlank()) return emptyList()
+
+    val entries = mutableListOf<String>()
+    val current = StringBuilder()
+
+    content.lines().dropLastWhile { it.isEmpty() }.forEach { line ->
+        val startsNewEntry = trackingLogEntryStartRegex.containsMatchIn(line.removePrefix("\uFEFF"))
+        if (startsNewEntry) {
+            if (current.isNotEmpty()) entries += current.toString()
+            current.clear()
+            current.append(line)
+        } else if (current.isNotEmpty()) {
+            current.append('\n').append(line)
+        } else if (line.isNotBlank()) {
+            entries += line
+        }
+    }
+
+    if (current.isNotEmpty()) entries += current.toString()
+    return entries
 }
 
 private fun shareLogFile(

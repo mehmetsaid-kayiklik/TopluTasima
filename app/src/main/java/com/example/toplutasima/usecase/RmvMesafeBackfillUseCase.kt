@@ -85,6 +85,16 @@ class RmvMesafeBackfillUseCase(
             BackfillResult(updated, failed)
         }
 
+    suspend fun resetAllMesafeBackfillState(): Int =
+        withContext(Dispatchers.IO) {
+            val resetCount = tripRepository.resetAllMesafeBackfillState()
+            TransitTrackerLogger.log(
+                RESET_LOG_TAG,
+                "Tüm RMV mesafe hesapları sıfırlandı: resetCount=$resetCount"
+            )
+            resetCount
+        }
+
     private suspend fun backfillTrip(trip: TripEntity): String {
         val journeyRef = trip.journeyRef.required("journeyRef")
         val fromStop = trip.binisDuragi.required("binisDuragi")
@@ -404,6 +414,7 @@ class RmvMesafeBackfillUseCase(
     private companion object {
         const val LOG_TAG = "RmvMesafeBackfill"
         const val SUMMARY_LOG_TAG = "RmvMesafeBackfill-Summary"
+        const val RESET_LOG_TAG = "RmvMesafeBackfill-Reset"
         const val FALLBACK_SOURCE_ORS_ROUTE = "ors_route_fallback"
         const val FALLBACK_SOURCE_STORED_LEGACY = "stored_legacy_mesafe"
         const val FALLBACK_FAILURE_RATE_LIMIT = "429/rate"

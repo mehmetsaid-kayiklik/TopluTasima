@@ -127,6 +127,18 @@ class LocalTripRepository(
         tripDao.getTripsNeedingMesafeBackfill()
     }
 
+    suspend fun resetAllMesafeBackfillState(): Int = withContext(Dispatchers.IO) {
+        withContext(NonCancellable) {
+            val trips = tripDao.getAllTrips()
+            val docIds = trips.map { trip ->
+                trip.firestoreDocId?.takeIf { it.isNotBlank() } ?: trip.id
+            }
+            tripRemoteDataSource.resetRmvMesafeFields(docIds)
+            tripDao.resetAllRmvMesafeBackfillState()
+            trips.size
+        }
+    }
+
     suspend fun searchTrips(query: String): List<TripEntity> = withContext(Dispatchers.IO) {
         tripDao.searchTrips("%$query%")
     }

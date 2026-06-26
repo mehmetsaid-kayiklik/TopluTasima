@@ -47,6 +47,12 @@ internal fun MigrationActionsSection(
     rmvMesafeBackfillProgress: String,
     rmvMesafeBackfillResult: String,
     onRunRmvMesafeBackfill: () -> Unit,
+    rmvMesafeResetRunning: Boolean,
+    rmvMesafeResetResult: String,
+    showRmvMesafeResetDialog: Boolean,
+    onRequestRmvMesafeReset: () -> Unit,
+    onConfirmRmvMesafeReset: () -> Unit,
+    onDismissRmvMesafeReset: () -> Unit,
     seatmateUuidRunning: Boolean,
     seatmateUuidResult: String,
     showSeatmateUuidDialog: Boolean,
@@ -188,6 +194,26 @@ internal fun MigrationActionsSection(
         buttonText = "rmvMesafeKm Backfill",
         onClick = onRunRmvMesafeBackfill
     )
+
+    MaintenanceActionCard(
+        title = "RMV Mesafe Hesaplarını Sıfırla",
+        description = "Tüm kayıtların RMV mesafe sonuçlarını temizler; sonraki backfill tüm seyahatleri yeniden işler.",
+        isRunning = rmvMesafeResetRunning,
+        runningText = "RMV mesafe hesapları sıfırlanıyor...",
+        result = rmvMesafeResetResult,
+        buttonText = "RMV Mesafe Hesaplarını Sıfırla",
+        onClick = onRequestRmvMesafeReset
+    )
+    if (showRmvMesafeResetDialog) {
+        MaintenanceConfirmDialog(
+            title = "RMV Mesafe Hesaplarını Sıfırla",
+            text = "Tüm mesafe hesaplamaları sıfırlanacak ve yeniden hesaplanması gerekecek. Devam edilsin mi?",
+            confirmText = S.yes(lang),
+            dismissText = S.cancel(lang),
+            onConfirm = onConfirmRmvMesafeReset,
+            onDismiss = onDismissRmvMesafeReset
+        )
+    }
 
     MaintenanceActionCard(
         title = "Yanıma Oturan Kişi UUID Güncelleme",

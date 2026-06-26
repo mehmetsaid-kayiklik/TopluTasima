@@ -29,6 +29,17 @@ interface TripDao {
     suspend fun getAllTrips(): List<TripEntity>
 
     @Query("""
+        UPDATE trips
+        SET rmvMesafeKm = NULL,
+            rmvMesafeMetre = NULL,
+            rmvMesafeText = NULL,
+            rmvMesafeDurumu = NULL,
+            rmvMesafeGuncellemeTarihi = NULL,
+            rmvApiVersion = NULL
+    """)
+    suspend fun resetAllRmvMesafeBackfillState(): Int
+
+    @Query("""
         SELECT * FROM trips
         WHERE rmvMesafeDurumu IS NULL
         OR rmvMesafeDurumu = ''
