@@ -39,18 +39,28 @@ interface TripDao {
     """)
     suspend fun resetAllRmvMesafeBackfillState(): Int
 
+    @Query("SELECT * FROM trips WHERE rmvMesafeDurumu = 'hazir_fallback'")
+    suspend fun getTripsWithRmvFallbackDistance(): List<TripEntity>
+
+    @Query("""
+        UPDATE trips
+        SET rmvMesafeKm = NULL,
+            rmvMesafeMetre = NULL,
+            rmvMesafeText = NULL,
+            rmvApiVersion = NULL,
+            rmvMesafeDurumu = 'poly_yok'
+        WHERE rmvMesafeDurumu = 'hazir_fallback'
+    """)
+    suspend fun cleanupRmvFallbackDistances(): Int
+
     @Query("""
         SELECT * FROM trips
         WHERE rmvMesafeDurumu IS NULL
         OR rmvMesafeDurumu = ''
         OR rmvMesafeDurumu = 'bekliyor'
-        OR rmvMesafeDurumu = 'hata'
         OR rmvMesafeDurumu = 'hata_rate_limit_429'
         OR rmvMesafeDurumu = 'hata_timeout'
         OR rmvMesafeDurumu = 'hata_sonuc_yok'
-        OR rmvMesafeDurumu = 'hata_parse_exception'
-        OR (rmvMesafeDurumu = 'hazir' AND rmvMesafeKm IS NULL)
-        OR (rmvMesafeDurumu = 'hazir_fallback' AND rmvMesafeKm IS NULL)
         ORDER BY sortDate DESC
     """)
     suspend fun getTripsNeedingMesafeBackfill(): List<TripEntity>

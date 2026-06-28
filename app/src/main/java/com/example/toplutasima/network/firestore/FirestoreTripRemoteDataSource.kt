@@ -257,6 +257,28 @@ class FirestoreTripRemoteDataSource {
         }
     }
 
+    suspend fun cleanupRmvFallbackFields(docIds: List<String>) {
+        val uniqueDocIds = docIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (uniqueDocIds.isEmpty()) return
+
+        FirestoreHelper.safeFirestore {
+            uniqueDocIds.forEach { docId ->
+                collection().document(docId).update(
+                    TransitRecordCalculations.FIELD_RMV_DISTANCE_KM, null,
+                    TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS, null,
+                    TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT, null,
+                    TransitRecordCalculations.FIELD_RMV_API_VERSION, null,
+                    TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS,
+                    TransitRecordCalculations.RMV_DISTANCE_POLY_UNAVAILABLE,
+                    "updatedAt", System.currentTimeMillis()
+                ).await()
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "cleanupRmvFallbackFields failed", e)
+            throw e
+        }
+    }
+
     suspend fun updateStops(
         tripId: String,
         binisDuragi: String?,

@@ -53,6 +53,12 @@ internal fun MigrationActionsSection(
     onRequestRmvMesafeReset: () -> Unit,
     onConfirmRmvMesafeReset: () -> Unit,
     onDismissRmvMesafeReset: () -> Unit,
+    rmvFallbackCleanupRunning: Boolean,
+    rmvFallbackCleanupResult: String,
+    showRmvFallbackCleanupDialog: Boolean,
+    onRequestRmvFallbackCleanup: () -> Unit,
+    onConfirmRmvFallbackCleanup: () -> Unit,
+    onDismissRmvFallbackCleanup: () -> Unit,
     seatmateUuidRunning: Boolean,
     seatmateUuidResult: String,
     showSeatmateUuidDialog: Boolean,
@@ -212,6 +218,26 @@ internal fun MigrationActionsSection(
             dismissText = S.cancel(lang),
             onConfirm = onConfirmRmvMesafeReset,
             onDismiss = onDismissRmvMesafeReset
+        )
+    }
+
+    MaintenanceActionCard(
+        title = "ORS Fallback Kayıtlarını Düzelt",
+        description = "hazir_fallback kayıtlarının RMV mesafe alanlarını API çağrısı yapmadan temizler ve durumlarını poly_yok yapar. orsMesafeKm değişmez.",
+        isRunning = rmvFallbackCleanupRunning,
+        runningText = "ORS fallback kayıtları düzeltiliyor...",
+        result = rmvFallbackCleanupResult,
+        buttonText = "ORS Fallback Kayıtlarını Düzelt",
+        onClick = onRequestRmvFallbackCleanup
+    )
+    if (showRmvFallbackCleanupDialog) {
+        MaintenanceConfirmDialog(
+            title = "ORS Fallback Kayıtlarını Düzelt",
+            text = "hazir_fallback kayıtlarındaki RMV mesafe değerleri temizlenecek ve durumları kalıcı olarak poly_yok yapılacak. Devam edilsin mi?",
+            confirmText = S.yes(lang),
+            dismissText = S.cancel(lang),
+            onConfirm = onConfirmRmvFallbackCleanup,
+            onDismiss = onDismissRmvFallbackCleanup
         )
     }
 

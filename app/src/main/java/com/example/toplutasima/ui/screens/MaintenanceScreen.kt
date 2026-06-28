@@ -98,6 +98,7 @@ fun MaintenanceScreen(
     var distanceFieldsRunning by remember { mutableStateOf(false) }
     var distanceFieldsResult by remember { mutableStateOf("") }
     var showRmvMesafeResetDialog by remember { mutableStateOf(false) }
+    var showRmvFallbackCleanupDialog by remember { mutableStateOf(false) }
 
     // Dialog state for seatmate uuid migration
     var showSeatmateUuidDialog by remember { mutableStateOf(false) }
@@ -307,6 +308,15 @@ fun MaintenanceScreen(
             onConfirmRmvMesafeReset = {
                 showRmvMesafeResetDialog = false
                 settingsViewModel.resetAllMesafeBackfillState()
+            },
+            rmvFallbackCleanupRunning = settingsViewModel.isFallbackCleanupRunning,
+            rmvFallbackCleanupResult = settingsViewModel.fallbackCleanupResultMessage,
+            showRmvFallbackCleanupDialog = showRmvFallbackCleanupDialog,
+            onRequestRmvFallbackCleanup = { showRmvFallbackCleanupDialog = true },
+            onDismissRmvFallbackCleanup = { showRmvFallbackCleanupDialog = false },
+            onConfirmRmvFallbackCleanup = {
+                showRmvFallbackCleanupDialog = false
+                settingsViewModel.cleanupRmvFallbackDistances()
             },
             seatmateUuidRunning = seatmateUuidRunning,
             seatmateUuidResult = seatmateUuidResult,

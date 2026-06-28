@@ -135,4 +135,28 @@ class TransitRecordCalculationsTest {
         assertEquals(0, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS])
         assertEquals(TransitRecordCalculations.RMV_DISTANCE_FAILED, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS])
     }
+
+    @Test
+    fun `poly unavailable fields clear rmv values and write terminal status`() {
+        val fields = TransitRecordCalculations.polyUnavailableDistanceFields()
+
+        assertEquals(
+            setOf(
+                TransitRecordCalculations.FIELD_RMV_DISTANCE_KM,
+                TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS,
+                TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT,
+                TransitRecordCalculations.FIELD_RMV_API_VERSION,
+                TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS
+            ),
+            fields.keys
+        )
+        assertEquals(null, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM])
+        assertEquals(null, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS])
+        assertEquals(null, fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT])
+        assertEquals(null, fields[TransitRecordCalculations.FIELD_RMV_API_VERSION])
+        assertEquals(
+            TransitRecordCalculations.RMV_DISTANCE_POLY_UNAVAILABLE,
+            fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS]
+        )
+    }
 }

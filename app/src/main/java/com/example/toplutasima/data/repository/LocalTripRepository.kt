@@ -139,6 +139,17 @@ class LocalTripRepository(
         }
     }
 
+    suspend fun cleanupRmvFallbackDistances(): Int = withContext(Dispatchers.IO) {
+        withContext(NonCancellable) {
+            val trips = tripDao.getTripsWithRmvFallbackDistance()
+            val docIds = trips.map { trip ->
+                trip.firestoreDocId?.takeIf { it.isNotBlank() } ?: trip.id
+            }
+            tripRemoteDataSource.cleanupRmvFallbackFields(docIds)
+            tripDao.cleanupRmvFallbackDistances()
+        }
+    }
+
     suspend fun searchTrips(query: String): List<TripEntity> = withContext(Dispatchers.IO) {
         tripDao.searchTrips("%$query%")
     }
@@ -155,7 +166,7 @@ class LocalTripRepository(
         }
     }
 
-    suspend fun updateTripMesafeBackfill(trip: TripEntity, fields: Map<String, Any>) = withContext(Dispatchers.IO) {
+    suspend fun updateTripMesafeBackfill(trip: TripEntity, fields: Map<String, Any?>) = withContext(Dispatchers.IO) {
         withContext(NonCancellable) {
             val docId = trip.firestoreDocId?.takeIf { it.isNotBlank() } ?: trip.id
             try {
@@ -168,26 +179,38 @@ class LocalTripRepository(
         }
     }
 
-    private fun TripEntity.withMesafeBackfillFields(fields: Map<String, Any>): TripEntity = copy(
+    private fun TripEntity.withMesafeBackfillFields(fields: Map<String, Any?>): TripEntity = copy(
         orsMesafeKm = fields[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM]?.toString()?.toDoubleOrNull()
             ?: orsMesafeKm,
         orsMesafeText = fields[TransitRecordCalculations.FIELD_ORS_DISTANCE_TEXT]?.toString()
             ?: orsMesafeText,
-        rmvMesafeKm = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM]?.toString()?.toDoubleOrNull()
-            ?: rmvMesafeKm,
-        rmvMesafeMetre = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS]?.toString()?.toDoubleOrNull()?.toInt()
-            ?: rmvMesafeMetre,
-        rmvMesafeText = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT]?.toString()
-            ?: rmvMesafeText,
+        rmvMesafeKm = if (fields.containsKey(TransitRecordCalculations.FIELD_RMV_DISTANCE_KM)) {
+            fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM]?.toString()?.toDoubleOrNull()
+        } else {
+            rmvMesafeKm
+        },
+        rmvMesafeMetre = if (fields.containsKey(TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS)) {
+            fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS]?.toString()?.toDoubleOrNull()?.toInt()
+        } else {
+            rmvMesafeMetre
+        },
+        rmvMesafeText = if (fields.containsKey(TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT)) {
+            fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_TEXT]?.toString()
+        } else {
+            rmvMesafeText
+        },
         rmvMesafeDurumu = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_STATUS]?.toString()
             ?: rmvMesafeDurumu,
         rmvMesafeGuncellemeTarihi = fields[TransitRecordCalculations.FIELD_RMV_DISTANCE_UPDATED_AT]?.toString()
             ?: rmvMesafeGuncellemeTarihi,
-        rmvApiVersion = fields[TransitRecordCalculations.FIELD_RMV_API_VERSION]?.toString()
-            ?: rmvApiVersion
+        rmvApiVersion = if (fields.containsKey(TransitRecordCalculations.FIELD_RMV_API_VERSION)) {
+            fields[TransitRecordCalculations.FIELD_RMV_API_VERSION]?.toString()
+        } else {
+            rmvApiVersion
+        }
     )
 
-    private fun Map<String, Any>.asFailedMesafeBackfillFields(): Map<String, Any> =
+    private fun Map<String, Any?>.asFailedMesafeBackfillFields(): Map<String, Any?> =
         toMutableMap().apply {
             this[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM] = 0.0
             this[TransitRecordCalculations.FIELD_RMV_DISTANCE_METERS] = 0

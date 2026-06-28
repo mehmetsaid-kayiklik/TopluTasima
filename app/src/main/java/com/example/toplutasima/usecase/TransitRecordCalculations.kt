@@ -26,6 +26,7 @@ object TransitRecordCalculations {
     const val RMV_DISTANCE_PENDING = "bekliyor"
     const val RMV_DISTANCE_READY = "hazir"
     const val RMV_DISTANCE_READY_FALLBACK = "hazir_fallback"
+    const val RMV_DISTANCE_POLY_UNAVAILABLE = "poly_yok"
     const val RMV_DISTANCE_FAILED = "hata"
     const val RMV_DISTANCE_FAILED_RATE_LIMIT = "hata_rate_limit_429"
     const val RMV_DISTANCE_FAILED_TIMEOUT = "hata_timeout"
@@ -146,6 +147,14 @@ object TransitRecordCalculations {
         FIELD_RMV_DISTANCE_STATUS to RMV_DISTANCE_PENDING,
         FIELD_RMV_DISTANCE_UPDATED_AT to "",
         FIELD_RMV_API_VERSION to ""
+    )
+
+    fun polyUnavailableDistanceFields(): LinkedHashMap<String, Any?> = linkedMapOf(
+        FIELD_RMV_DISTANCE_KM to null,
+        FIELD_RMV_DISTANCE_METERS to null,
+        FIELD_RMV_DISTANCE_TEXT to null,
+        FIELD_RMV_API_VERSION to null,
+        FIELD_RMV_DISTANCE_STATUS to RMV_DISTANCE_POLY_UNAVAILABLE
     )
 
     fun calculatedDistanceFields(

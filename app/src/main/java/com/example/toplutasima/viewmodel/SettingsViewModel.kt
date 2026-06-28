@@ -51,6 +51,10 @@ class SettingsViewModel(
         private set
     var backfillResetResultMessage by mutableStateOf("")
         private set
+    var isFallbackCleanupRunning by mutableStateOf(false)
+        private set
+    var fallbackCleanupResultMessage by mutableStateOf("")
+        private set
 
     init {
         refreshCrashLogs()
@@ -119,7 +123,7 @@ class SettingsViewModel(
     }
 
     fun runMesafeBackfill() {
-        if (isBackfillRunning) return
+        if (isBackfillRunning || isBackfillResetRunning || isFallbackCleanupRunning) return
         isBackfillRunning = true
         backfillProgress = ""
         backfillResultMessage = ""
@@ -141,7 +145,7 @@ class SettingsViewModel(
     }
 
     fun resetAllMesafeBackfillState() {
-        if (isBackfillResetRunning || isBackfillRunning) return
+        if (isBackfillResetRunning || isBackfillRunning || isFallbackCleanupRunning) return
         isBackfillResetRunning = true
         backfillResetResultMessage = ""
 
@@ -160,6 +164,30 @@ class SettingsViewModel(
                     "RMV mesafe sıfırlama hata: ${e.message ?: "bilinmeyen hata"}"
             } finally {
                 isBackfillResetRunning = false
+            }
+        }
+    }
+
+    fun cleanupRmvFallbackDistances() {
+        if (isFallbackCleanupRunning || isBackfillRunning || isBackfillResetRunning) return
+        isFallbackCleanupRunning = true
+        fallbackCleanupResultMessage = ""
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val cleanupCount = backfillUseCase.cleanupFallbackDistances()
+                val message = "$cleanupCount ORS fallback kaydı poly_yok olarak düzeltildi"
+                fallbackCleanupResultMessage = message
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(appContext, message, Toast.LENGTH_LONG).show()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                fallbackCleanupResultMessage =
+                    "ORS fallback temizleme hatası: ${e.message ?: "bilinmeyen hata"}"
+            } finally {
+                isFallbackCleanupRunning = false
             }
         }
     }

@@ -16,6 +16,7 @@ import androidx.work.WorkManager
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.di.appModule
+import com.example.toplutasima.diagnostics.RmvMesafeBackfillLogger
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.service.PersonalTripActivityTransitionReceiver
 import com.example.toplutasima.ui.LocaleManager
@@ -41,6 +42,8 @@ class TopluTasimaApp : Application() {
         CrashLogger.init(this)
         CrashLogger.checkExitReasons(this)
         TransitTrackerLogger.init(this)
+        RmvMesafeBackfillLogger.init(this)
+        RmvMesafeBackfillLogger.cleanOldLogs(this, maxDaysToKeep = 7)
 
         // PrefsManager ve LocaleManager'ı burada başlat.
         // Service / Worker / BroadcastReceiver, MainActivity'den önce çalışabilir;

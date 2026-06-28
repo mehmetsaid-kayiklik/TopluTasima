@@ -48,6 +48,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.diagnostics.PersonalTripTrackerLogger
+import com.example.toplutasima.diagnostics.RmvMesafeBackfillLogger
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.ui.util.CrashLogEntry
 import kotlinx.coroutines.delay
@@ -307,6 +308,35 @@ private fun TrackingLogsDialog(
                             }
                         },
                         subjectPrefix = "Personal Trip GPS Log"
+                    )
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                    TrackingLogSection(
+                        context = context,
+                        lang = lang,
+                        title = when (lang) {
+                            AppLanguage.TR -> "RMV Mesafe Backfill Logları (Son 7 Gün)"
+                            AppLanguage.DE -> "RMV-Distanz-Backfill-Logs (Letzte 7 Tage)"
+                            else -> "RMV Distance Backfill Logs (Last 7 Days)"
+                        },
+                        noLogsText = when (lang) {
+                            AppLanguage.TR -> "Kayıtlı RMV mesafe backfill logu bulunamadı."
+                            AppLanguage.DE -> "Keine RMV-Distanz-Backfill-Logs gefunden."
+                            else -> "No RMV distance backfill logs found."
+                        },
+                        filePrefix = "rmv_mesafe_backfill_log_",
+                        getLogFiles = { RmvMesafeBackfillLogger.getLogFiles(context) },
+                        readLogFile = { RmvMesafeBackfillLogger.readLogFile(it) },
+                        deleteLogFile = { RmvMesafeBackfillLogger.deleteLogFile(it) },
+                        dialogTitle = { titleText ->
+                            when (lang) {
+                                AppLanguage.TR -> "RMV Mesafe Backfill Logu: $titleText"
+                                AppLanguage.DE -> "RMV-Distanz-Backfill-Log: $titleText"
+                                else -> "RMV Distance Backfill Log: $titleText"
+                            }
+                        },
+                        subjectPrefix = "RMV Distance Backfill Log"
                     )
                 }
             }
