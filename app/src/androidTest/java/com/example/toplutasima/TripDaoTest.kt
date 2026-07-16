@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class TripDaoTest {
+    private val userId = "test-user"
     private lateinit var database: AppDatabase
 
     @Before
@@ -43,11 +44,16 @@ class TripDaoTest {
         )
         database.tripDao().upsertAll(
             statuses.mapIndexed { index, status ->
-                TripEntity(id = "trip-$index", rmvMesafeDurumu = status, sortDate = "2026-06-${index + 1}")
+                TripEntity(
+                    id = "trip-$index",
+                    rmvMesafeDurumu = status,
+                    sortDate = "2026-06-${index + 1}",
+                    userId = userId
+                )
             }
         )
 
-        val selectedIds = database.tripDao().getTripsNeedingMesafeBackfill().map { it.id }.toSet()
+        val selectedIds = database.tripDao().getTripsNeedingMesafeBackfill(userId).map { it.id }.toSet()
 
         assertEquals((0..5).map { "trip-$it" }.toSet(), selectedIds)
     }
@@ -64,7 +70,8 @@ class TripDaoTest {
                     rmvMesafeMetre = 8500,
                     rmvMesafeText = "8.50 km",
                     rmvMesafeDurumu = TransitRecordCalculations.RMV_DISTANCE_READY_FALLBACK,
-                    rmvApiVersion = "ors_route_fallback"
+                    rmvApiVersion = "ors_route_fallback",
+                    userId = userId
                 ),
                 TripEntity(
                     id = "hafas",
@@ -72,14 +79,15 @@ class TripDaoTest {
                     rmvMesafeMetre = 8100,
                     rmvMesafeText = "8.10 km",
                     rmvMesafeDurumu = TransitRecordCalculations.RMV_DISTANCE_READY,
-                    rmvApiVersion = "poly=1"
+                    rmvApiVersion = "poly=1",
+                    userId = userId
                 )
             )
         )
 
-        assertEquals(1, database.tripDao().cleanupRmvFallbackDistances())
+        assertEquals(1, database.tripDao().cleanupRmvFallbackDistances(userId))
 
-        val fallback = database.tripDao().getTripById("fallback")!!
+        val fallback = database.tripDao().getTripById(userId, "fallback")!!
         assertEquals(8.5, fallback.orsMesafeKm!!, 0.0)
         assertEquals("8.50 km", fallback.orsMesafeText)
         assertNull(fallback.rmvMesafeKm)
@@ -88,7 +96,7 @@ class TripDaoTest {
         assertNull(fallback.rmvApiVersion)
         assertEquals(TransitRecordCalculations.RMV_DISTANCE_POLY_UNAVAILABLE, fallback.rmvMesafeDurumu)
 
-        val hafas = database.tripDao().getTripById("hafas")!!
+        val hafas = database.tripDao().getTripById(userId, "hafas")!!
         assertEquals(8.1, hafas.rmvMesafeKm!!, 0.0)
         assertEquals(TransitRecordCalculations.RMV_DISTANCE_READY, hafas.rmvMesafeDurumu)
     }

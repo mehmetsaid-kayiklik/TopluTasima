@@ -7,12 +7,38 @@ import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import kotlinx.coroutines.tasks.await
 
-class FirestoreTripRemoteDataSource {
-    private fun collection() = FirestoreHelper.tripsCollection()
+internal interface TripDocumentWriter {
+    fun newDocumentId(): String
+    suspend fun setDocument(userId: String?, documentId: String, data: Map<String, Any?>)
+}
 
-    suspend fun saveTrip(data: Map<String, Any?>): String {
+private object FirebaseTripDocumentWriter : TripDocumentWriter {
+    override fun newDocumentId(): String = FirestoreHelper.tripsCollection().document().id
+
+    override suspend fun setDocument(userId: String?, documentId: String, data: Map<String, Any?>) {
+        FirestoreHelper.tripsCollection(userId ?: FirestoreHelper.currentUserId)
+            .document(documentId)
+            .set(data)
+            .await()
+    }
+}
+
+class FirestoreTripRemoteDataSource internal constructor(
+    private val tripDocumentWriter: TripDocumentWriter = FirebaseTripDocumentWriter
+) {
+    private fun collection(userId: String? = null) =
+        FirestoreHelper.tripsCollection(userId ?: FirestoreHelper.currentUserId)
+
+    fun newTripDocumentId(): String = tripDocumentWriter.newDocumentId()
+
+    suspend fun saveTrip(data: Map<String, Any?>, userId: String? = null): String {
         val enriched = data.toMutableMap()
-        val firestoreDocId = enriched["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
+        val firestoreDocId = requireNotNull(
+            enriched["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
+        ) {
+            "firestoreDocId must be generated and persisted locally before saveTrip"
+        }
+        enriched["firestoreDocId"] = firestoreDocId
         val tarih = enriched["tarih"]?.toString()
         if (!tarih.isNullOrBlank()) {
             if (!enriched.containsKey("yearMonth")) {
@@ -25,17 +51,17 @@ class FirestoreTripRemoteDataSource {
         enriched["updatedAt"] = System.currentTimeMillis()
         enrichNewDistanceFields(enriched)
         val ordered = buildOrderedMap(enriched)
-        return if (firestoreDocId != null) {
-            collection().document(firestoreDocId).set(ordered).await()
-            firestoreDocId
-        } else {
-            val doc = collection().add(ordered).await()
-            doc.id
-        }
+        tripDocumentWriter.setDocument(userId, firestoreDocId, ordered)
+        return firestoreDocId
     }
 
-    suspend fun updateActual(tripId: String, actualDep: String?, actualArr: String?): Boolean {
-        val snapshot = collection()
+    suspend fun updateActual(
+        tripId: String,
+        actualDep: String?,
+        actualArr: String?,
+        userId: String? = null
+    ): Boolean {
+        val snapshot = collection(userId)
             .whereEqualTo("id", tripId)
             .get().await()
         Log.d(TAG, "updateActual query for id=$tripId → found ${snapshot.size()} docs")
@@ -142,50 +168,6 @@ class FirestoreTripRemoteDataSource {
         return snapshot.documents.mapNotNull { doc ->
             val data = doc.data ?: return@mapNotNull null
             data + ("firestoreDocId" to doc.id)
-        }
-    }
-
-    suspend fun fetchTripsFiltered(
-        month: String = "T\u00fcm\u00fc",
-        type: String = "T\u00fcm\u00fc"
-    ): List<Map<String, Any>> {
-        val snapshot = collection().get().await()
-
-        val filterMonthNum: String?
-        val filterYear: String?
-        if (month != ALL_FILTER) {
-            val filterParts = month.split(" ")
-            filterMonthNum = if (filterParts.size >= 2) {
-                MONTH_NUMBERS[filterParts[0]]
-            } else {
-                MONTH_NUMBERS[month]
-            }
-            filterYear = if (filterParts.size >= 2) filterParts[1] else null
-        } else {
-            filterMonthNum = null
-            filterYear = null
-        }
-
-        return snapshot.documents.mapNotNull { doc ->
-            val data = doc.data ?: return@mapNotNull null
-            val tarih = data["tarih"]?.toString() ?: ""
-            if (tarih.isBlank() || tarih.lowercase() == "tarih") return@mapNotNull null
-
-            if (filterMonthNum != null) {
-                val parts = tarih.split(".")
-                if (parts.size < 3 || parts[1] != filterMonthNum) return@mapNotNull null
-                if (filterYear != null && parts[2] != filterYear) return@mapNotNull null
-            }
-
-            if (type != ALL_FILTER) {
-                val tur = data["tur"]?.toString() ?: ""
-                if (tur != type) return@mapNotNull null
-            }
-
-            data + ("firestoreDocId" to doc.id)
-        }.sortedByDescending { doc ->
-            doc["sortDate"]?.toString().takeIf { !it.isNullOrBlank() }
-                ?: TransitRecordCalculations.computeSortDate(doc["tarih"]?.toString() ?: "")
         }
     }
 
@@ -349,42 +331,13 @@ class FirestoreTripRemoteDataSource {
         }
     }
 
-    suspend fun bulkUpdate(
+    suspend fun updateExistingRecord(
         tripId: String,
-        mesafe: String,
-        durakSayisi: Int,
-        distanceResult: SegmentDistanceResult? = null
+        fields: Map<String, Any>,
+        userId: String? = null
     ): Boolean {
-        val snapshot = collection()
-            .whereEqualTo("id", tripId)
-            .get()
-            .await()
-        if (snapshot.isEmpty) return false
-
-        val docRef = snapshot.documents[0].reference
-        docRef.update(
-            buildMap {
-                if (distanceResult != null) {
-                    putAll(TransitRecordCalculations.calculatedDistanceFields(distanceResult))
-                } else {
-                    putAll(
-                        TransitRecordCalculations.calculatedDistanceFields(
-                            TransitRecordCalculations.parseDistanceKm(mesafe) ?: 0.0,
-                            resetRmvDistance = true
-                        )
-                    )
-                }
-                put("mesafe", mesafe)
-                put("durakSayisi", durakSayisi)
-                put("updatedAt", System.currentTimeMillis())
-            }
-        ).await()
-        return true
-    }
-
-    suspend fun updateExistingRecord(tripId: String, fields: Map<String, Any>): Boolean {
         return FirestoreHelper.safeFirestore {
-            val snapshot = collection()
+            val snapshot = collection(userId)
                 .whereEqualTo("id", tripId)
                 .get().await()
             if (snapshot.isEmpty) {
@@ -404,19 +357,7 @@ class FirestoreTripRemoteDataSource {
 
     suspend fun saveTripMap(data: Map<String, Any?>): Boolean {
         return FirestoreHelper.safeFirestore {
-            val enriched = data.toMutableMap()
-            val tarih = enriched["tarih"]?.toString()
-            if (!tarih.isNullOrBlank()) {
-                if (!enriched.containsKey("yearMonth")) {
-                    enriched["yearMonth"] = TransitRecordCalculations.computeYearMonth(tarih)
-                }
-                if (!enriched.containsKey("sortDate")) {
-                    enriched["sortDate"] = TransitRecordCalculations.computeSortDate(tarih)
-                }
-            }
-            enriched["updatedAt"] = System.currentTimeMillis()
-            enrichNewDistanceFields(enriched)
-            collection().add(buildOrderedMap(enriched)).await()
+            saveTrip(data)
             true
         }.getOrElse { e ->
             Log.e(TAG, "saveTripMap failed", e)
@@ -522,25 +463,9 @@ class FirestoreTripRemoteDataSource {
 
     private companion object {
         private const val TAG = "FirestoreTripRemoteDataSource"
-        private const val ALL_FILTER = "T\u00fcm\u00fc"
         private const val FIELD_JOURNEY_REF = "journeyRef"
         private const val FIELD_FROM_STOP_ID = "fromStopId"
         private const val FIELD_TO_STOP_ID = "toStopId"
-
-        private val MONTH_NUMBERS = mapOf(
-            "Ocak" to "01",
-            "\u015eubat" to "02",
-            "Mart" to "03",
-            "Nisan" to "04",
-            "May\u0131s" to "05",
-            "Haziran" to "06",
-            "Temmuz" to "07",
-            "A\u011fustos" to "08",
-            "Eyl\u00fcl" to "09",
-            "Ekim" to "10",
-            "Kas\u0131m" to "11",
-            "Aral\u0131k" to "12"
-        )
 
         private val FIELD_ORDER = listOf(
             "tarih", "gun", "tur", "hat", "yon", "binisDuragi",

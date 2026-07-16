@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.data.AppEventBus
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.repository.ProfileSyncRepository
@@ -39,7 +40,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,7 +72,6 @@ class RmvLogViewModel(
     private val prefs = application.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
     private val transitServiceStateStore = TransitServiceStateStore(application)
 
-    private var tripDetailJob: Job? = null
     private var actualTimesRefreshJob: Job? = null
     private var departureRefreshJob: Job? = null
     private var serviceStateRefreshJob: Job? = null
@@ -553,7 +552,6 @@ class RmvLogViewModel(
      * Tüm segment hesaplama mantığı [TripPlanningUseCase]'e devredilmiştir.
      */
     fun selectDeparture(dep: Departure) {
-        tripDetailJob?.cancel()
         _uiState.value = stopSelectionUseCase.selectDepartureStart(_uiState.value, dep, lang())
         viewModelScope.launch {
             try {
@@ -563,7 +561,7 @@ class RmvLogViewModel(
                     persistentStops = result.persistentStops,
                     status = S.statusPlanReady(result.trip.segments.size, lang())
                 )
-                loadTransitAlerts(dep.line)
+                loadTransitAlerts(dep)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     transitAlertsLoading = false,
@@ -573,51 +571,12 @@ class RmvLogViewModel(
         }
     }
 
-    fun fetchTrip() {
-        tripDetailJob?.cancel()
-        viewModelScope.launch {
-            try {
-                val s = _uiState.value
-                _uiState.value = s.copy(status = S.statusFetchingPlan(lang()), trip = null, firstSavedId = "", lastSavedId = "", isEditingTimes = false)
-                if (s.fromId.isBlank() || s.toId.isBlank()) throw IllegalStateException(S.errorSelectFromList(lang()))
-                val searchTime = if (s.time.isNotBlank()) RmvApiService.formatTimeDigits(s.time)
-                    else LocalTime.now().withSecond(0).withNano(0).format(DateTimeFormatter.ofPattern("HH:mm"))
-                val apiDate = RmvApiService.convertToApiDate(s.date)
-                val res = rmvTripRepository.fetchTripBasic(s.fromId, s.toId, apiDate, searchTime)
-                _uiState.value = _uiState.value.copy(trip = res, status = S.statusPlanReady(res.segments.size, lang()))
-
-                val expectedSegmentCount = res.segments.size
-                tripDetailJob = viewModelScope.launch {
-                    try {
-                        val detailsList = res.segments.map { seg ->
-                            ensureActive()
-                            runCatching { rmvTripRepository.fetchSegmentDetails(seg) }
-                                .getOrDefault(RmvApiService.SegmentDetails(0.0, 0, emptyList()))
-                        }
-                        ensureActive()
-                        val current = _uiState.value
-                        val currentTrip = current.trip ?: return@launch
-                        if (currentTrip.segments.size != expectedSegmentCount) return@launch
-                        val updatedSegs = currentTrip.segments.mapIndexed { idx, seg ->
-                            val d = detailsList[idx]
-                            applySegmentDetails(seg, d)
-                        }
-                        _uiState.value = current.copy(trip = currentTrip.copy(segments = updatedSegs))
-                    } catch (_: Exception) { }
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
-            }
-        }
-    }
-
     // ── Kayıt ve zaman damgası ────────────────────────────────────────────────
 
-    private fun loadTransitAlerts(line: String) {
+    private fun loadTransitAlerts(departure: Departure) {
         viewModelScope.launch {
             try {
-                val apiDate = runCatching { RmvApiService.convertToApiDate(_uiState.value.date) }.getOrDefault("")
-                val alerts = rmvTripRepository.fetchTransitAlerts(line, apiDate)
+                val alerts = rmvTripRepository.fetchTransitAlerts(departure)
                 _uiState.value = _uiState.value.copy(
                     transitAlerts = alerts,
                     transitAlertsLoading = false
@@ -749,7 +708,12 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 val linkDao = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication()).tripProfileLinkDao()
-                val links = if (docId.isNotBlank()) linkDao.getLinksForTrip(docId) else linkDao.getLinksForTrip(customId)
+                val userId = CurrentUserProvider.requireUserId()
+                val links = if (docId.isNotBlank()) {
+                    linkDao.getLinksForTrip(userId, docId)
+                } else {
+                    linkDao.getLinksForTrip(userId, customId)
+                }
                 val link = links.firstOrNull()
                 if (link != null) {
                     val current = _uiState.value
@@ -815,10 +779,6 @@ class RmvLogViewModel(
             changeStopSelectedIdx = -1,
             changeStopManualText = ""
         )
-    }
-
-    fun updateChangeStopManualText(text: String) {
-        _uiState.value = _uiState.value.copy(changeStopManualText = text)
     }
 
     /**
@@ -888,14 +848,6 @@ class RmvLogViewModel(
     fun setMode(newMode: LogMode) {
         _uiState.value = _uiState.value.copy(mode = newMode)
     }
-
-    /** Backward-compat — Manuel mod toggle */
-    fun setManualMode(isManual: Boolean) {
-        _uiState.value = _uiState.value.copy(
-            mode = if (isManual) LogMode.MANUAL else LogMode.AUTO
-        )
-    }
-
 
     fun setManualTypeMenuOpen(open: Boolean) {
         _uiState.value = _uiState.value.copy(manual = _uiState.value.manual.copy(typeMenuOpen = open))
@@ -1356,13 +1308,9 @@ class RmvLogViewModel(
         }
     }
 
-    private fun toRaw(formatted: String?): String =
-        formatted.orEmpty().replace(":", "").filter { it.isDigit() }.take(4)
-
     override fun onCleared() {
         stopDepartureRefresh()
         actualTimesRefreshJob?.cancel()
-        tripDetailJob?.cancel()
         super.onCleared()
     }
 }

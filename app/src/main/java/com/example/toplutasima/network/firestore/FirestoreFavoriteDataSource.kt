@@ -5,10 +5,16 @@ import com.example.toplutasima.model.FavoriteStop
 import com.example.toplutasima.model.UsageType
 import kotlinx.coroutines.tasks.await
 
-class FirestoreFavoriteDataSource {
+internal interface FavoriteRemoteDataSource {
+    suspend fun saveFavorite(fav: FavoriteStop)
+    suspend fun deleteFavorite(favId: String)
+    suspend fun fetchAllFavorites(): List<FavoriteStop>
+}
+
+class FirestoreFavoriteDataSource : FavoriteRemoteDataSource {
     private fun collection() = FirestoreHelper.favoritesCollection()
 
-    suspend fun saveFavorite(fav: FavoriteStop) {
+    override suspend fun saveFavorite(fav: FavoriteStop) {
         FirestoreHelper.safeFirestore {
             collection().document(fav.id).set(
                 mapOf(
@@ -25,7 +31,7 @@ class FirestoreFavoriteDataSource {
         }
     }
 
-    suspend fun deleteFavorite(favId: String) {
+    override suspend fun deleteFavorite(favId: String) {
         FirestoreHelper.safeFirestore {
             collection().document(favId).delete().await()
         }.getOrElse { e ->
@@ -34,7 +40,7 @@ class FirestoreFavoriteDataSource {
         }
     }
 
-    suspend fun fetchAllFavorites(): List<FavoriteStop> {
+    override suspend fun fetchAllFavorites(): List<FavoriteStop> {
         return FirestoreHelper.safeFirestore {
             val snapshot = collection().get().await()
             snapshot.documents.mapNotNull { doc ->

@@ -233,58 +233,6 @@ class RmvDistanceService(
         return totalMeters / 1000.0
     }
 
-    // API/legacy mesafe kaynağı, orsMesafeKm'i besler.
-    private fun railRoutePolyline(
-        pStart: Pair<Double, Double>,
-        pEnd: Pair<Double, Double>
-    ): List<Pair<Double, Double>> {
-        return try {
-            val url =
-                "https://routing.openrailrouting.org/route?point=${pStart.first},${pStart.second}&point=${pEnd.first},${pEnd.second}&profile=all_tracks&points_encoded=false"
-            val req = Request.Builder().url(url).get().build()
-            ApiClient.http.newCall(req).execute().use { res ->
-                if (!res.isSuccessful) return@use emptyList()
-                val body = res.body?.string().orEmpty()
-                val json = JSONObject(body)
-                val paths = json.optJSONArray("paths")
-                if (paths != null && paths.length() > 0) {
-                    val coords = paths.getJSONObject(0).optJSONObject("points")?.optJSONArray("coordinates")
-                    if (coords != null) {
-                        val poly = mutableListOf<Pair<Double, Double>>()
-                        for (i in 0 until coords.length()) {
-                            val pt = coords.optJSONArray(i)
-                            if (pt != null && pt.length() >= 2) {
-                                poly.add(Pair(pt.optDouble(1), pt.optDouble(0)))
-                            }
-                        }
-                        return@use poly
-                    }
-                }
-                emptyList()
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
-
-    private fun closestVertexDistance(poly: List<Pair<Double, Double>>, point: Pair<Double, Double>): Double {
-        if (poly.isEmpty()) return 0.0
-        var minIdx = 0
-        var minDist = Double.MAX_VALUE
-        for (i in poly.indices) {
-            val distance = haversineKm(point, poly[i])
-            if (distance < minDist) {
-                minDist = distance
-                minIdx = i
-            }
-        }
-        var distance = 0.0
-        for (i in 0 until minIdx) {
-            distance += haversineKm(poly[i], poly[i + 1])
-        }
-        return distance
-    }
-
     private fun haversineKm(p1: Pair<Double, Double>, p2: Pair<Double, Double>): Double {
         val radiusKm = 6371.0
         val lat1 = Math.toRadians(p1.first)

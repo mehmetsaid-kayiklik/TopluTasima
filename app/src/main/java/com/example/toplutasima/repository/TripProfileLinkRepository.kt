@@ -1,6 +1,7 @@
 package com.example.toplutasima.repository
 
 import android.content.Context
+import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.local.entity.TripProfileLinkEntity
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ class TripProfileLinkRepository(private val appContext: Context? = null) {
         seatmateNote: String?
     ) = withContext(Dispatchers.IO) {
         if (profileId.isNullOrBlank()) return@withContext
+        val userId = CurrentUserProvider.requireUserId()
         getLinkDao()?.upsert(
             TripProfileLinkEntity(
                 id = UUID.randomUUID().toString(),
@@ -25,7 +27,8 @@ class TripProfileLinkRepository(private val appContext: Context? = null) {
                 profileId = profileId,
                 seatmateNote = seatmateNote,
                 createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                userId = userId
             )
         )
     }
@@ -35,7 +38,12 @@ class TripProfileLinkRepository(private val appContext: Context? = null) {
         firestoreDocId: String
     ) = withContext(Dispatchers.IO) {
         if (firestoreDocId.isBlank()) return@withContext
-        getLinkDao()?.updateStableKey(localTripStableKey, firestoreDocId, System.currentTimeMillis())
+        getLinkDao()?.updateStableKey(
+            CurrentUserProvider.requireUserId(),
+            localTripStableKey,
+            firestoreDocId,
+            System.currentTimeMillis()
+        )
     }
 
     suspend fun updateTripProfileLink(
@@ -43,19 +51,20 @@ class TripProfileLinkRepository(private val appContext: Context? = null) {
         profileId: String?,
         seatmateNote: String?
     ) = withContext(Dispatchers.IO) {
+        val userId = CurrentUserProvider.requireUserId()
         val linkDao = getLinkDao() ?: return@withContext
-        val localTrip = getTripDao()?.getTripById(tripStableKey)
+        val localTrip = getTripDao()?.getTripById(userId, tripStableKey)
         val firestoreDocId = localTrip?.firestoreDocId ?: ""
 
         if (profileId.isNullOrBlank()) {
-            linkDao.deleteLinksForTrip(tripStableKey, firestoreDocId)
+            linkDao.deleteLinksForTrip(userId, tripStableKey, firestoreDocId)
             return@withContext
         }
 
         val existingLinks = if (firestoreDocId.isNotBlank()) {
-            linkDao.getLinksForTrip(firestoreDocId)
+            linkDao.getLinksForTrip(userId, firestoreDocId)
         } else {
-            linkDao.getLinksForTrip(tripStableKey)
+            linkDao.getLinksForTrip(userId, tripStableKey)
         }
 
         if (existingLinks.isNotEmpty()) {
@@ -64,7 +73,8 @@ class TripProfileLinkRepository(private val appContext: Context? = null) {
                 existing.copy(
                     profileId = profileId,
                     seatmateNote = seatmateNote,
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = System.currentTimeMillis(),
+                    userId = userId
                 )
             )
         } else {
@@ -75,7 +85,8 @@ class TripProfileLinkRepository(private val appContext: Context? = null) {
                     profileId = profileId,
                     seatmateNote = seatmateNote,
                     createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = System.currentTimeMillis(),
+                    userId = userId
                 )
             )
         }

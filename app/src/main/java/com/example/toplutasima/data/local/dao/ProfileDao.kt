@@ -2,33 +2,51 @@ package com.example.toplutasima.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
 import com.example.toplutasima.data.local.entity.ProfileEntity
 
 @Dao
 interface ProfileDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(profile: ProfileEntity)
+    @Insert
+    suspend fun insert(profile: ProfileEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertAll(profiles: List<ProfileEntity>)
+    @Update
+    suspend fun update(profile: ProfileEntity)
 
-    @Query("SELECT * FROM profiles ORDER BY displayName ASC")
-    suspend fun getAllProfiles(): List<ProfileEntity>
+    @Transaction
+    suspend fun upsert(profile: ProfileEntity) {
+        require(profile.userId.isNotBlank()) { "Profile userId must not be blank" }
+        if (getProfileById(profile.userId, profile.id) == null) {
+            insert(profile)
+        } else {
+            update(profile)
+        }
+    }
 
-    @Query("SELECT * FROM profiles WHERE archived = 0 ORDER BY displayName ASC")
-    suspend fun getActiveProfiles(): List<ProfileEntity>
+    @Transaction
+    suspend fun upsertAll(profiles: List<ProfileEntity>) {
+        profiles.forEach { profile ->
+            require(profile.userId.isNotBlank()) { "Profile userId must not be blank" }
+            if (getProfileById(profile.userId, profile.id) == null) {
+                insert(profile)
+            } else {
+                update(profile)
+            }
+        }
+    }
 
-    @Query("SELECT * FROM profiles WHERE archived = 0 AND sharedWithTransit = 1 ORDER BY displayName ASC")
-    suspend fun getSharedWithTransitProfiles(): List<ProfileEntity>
+    @Query("SELECT * FROM profiles WHERE userId = :userId ORDER BY displayName ASC")
+    suspend fun getAllProfiles(userId: String): List<ProfileEntity>
 
-    @Query("SELECT * FROM profiles WHERE id = :id LIMIT 1")
-    suspend fun getProfileById(id: String): ProfileEntity?
+    @Query("SELECT * FROM profiles WHERE userId = :userId AND archived = 0 AND sharedWithTransit = 1 ORDER BY displayName ASC")
+    suspend fun getSharedWithTransitProfiles(userId: String): List<ProfileEntity>
 
-    @Query("DELETE FROM profiles WHERE id = :id")
-    suspend fun deleteProfile(id: String)
+    @Query("SELECT * FROM profiles WHERE userId = :userId AND id = :id LIMIT 1")
+    suspend fun getProfileById(userId: String, id: String): ProfileEntity?
 
-    @Query("DELETE FROM profiles")
-    suspend fun deleteAllProfiles()
+    @Query("DELETE FROM profiles WHERE userId = :userId AND id = :id")
+    suspend fun deleteProfile(userId: String, id: String)
+
 }

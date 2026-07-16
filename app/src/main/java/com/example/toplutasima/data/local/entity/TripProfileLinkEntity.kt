@@ -3,29 +3,29 @@ package com.example.toplutasima.data.local.entity
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
-import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "trip_profile_links",
+    primaryKeys = ["userId", "id"],
     foreignKeys = [
         ForeignKey(
             entity = ProfileEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["profileId"],
+            parentColumns = ["userId", "id"],
+            childColumns = ["userId", "profileId"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index(value = ["tripStableKey"]),
-        Index(value = ["profileId"])
+        Index(value = ["userId", "tripStableKey"]),
+        Index(value = ["userId", "profileId"])
     ]
 )
 data class TripProfileLinkEntity(
-    @PrimaryKey
     val id: String,
     val tripStableKey: String,
     val profileId: String,
     val seatmateNote: String? = null,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val userId: String = ""
 )

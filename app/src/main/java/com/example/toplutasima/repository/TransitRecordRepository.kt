@@ -1,6 +1,7 @@
 package com.example.toplutasima.repository
 
 import android.content.Context
+import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.repository.toEntity
@@ -33,6 +34,7 @@ class TransitRecordRepository(
         profileId: String? = null,
         seatmateNote: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
+        val userId = CurrentUserProvider.requireUserId()
         val data = recordMapper.buildSegmentData(
             id = id,
             date = date,
@@ -44,23 +46,26 @@ class TransitRecordRepository(
             seatmateUuid = seatmateUuid
         )
         val tripDao = getTripDao()
-        tripDao?.upsertAll(listOf(data.toEntity()))
+        val existingFirestoreDocId = data["firestoreDocId"]
+            ?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?: tripDao?.getTripById(userId, id)?.firestoreDocId?.takeIf { it.isNotBlank() }
+        val firestoreDocId = existingFirestoreDocId ?: tripRemoteDataSource.newTripDocumentId()
+        data["firestoreDocId"] = firestoreDocId
+        // Persist the client-generated ID before Firestore so a timeout can only retry this ID.
+        tripDao?.upsertAll(listOf(data.toEntity(userId)))
 
         profileLinkRepository.saveInitialLink(id, profileId, seatmateNote)
+        profileLinkRepository.updateStableKey(id, firestoreDocId)
 
         try {
-            val firestoreDocId = tripRemoteDataSource.saveTrip(data)
-            if (firestoreDocId.isNotBlank()) {
-                data["firestoreDocId"] = firestoreDocId
-                tripDao?.upsertAll(listOf(data.toEntity()))
-                profileLinkRepository.updateStableKey(id, firestoreDocId)
-            }
+            tripRemoteDataSource.saveTrip(data)
             true
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             appContext?.let {
-                OfflineQueueStore.enqueueSaveTrip(it, data)
+                OfflineQueueStore.enqueueSaveTrip(it, data, userId)
                 return@withContext true
             }
             false
@@ -69,14 +74,15 @@ class TransitRecordRepository(
 
     suspend fun updateActual(id: String, actualDep: String?, actualArr: String?): Boolean =
         withContext(Dispatchers.IO) {
+            val userId = CurrentUserProvider.requireUserId()
             val tripDao = getTripDao()
             // Firestore'a gönderilecek ID: önce Room'dan doğru kaydı bul,
             // varsa Firestore doc içindeki "id" alanını kullan (doc'u "id" field'ı ile arıyoruz)
             var firestoreQueryId = id
             if (tripDao != null) {
-                var existingEntity = tripDao.getTripById(id)
+                var existingEntity = tripDao.getTripById(userId, id)
                 if (existingEntity == null) {
-                    existingEntity = tripDao.getTripByFirestoreDocId(id)
+                    existingEntity = tripDao.getTripByFirestoreDocId(userId, id)
                 }
                 // Room kaydındaki "id" alanı Firestore'daki "id" field'ı ile eşleşmeli
                 existingEntity?.id?.takeIf { it.isNotBlank() }?.let { firestoreQueryId = it }
@@ -95,7 +101,7 @@ class TransitRecordRepository(
                         existing["gercekYolSuresi"] =
                             TransitRecordCalculations.computeYolSuresi(finalGercekBinis, finalGercekInis)
                     }
-                    tripDao.upsertAll(listOf(existing.toEntity()))
+                    tripDao.upsertAll(listOf(existing.toEntity(userId)))
                 }
             }
             try {
@@ -105,7 +111,13 @@ class TransitRecordRepository(
                 throw e
             } catch (_: Exception) {
                 appContext?.let {
-                    OfflineQueueStore.enqueueUpdateActual(it, firestoreQueryId, actualDep, actualArr)
+                    OfflineQueueStore.enqueueUpdateActual(
+                        it,
+                        firestoreQueryId,
+                        actualDep,
+                        actualArr,
+                        userId
+                    )
                     return@withContext true
                 }
                 false
@@ -114,9 +126,10 @@ class TransitRecordRepository(
 
     suspend fun clearActual(id: String, clearDep: Boolean, clearArr: Boolean): Boolean =
         withContext(Dispatchers.IO) {
+            val userId = CurrentUserProvider.requireUserId()
             val tripDao = getTripDao()
             if (tripDao != null) {
-                val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+                val existing = tripDao.getTripById(userId, id)?.toMap()?.toMutableMap()
                 if (existing != null) {
                     if (clearDep) {
                         existing["gercekBinis"] = ""
@@ -131,7 +144,7 @@ class TransitRecordRepository(
                         } else {
                             ""
                         }
-                    tripDao.upsertAll(listOf(existing.toEntity()))
+                    tripDao.upsertAll(listOf(existing.toEntity(userId)))
                 }
             }
             try {
@@ -147,7 +160,7 @@ class TransitRecordRepository(
                 if (clearArr) fields["gercekInis"] = ""
                 if (clearDep || clearArr) fields["gercekYolSuresi"] = ""
                 appContext?.let {
-                    OfflineQueueStore.enqueueUpdateRecord(it, id, fields)
+                    OfflineQueueStore.enqueueUpdateRecord(it, id, fields, userId)
                     return@withContext true
                 }
                 false
@@ -167,9 +180,10 @@ class TransitRecordRepository(
         durakSayisi: String? = null,
         distanceResult: SegmentDistanceResult? = null
     ): Boolean = withContext(Dispatchers.IO) {
+        val userId = CurrentUserProvider.requireUserId()
         val tripDao = getTripDao()
         if (tripDao != null) {
-            val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+            val existing = tripDao.getTripById(userId, id)?.toMap()?.toMutableMap()
             if (existing != null) {
                 if (!binisDuragi.isNullOrBlank()) {
                     existing["binisDuragi"] = binisDuragi
@@ -199,7 +213,7 @@ class TransitRecordRepository(
                     val finalInis = inisTime ?: existing["planlananInis"]?.toString()
                     existing["planlananYolSuresi"] = TransitRecordCalculations.computeYolSuresi(finalBinis, finalInis)
                 }
-                tripDao.upsertAll(listOf(existing.toEntity()))
+                tripDao.upsertAll(listOf(existing.toEntity(userId)))
             }
         }
         tripRemoteDataSource.updateStops(
@@ -216,12 +230,13 @@ class TransitRecordRepository(
 
     suspend fun updateExistingRecord(id: String, fields: Map<String, Any>): Boolean =
         withContext(Dispatchers.IO) {
+            val userId = CurrentUserProvider.requireUserId()
             val tripDao = getTripDao()
             if (tripDao != null) {
-                val existing = tripDao.getTripById(id)?.toMap()?.toMutableMap()
+                val existing = tripDao.getTripById(userId, id)?.toMap()?.toMutableMap()
                 if (existing != null) {
                     existing.putAll(fields)
-                    tripDao.upsertAll(listOf(existing.toEntity()))
+                    tripDao.upsertAll(listOf(existing.toEntity(userId)))
                 }
             }
             try {
@@ -230,7 +245,7 @@ class TransitRecordRepository(
                 throw e
             } catch (_: Exception) {
                 appContext?.let {
-                    OfflineQueueStore.enqueueUpdateRecord(it, id, fields)
+                    OfflineQueueStore.enqueueUpdateRecord(it, id, fields, userId)
                     return@withContext true
                 }
                 false

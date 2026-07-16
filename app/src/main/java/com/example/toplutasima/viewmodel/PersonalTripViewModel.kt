@@ -2,11 +2,8 @@ package com.example.toplutasima.viewmodel
 
 import android.app.Application
 import android.content.Context
-import android.content.Intent
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.toplutasima.location.PersonalLocationHelper
 import com.example.toplutasima.model.PersonalTrip
 import com.example.toplutasima.model.PersonPlateSuggestion
 import com.example.toplutasima.model.PlateCountries
@@ -15,23 +12,29 @@ import com.example.toplutasima.service.PersonalTripForegroundService
 import com.example.toplutasima.service.PersonalTripPermissionGuard
 import com.example.toplutasima.service.PersonalTripTrackingState
 import com.example.toplutasima.usecase.TransitRecordCalculations
+import com.example.toplutasima.viewmodel.personaltrip.AndroidPersonalTripRuntime
+import com.example.toplutasima.viewmodel.personaltrip.PersonalTripRuntime
 import com.example.toplutasima.viewmodel.personaltrip.PersonalTripUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 
-class PersonalTripViewModel(
+class PersonalTripViewModel internal constructor(
     application: Application,
-    private val repository: PersonalTripRepository
+    private val repository: PersonalTripRepository,
+    private val runtime: PersonalTripRuntime
 ) : AndroidViewModel(application) {
+
+    constructor(
+        application: Application,
+        repository: PersonalTripRepository
+    ) : this(application, repository, AndroidPersonalTripRuntime(application))
 
     private val _uiState = MutableStateFlow(
         PersonalTripUiState(
@@ -40,9 +43,7 @@ class PersonalTripViewModel(
     )
     val uiState: StateFlow<PersonalTripUiState> = _uiState.asStateFlow()
 
-    private val locationHelper = PersonalLocationHelper(application)
     private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-    private val dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy")
 
     init {
         load()
@@ -141,10 +142,6 @@ class PersonalTripViewModel(
         )
     }
 
-    fun updateFormSurucu(value: Boolean?) {
-        _uiState.value = _uiState.value.copy(formSurucu = value)
-    }
-
     fun resetForm(keepPlate: Boolean = false, keepWeather: Boolean = false) {
         val current = _uiState.value
         _uiState.value = current.copy(
@@ -196,10 +193,6 @@ class PersonalTripViewModel(
     }
 
     // ── Dialog (yalnızca düzenleme için) ──────────────────────────────────────
-
-    fun openAddDialog() {
-        _uiState.value = _uiState.value.copy(showAddDialog = true, editingTrip = null)
-    }
 
     fun openEditDialog(trip: PersonalTrip) {
         _uiState.value = _uiState.value.copy(showAddDialog = true, editingTrip = trip)
@@ -265,7 +258,13 @@ class PersonalTripViewModel(
                     "yolcuSayisi" to trip.yolcuSayisi,
                     "not"         to trip.not
                 )
-                repository.updateTrip(trip.firestoreDocId, fields)
+                val updated = repository.updateTrip(trip.firestoreDocId, fields)
+                if (!updated) {
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = "Güncellenemedi: Firestore işlemi başarısız oldu"
+                    )
+                    return@launch
+                }
                 closeDialog()
                 load()
             } catch (e: Exception) {
@@ -277,9 +276,15 @@ class PersonalTripViewModel(
     fun deleteTrip(docId: String) {
         viewModelScope.launch {
             try {
-                repository.deleteTrip(docId)
+                val deleted = repository.deleteTrip(docId)
+                if (!deleted) {
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = "Silinemedi: Firestore işlemi başarısız oldu"
+                    )
+                    return@launch
+                }
                 if (_uiState.value.activeDocId == docId) {
-                    stopTracking(getApplication(), docId)
+                    runtime.stopTracking(getApplication(), docId)
                 }
                 load()
             } catch (e: Exception) {
@@ -299,15 +304,16 @@ class PersonalTripViewModel(
      */
     fun recordBindim(context: Context, docId: String) {
         viewModelScope.launch {
-            startTripTracking(context, docId)
-            load()
+            if (startTripTracking(context, docId)) {
+                load()
+            }
         }
     }
 
-    private suspend fun startTripTracking(context: Context, docId: String) {
-        if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
+    private suspend fun startTripTracking(context: Context, docId: String): Boolean {
+        if (!runtime.hasLocationPermission(context)) {
             noteLocationPermissionRequired()
-            return
+            return false
         }
 
         _uiState.value = _uiState.value.copy(
@@ -315,7 +321,7 @@ class PersonalTripViewModel(
             statusMessage = "Konum alınıyor..."
         )
         val now = LocalTime.now().format(timeFormatter)
-        val location = locationHelper.resolveCurrentLocation()
+        val location = runtime.resolveCurrentLocation()
         val fields = mutableMapOf<String, Any?>(
             "kaldigiSaat" to now,
             "durum"       to PersonalTrip.DURUM_AKTIF
@@ -325,7 +331,14 @@ class PersonalTripViewModel(
             fields["kaldigiLat"] = location.second
             fields["kaldigiLng"] = location.third
         }
-        repository.updateTrip(docId, fields)
+        val updated = repository.updateTrip(docId, fields)
+        if (!updated) {
+            _uiState.value = _uiState.value.copy(
+                isResolvingLocation = false,
+                statusMessage = "Biniş kaydedilemedi: Firestore işlemi başarısız oldu"
+            )
+            return false
+        }
         _uiState.value = _uiState.value.copy(
             isResolvingLocation = false,
             activeDocId = docId,
@@ -335,30 +348,43 @@ class PersonalTripViewModel(
                 "Biniş kaydedildi (konum alınamadı)"
         )
         try {
-            val intent = Intent(context, PersonalTripForegroundService::class.java)
-                .setAction(PersonalTripForegroundService.ACTION_START)
-                .putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
-            if (!PersonalTripPermissionGuard.hasLocationPermission(context)) {
+            if (!runtime.hasLocationPermission(context)) {
                 PersonalTripPermissionGuard.handleMissingLocationPermission(
                     context = context,
                     source = "manual_start",
                     notifyUser = false
                 )
-                repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
+                val rolledBack = repository.updateTrip(
+                    docId,
+                    mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE)
+                )
                 _uiState.value = _uiState.value.copy(
                     activeDocId = null,
-                    statusMessage = LOCATION_PERMISSION_REQUIRED_MESSAGE
+                    statusMessage = if (rolledBack) {
+                        LOCATION_PERMISSION_REQUIRED_MESSAGE
+                    } else {
+                        "$LOCATION_PERMISSION_REQUIRED_MESSAGE; kayıt geri alınamadı"
+                    }
                 )
-                return
+                return false
             }
-            ContextCompat.startForegroundService(context, intent)
+            runtime.startTracking(context, docId)
         } catch (e: Exception) {
-            repository.updateTrip(docId, mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE))
+            val rolledBack = repository.updateTrip(
+                docId,
+                mapOf("durum" to PersonalTrip.DURUM_BEKLEMEDE)
+            )
             _uiState.value = _uiState.value.copy(
                 activeDocId = null,
-                statusMessage = "Takip başlatılamadı: ${e.message}"
+                statusMessage = if (rolledBack) {
+                    "Takip başlatılamadı: ${e.message}"
+                } else {
+                    "Takip başlatılamadı ve kayıt geri alınamadı: ${e.message}"
+                }
             )
+            return false
         }
+        return true
     }
 
     // ── İndim ─────────────────────────────────────────────────────────────────
@@ -372,20 +398,21 @@ class PersonalTripViewModel(
      */
     fun recordIndim(context: Context, docId: String) {
         viewModelScope.launch {
-            // Önce servisi durdur (son batch ORS'e gönderilecek)
-            stopTracking(context, docId)
-            withTimeoutOrNull(15_000L) {
-                PersonalTripForegroundService.isTracking.first { !it }
+            val finalization = runtime.stopTrackingAndAwaitFinalization(context, docId) ?: run {
+                _uiState.value = _uiState.value.copy(
+                    isResolvingLocation = false,
+                    statusMessage = "Son mesafe hesaplaması tamamlanamadı. Lütfen tekrar deneyin."
+                )
+                return@launch
             }
             _uiState.value = _uiState.value.copy(
                 isResolvingLocation = true,
                 statusMessage = "Konum alınıyor..."
             )
             val now = LocalTime.now().format(timeFormatter)
-            val location = locationHelper.resolveCurrentLocation()
+            val location = runtime.resolveCurrentLocation()
 
-            // Servisten son mesafeyi oku (stopTracking sonrası StateFlow güncelleniyor)
-            val km = PersonalTripForegroundService.currentDistanceKm
+            val km = finalization.distanceKm
             val mesafe = if (km > 0.0) String.format(Locale.US, "%.1f km", km) else ""
 
             // Bindim saatini bul (yolSuresi hesabı için)
@@ -405,7 +432,14 @@ class PersonalTripViewModel(
                 fields["varisLat"]  = location.second
                 fields["varisLng"]  = location.third
             }
-            repository.updateTrip(docId, fields)
+            val updated = repository.updateTrip(docId, fields)
+            if (!updated) {
+                _uiState.value = _uiState.value.copy(
+                    isResolvingLocation = false,
+                    statusMessage = "İniş kaydedilemedi: Firestore işlemi başarısız oldu"
+                )
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(
                 isResolvingLocation = false,
                 activeDocId = null,
@@ -417,19 +451,6 @@ class PersonalTripViewModel(
         }
     }
 
-    private fun stopTracking(context: Context, docId: String? = null) {
-        val intent = Intent(context, PersonalTripForegroundService::class.java)
-            .setAction(PersonalTripForegroundService.ACTION_STOP)
-        if (!docId.isNullOrBlank()) {
-            intent.putExtra(PersonalTripForegroundService.EXTRA_TRIP_DOC_ID, docId)
-        }
-        context.startService(intent)
-    }
-
-    fun clearStatusMessage() {
-        _uiState.value = _uiState.value.copy(statusMessage = "")
-    }
-
     fun noteLocationPermissionRequired() {
         PersonalTripTrackingState.markLocationPermissionReminder(getApplication())
         _uiState.value = _uiState.value.copy(
@@ -439,7 +460,7 @@ class PersonalTripViewModel(
     }
 
     fun hasLocationPermission() =
-        PersonalTripPermissionGuard.hasLocationPermission(getApplication())
+        runtime.hasLocationPermission(getApplication())
 
     private companion object {
         const val LOCATION_PERMISSION_REQUIRED_MESSAGE =

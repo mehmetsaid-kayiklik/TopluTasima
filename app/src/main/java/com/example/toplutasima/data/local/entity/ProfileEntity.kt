@@ -2,11 +2,12 @@ package com.example.toplutasima.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 
-@Entity(tableName = "profiles")
+@Entity(
+    tableName = "profiles",
+    primaryKeys = ["userId", "id"]
+)
 data class ProfileEntity(
-    @PrimaryKey
     val id: String,
     val displayName: String,
     val memoryNote: String? = null,
@@ -14,5 +15,6 @@ data class ProfileEntity(
     val updatedAt: Long,
     val archived: Boolean = false,
     @ColumnInfo(defaultValue = "0")
-    val sharedWithTransit: Boolean = false  // Bellek uygulamasından paylaşılmış mı?
+    val sharedWithTransit: Boolean = false,  // Bellek uygulamasından paylaşılmış mı?
+    val userId: String = ""
 )

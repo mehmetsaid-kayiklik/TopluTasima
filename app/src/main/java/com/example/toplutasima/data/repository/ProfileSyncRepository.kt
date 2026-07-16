@@ -2,31 +2,62 @@ package com.example.toplutasima.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.local.dao.ProfileDao
 import com.example.toplutasima.data.local.entity.ProfileEntity
 import com.example.toplutasima.network.firestore.FirestorePersonService
+import com.example.toplutasima.network.firestore.FirestorePersonService.PersonShareState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class ProfileSyncRepository(
-    context: Context
+class ProfileSyncRepository private constructor(
+    private val profileDao: () -> ProfileDao,
+    private val requireUserId: () -> String,
+    private val currentUserId: () -> String?,
+    private val fetchSharedProfiles: suspend () -> List<ProfileEntity>,
+    private val fetchShareStates: suspend () -> List<PersonShareState>
 ) {
-    private val appContext = context.applicationContext
+    constructor(context: Context) : this(
+        profileDao = {
+            AppDatabase.getDatabase(context.applicationContext).profileDao()
+        },
+        requireUserId = CurrentUserProvider::requireUserId,
+        currentUserId = CurrentUserProvider::currentUserIdOrNull,
+        fetchSharedProfiles = FirestorePersonService::fetchSharedWithTransit,
+        fetchShareStates = FirestorePersonService::fetchShareStates
+    )
+
+    internal constructor(
+        profileDao: ProfileDao,
+        requireUserId: () -> String,
+        currentUserId: () -> String?,
+        fetchSharedProfiles: suspend () -> List<ProfileEntity>,
+        fetchShareStates: suspend () -> List<PersonShareState>
+    ) : this(
+        profileDao = { profileDao },
+        requireUserId = requireUserId,
+        currentUserId = currentUserId,
+        fetchSharedProfiles = fetchSharedProfiles,
+        fetchShareStates = fetchShareStates
+    )
 
     suspend fun refreshSharedProfiles(): List<ProfileEntity> = withContext(Dispatchers.IO) {
-        val dao = AppDatabase.getDatabase(appContext).profileDao()
-        val localProfiles = dao.getSharedWithTransitProfiles()
+        val userId = requireUserId()
+        val dao = profileDao()
+        val localProfiles = dao.getSharedWithTransitProfiles(userId)
 
         return@withContext try {
-            val remoteSharedProfiles = FirestorePersonService.fetchSharedWithTransit()
+            val remoteSharedProfiles = fetchSharedProfiles()
+                .map { it.copy(userId = userId) }
+            ensureCurrentUser(userId)
             if (remoteSharedProfiles.isNotEmpty()) {
                 dao.upsertAll(remoteSharedProfiles)
             }
 
-            reconcileRemoteShareState(dao, remoteSharedProfiles)
-            dao.getSharedWithTransitProfiles()
+            reconcileRemoteShareState(dao, remoteSharedProfiles, userId)
+            dao.getSharedWithTransitProfiles(userId)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -37,12 +68,14 @@ class ProfileSyncRepository(
 
     private suspend fun reconcileRemoteShareState(
         dao: ProfileDao,
-        remoteSharedProfiles: List<ProfileEntity>
+        remoteSharedProfiles: List<ProfileEntity>,
+        userId: String
     ) {
-        val remoteStates = FirestorePersonService.fetchShareStates().associateBy { it.id }
+        val remoteStates = fetchShareStates().associateBy { it.id }
+        ensureCurrentUser(userId)
         val remoteSharedIds = remoteSharedProfiles.mapTo(mutableSetOf()) { it.id }
 
-        dao.getSharedWithTransitProfiles()
+        dao.getSharedWithTransitProfiles(userId)
             .filter { local ->
                 val remoteState = remoteStates[local.id]
                 local.id !in remoteSharedIds &&
@@ -58,6 +91,12 @@ class ProfileSyncRepository(
                     )
                 )
             }
+    }
+
+    private fun ensureCurrentUser(expectedUserId: String) {
+        if (currentUserId() != expectedUserId) {
+            throw CancellationException("Authenticated user changed during profile sync")
+        }
     }
 
     private companion object {

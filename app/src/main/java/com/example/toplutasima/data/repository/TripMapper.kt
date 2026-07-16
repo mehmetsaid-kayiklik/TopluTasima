@@ -3,7 +3,8 @@ package com.example.toplutasima.data.repository
 import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.usecase.TransitRecordCalculations
 
-fun Map<String, Any?>.toEntity(): TripEntity {
+fun Map<String, Any?>.toEntity(userId: String): TripEntity {
+    require(userId.isNotBlank()) { "Trip userId must not be blank" }
     val firestoreDocId = this["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
     val idStr = this["id"]?.toString()?.takeIf { it.isNotBlank() }
         ?: firestoreDocId
@@ -45,7 +46,8 @@ fun Map<String, Any?>.toEntity(): TripEntity {
         durakSayisi = this["durakSayisi"]?.toString(),
         yearMonth = this["yearMonth"]?.toString(),
         sortDate = this["sortDate"]?.toString(),
-        seatmateUuid = this["seatmateUuid"]?.toString() ?: ""
+        seatmateUuid = this["seatmateUuid"]?.toString() ?: "",
+        userId = userId
     )
 }
 

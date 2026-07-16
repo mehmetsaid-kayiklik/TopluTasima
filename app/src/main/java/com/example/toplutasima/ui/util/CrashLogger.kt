@@ -6,7 +6,6 @@ import android.os.Build
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.system.exitProcess
 
 object CrashLogger {
 
@@ -16,8 +15,9 @@ object CrashLogger {
 
     fun init(context: Context) {
         val appContext = context.applicationContext
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
 
-        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 writeCrashEntry(
                     context = appContext,
@@ -26,10 +26,10 @@ object CrashLogger {
                     stackTrace = throwable.stackTraceToString()
                 )
             } catch (loggingError: Throwable) {
-                // Crash kaydi basarisiz olsa bile normal crash kapanisini biz tamamlariz.
+                // Custom logging must never prevent Android's normal crash handling.
+            } finally {
+                previousHandler?.uncaughtException(thread, throwable)
             }
-            android.os.Process.killProcess(android.os.Process.myPid())
-            exitProcess(10)
         }
     }
 

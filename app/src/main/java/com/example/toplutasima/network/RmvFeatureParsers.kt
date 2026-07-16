@@ -38,10 +38,17 @@ object RmvFeatureParsers {
     fun lineMatchesAlert(line: String, text: String): Boolean {
         val normalizedLine = normalizeLineToken(line)
         if (normalizedLine.isBlank()) return false
-        val tokens = Regex("\\b(?:BUS|TRAM|S|U|RB|RE|M|X|N)?\\s*\\d{1,4}\\b", RegexOption.IGNORE_CASE)
-            .findAll(text)
-            .map { normalizeLineToken(it.value) }
-            .toSet()
+        val explicitlyPrefixedTokens = Regex(
+            "(?<![\\p{L}\\p{N}-])(?:[A-Z]{1,4}-\\s*\\d{1,4}|(?:BUS|TRAM|RB|RE|S|U|M|X|N)\\s*\\d{1,4})(?![\\p{L}\\p{N}-])",
+            RegexOption.IGNORE_CASE
+        ).findAll(text).map { normalizeLineToken(it.value) }
+        val labelledTokens = Regex(
+            "(?<![\\p{L}\\p{N}-])(?:LINE|LINES|LINIE|LINIEN|HAT)\\s*[:#]?\\s*" +
+                "([A-Z]{1,4}-\\s*\\d{1,4}|(?:BUS|TRAM|RB|RE|S|U|M|X|N)\\s*\\d{1,4}|\\d{1,4})" +
+                "(?![\\p{L}\\p{N}-])",
+            RegexOption.IGNORE_CASE
+        ).findAll(text).map { normalizeLineToken(it.groupValues[1]) }
+        val tokens = (explicitlyPrefixedTokens + labelledTokens).toSet()
         return normalizedLine in tokens
     }
 
@@ -69,6 +76,97 @@ object RmvFeatureParsers {
                 severity = firstString(obj, "priority", "severity", "type") ?: "info"
             )
         }.take(5)
+    }
+
+    /**
+     * Parses only messages attached to the selected journeyDetail response.
+     * If HAFAS supplies message product metadata, its internal line/operator refs
+     * must also match exactly. Missing metadata is accepted because attachment to
+     * the journey detail is already the authoritative scope.
+     */
+    fun parseJourneyTransitAlerts(
+        root: JsonObject,
+        displayLine: String,
+        lineRef: String,
+        operatorRef: String,
+        onDecision: (messageId: String, included: Boolean, reason: String) -> Unit = { _, _, _ -> }
+    ): List<TransitAlert> {
+        val journeyDetails = mutableListOf<JsonObject>()
+        collectNamedObjects(root, "JourneyDetail", journeyDetails)
+
+        val attachedCandidates = mutableListOf<JsonObject>()
+        val attachedMessageIds = mutableSetOf<String>()
+        journeyDetails.forEach { journey ->
+            collectMessageObjects(
+                el = journey,
+                inMessageScope = false,
+                objects = attachedCandidates,
+                referencedIds = attachedMessageIds
+            )
+        }
+
+        val allMessageCandidates = mutableListOf<JsonObject>()
+        collectMessageObjects(
+            el = root,
+            inMessageScope = false,
+            objects = allMessageCandidates,
+            referencedIds = mutableSetOf()
+        )
+
+        val attachedKeys = attachedCandidates.mapTo(mutableSetOf()) { alertKey(it) }
+        val targetLineRef = normalizeIdentityRef(lineRef)
+        val targetOperatorRef = normalizeIdentityRef(operatorRef)
+        val seen = mutableSetOf<String>()
+        val alerts = mutableListOf<TransitAlert>()
+
+        (attachedCandidates + allMessageCandidates).forEach { obj ->
+            val title = cleanAlertText(firstString(obj, *alertTitleKeys.toTypedArray()))
+                ?: return@forEach
+            val id = firstString(obj, "id", "hid", "messageId") ?: title
+            if (!seen.add(id)) return@forEach
+
+            val key = alertKey(obj)
+            val isAttached = key in attachedKeys || id in attachedMessageIds
+            if (!isAttached) {
+                onDecision(id, false, "not attached to selected journeyDetail")
+                return@forEach
+            }
+
+            val messageLineRefs = identityRefs(obj, lineIdentityKeys)
+            if (targetLineRef.isNotBlank() && messageLineRefs.isNotEmpty() && targetLineRef !in messageLineRefs) {
+                onDecision(id, false, "lineRef mismatch; messageRefs=$messageLineRefs")
+                return@forEach
+            }
+
+            val messageOperatorRefs = identityRefs(obj, operatorIdentityKeys)
+            if (
+                targetOperatorRef.isNotBlank() &&
+                messageOperatorRefs.isNotEmpty() &&
+                targetOperatorRef !in messageOperatorRefs
+            ) {
+                onDecision(id, false, "operatorRef mismatch; messageRefs=$messageOperatorRefs")
+                return@forEach
+            }
+
+            val detail = collectStringsForKeys(obj, alertDetailKeys)
+                .mapNotNull { cleanAlertText(it) }
+                .filterNot { it.equals(title, ignoreCase = true) }
+                .distinct()
+                .joinToString(" ")
+                .trim()
+
+            onDecision(id, true, "attached journey message with matching exact refs")
+            if (alerts.size < 5) {
+                alerts += TransitAlert(
+                    id = id,
+                    title = title,
+                    detail = detail,
+                    line = normalizeLineToken(displayLine),
+                    severity = firstString(obj, "priority", "severity", "type") ?: "info"
+                )
+            }
+        }
+        return alerts
     }
 
     fun parseLocationOptions(root: JsonObject): List<LocationOption> {
@@ -105,9 +203,8 @@ object RmvFeatureParsers {
         val objects = mutableListOf<JsonObject>()
         collectObjects(root, objects)
         return objects.mapNotNull { obj ->
-            val line = string(obj, "line", "name", "num") ?: productName(obj) ?: return@mapNotNull null
+            val line = journeyLineCandidate(obj) ?: return@mapNotNull null
             val normalizedLine = normalizeLineToken(line)
-            if (normalizedLine.isBlank() || normalizedLine.none { it.isDigit() }) return@mapNotNull null
             JourneyMatchCandidate(
                 id = string(obj, "id", "jid", "ctxRecon") ?: normalizedLine,
                 line = normalizedLine,
@@ -119,6 +216,20 @@ object RmvFeatureParsers {
             )
         }.distinctBy { "${it.id}:${it.line}:${it.direction}" }.take(5)
     }
+
+    private fun journeyLineCandidate(obj: JsonObject): String? {
+        val explicitLine = string(obj, "line", "num") ?: productName(obj)
+        if (explicitLine != null) return explicitLine.takeIf(::isValidLineCode)
+
+        val name = string(obj, "name") ?: return null
+        val hasJourneyContext = string(obj, "direction", "dirTxt", "dir") != null ||
+            (nestedName(obj, "Origin") != null && nestedName(obj, "Destination") != null) ||
+            string(obj, "jid", "ctxRecon") != null
+        return name.takeIf { hasJourneyContext && isValidLineCode(it) }
+    }
+
+    private fun isValidLineCode(value: String): Boolean =
+        normalizeLineToken(value).matches(Regex("(?:[A-Z]{1,4}-?\\d{1,4}|\\d{1,4})"))
 
     private fun elements(el: JsonElement?): List<JsonObject> = when (el) {
         is JsonArray -> el.mapNotNull { it as? JsonObject }
@@ -147,6 +258,84 @@ object RmvFeatureParsers {
             else -> {}
         }
     }
+
+    private val lineIdentityKeys = setOf("lineid", "lineref", "matchid")
+    private val operatorIdentityKeys = setOf("operatorcode", "operatorid", "admin")
+
+    private fun collectNamedObjects(el: JsonElement?, name: String, out: MutableList<JsonObject>) {
+        when (el) {
+            is JsonObject -> el.forEach { (key, value) ->
+                if (key.equals(name, ignoreCase = true)) {
+                    out += elements(value)
+                }
+                collectNamedObjects(value, name, out)
+            }
+            is JsonArray -> el.forEach { collectNamedObjects(it, name, out) }
+            else -> {}
+        }
+    }
+
+    private fun collectMessageObjects(
+        el: JsonElement?,
+        inMessageScope: Boolean,
+        objects: MutableList<JsonObject>,
+        referencedIds: MutableSet<String>
+    ) {
+        when (el) {
+            is JsonObject -> {
+                if (inMessageScope) {
+                    firstString(el, "id", "hid", "messageId")?.let(referencedIds::add)
+                    if (el.keys.any { it.lowercase(Locale.ROOT) in alertTitleKeys }) objects += el
+                }
+                el.forEach { (key, value) ->
+                    collectMessageObjects(
+                        el = value,
+                        inMessageScope = inMessageScope || isMessageContainerKey(key),
+                        objects = objects,
+                        referencedIds = referencedIds
+                    )
+                }
+            }
+            is JsonArray -> el.forEach {
+                collectMessageObjects(it, inMessageScope, objects, referencedIds)
+            }
+            else -> {}
+        }
+    }
+
+    private fun isMessageContainerKey(key: String): Boolean {
+        val normalized = key.lowercase(Locale.ROOT)
+        return "message" in normalized || normalized == "him"
+    }
+
+    private fun alertKey(obj: JsonObject): String =
+        firstString(obj, "id", "hid", "messageId")
+            ?: firstString(obj, *alertTitleKeys.toTypedArray())
+            ?: obj.toString()
+
+    private fun identityRefs(obj: JsonObject, acceptedKeys: Set<String>): Set<String> {
+        val refs = mutableSetOf<String>()
+        fun walk(el: JsonElement?) {
+            when (el) {
+                is JsonObject -> el.forEach { (key, value) ->
+                    if (key.lowercase(Locale.ROOT) in acceptedKeys) {
+                        collectStrings(value)
+                            .map(::normalizeIdentityRef)
+                            .filterTo(refs) { it.isNotBlank() }
+                    } else {
+                        walk(value)
+                    }
+                }
+                is JsonArray -> el.forEach(::walk)
+                else -> {}
+            }
+        }
+        walk(obj)
+        return refs
+    }
+
+    private fun normalizeIdentityRef(value: String): String =
+        value.trim().uppercase(Locale.ROOT).replace(Regex("\\s+"), "")
 
     private fun collectStrings(el: JsonElement?): List<String> = when (el) {
         is JsonPrimitive -> listOfNotNull(el.takeIf { it.isString }?.content)

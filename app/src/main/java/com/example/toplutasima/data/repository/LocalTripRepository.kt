@@ -1,6 +1,7 @@
 package com.example.toplutasima.data.repository
 
 import android.content.Context
+import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.data.local.dao.TripDao
 import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.model.MonthSummary
@@ -9,6 +10,7 @@ import com.example.toplutasima.network.firestore.FirestoreHelper
 import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.usecase.SummaryCalculator
 import com.example.toplutasima.usecase.TransitRecordCalculations
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +19,14 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
+
+internal suspend fun deleteRemoteTripThenLocal(
+    deleteRemote: suspend () -> Unit,
+    deleteLocal: suspend () -> Unit
+) {
+    deleteRemote()
+    deleteLocal()
+}
 
 class LocalTripRepository(
     private val context: Context,
@@ -32,11 +42,12 @@ class LocalTripRepository(
     }
 
     suspend fun syncFromFirestore(fullSync: Boolean = false) = withContext(Dispatchers.IO) {
+        val userId = CurrentUserProvider.requireUserId()
         val prefs = context.getSharedPreferences(SYNC_PREFS, Context.MODE_PRIVATE)
-        val lastSyncTimestamp = prefs.getLong(KEY_LAST_SYNC_TIMESTAMP, 0L)
-        val lastSyncSortDate = prefs.getString(KEY_LAST_SYNC_SORT_DATE, null)
-        val lastFullSyncTimestamp = prefs.getLong(KEY_LAST_FULL_SYNC_TIMESTAMP, 0L)
-        val localTripCount = tripDao.getTripCount()
+        val lastSyncTimestamp = prefs.getLong(scopedKey(KEY_LAST_SYNC_TIMESTAMP, userId), 0L)
+        val lastSyncSortDate = prefs.getString(scopedKey(KEY_LAST_SYNC_SORT_DATE, userId), null)
+        val lastFullSyncTimestamp = prefs.getLong(scopedKey(KEY_LAST_FULL_SYNC_TIMESTAMP, userId), 0L)
+        val localTripCount = tripDao.getTripCount(userId)
         val shouldFullSync = fullSync || lastSyncTimestamp <= 0L ||
             lastFullSyncTimestamp <= 0L || localTripCount == 0
         val now = System.currentTimeMillis()
@@ -51,7 +62,8 @@ class LocalTripRepository(
         }
         
         if (tripsMap.isNotEmpty()) {
-            val entities = tripsMap.map { it.toEntity() }
+            ensureCurrentUser(userId)
+            val entities = tripsMap.map { it.toEntity(userId) }
             tripDao.upsertAll(entities)
             
             // Son eklenenlerin en büyük sortDate'ini bul
@@ -65,21 +77,23 @@ class LocalTripRepository(
                 // Firestore'da `whereGreaterThan` dedik, bu yüzden `maxSortDate` i koyarsak ayni gunku diger seyahatleri alamayiz.
                 // Cözüm: lastSync olarak (bugün - 1 gün) kaydedelim veya direk şu anki tarihi kaydedelim ama
                 // whereGreaterThanOrEqualTo ile yapalım. Neyse kullanıcının dediği gibi yapıyorum:
-                prefs.edit().putString(KEY_LAST_SYNC_SORT_DATE, maxSortDate).apply()
+                prefs.edit().putString(scopedKey(KEY_LAST_SYNC_SORT_DATE, userId), maxSortDate).apply()
             }
         }
 
         if (fullSync) {
-            deleteLocalTripsMissingFromFirestore(tripsMap)
+            ensureCurrentUser(userId)
+            deleteLocalTripsMissingFromFirestore(tripsMap, userId)
         }
 
         val maxSortDate = tripsMap.mapNotNull { row ->
             row["sortDate"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: TransitRecordCalculations.computeSortDate(row["tarih"]?.toString().orEmpty()).takeIf { it.isNotBlank() }
         }.maxOrNull()
-        val editor = prefs.edit().putLong(KEY_LAST_SYNC_TIMESTAMP, now)
-        if (shouldFullSync) editor.putLong(KEY_LAST_FULL_SYNC_TIMESTAMP, now)
-        if (maxSortDate != null) editor.putString(KEY_LAST_SYNC_SORT_DATE, maxSortDate)
+        ensureCurrentUser(userId)
+        val editor = prefs.edit().putLong(scopedKey(KEY_LAST_SYNC_TIMESTAMP, userId), now)
+        if (shouldFullSync) editor.putLong(scopedKey(KEY_LAST_FULL_SYNC_TIMESTAMP, userId), now)
+        if (maxSortDate != null) editor.putString(scopedKey(KEY_LAST_SYNC_SORT_DATE, userId), maxSortDate)
         editor.apply()
     }
 
@@ -94,86 +108,103 @@ class LocalTripRepository(
             .toLocalDate()
             .toString()
 
-    private suspend fun deleteLocalTripsMissingFromFirestore(remoteTrips: List<Map<String, Any>>) {
+    private suspend fun deleteLocalTripsMissingFromFirestore(
+        remoteTrips: List<Map<String, Any>>,
+        userId: String
+    ) {
         val remoteDocIds = remoteTrips.mapNotNull {
             it["firestoreDocId"]?.toString()?.takeIf { docId -> docId.isNotBlank() }
         }.toSet()
-        val staleLocalIds = tripDao.getAllTrips().mapNotNull { trip ->
+        val staleLocalIds = tripDao.getAllTrips(userId).mapNotNull { trip ->
             val docId = trip.firestoreDocId
             if (!docId.isNullOrBlank() && docId !in remoteDocIds) trip.id else null
         }
         if (staleLocalIds.isNotEmpty()) {
-            tripDao.deleteTripsByIds(staleLocalIds)
+            tripDao.deleteTripsByIds(userId, staleLocalIds)
         }
     }
 
     fun getTripsForMonth(yearMonth: String): Flow<List<TripEntity>> = flow {
-        emit(tripDao.getTripsForMonth(yearMonth))
+        emit(tripDao.getTripsForMonth(CurrentUserProvider.requireUserId(), yearMonth))
     }
 
     suspend fun getTripById(id: String): TripEntity? {
-        return tripDao.getTripById(id)
+        return tripDao.getTripById(CurrentUserProvider.requireUserId(), id)
     }
 
     suspend fun getTripByFirestoreDocId(firestoreDocId: String): TripEntity? {
-        return tripDao.getTripByFirestoreDocId(firestoreDocId)
+        return tripDao.getTripByFirestoreDocId(CurrentUserProvider.requireUserId(), firestoreDocId)
     }
 
     fun getAllTrips(): Flow<List<TripEntity>> = flow {
-        emit(tripDao.getAllTrips())
+        emit(tripDao.getAllTrips(CurrentUserProvider.requireUserId()))
     }
 
     suspend fun getTripsNeedingMesafeBackfill(): List<TripEntity> = withContext(Dispatchers.IO) {
-        tripDao.getTripsNeedingMesafeBackfill()
+        tripDao.getTripsNeedingMesafeBackfill(CurrentUserProvider.requireUserId())
     }
 
     suspend fun resetAllMesafeBackfillState(): Int = withContext(Dispatchers.IO) {
         withContext(NonCancellable) {
-            val trips = tripDao.getAllTrips()
+            val userId = CurrentUserProvider.requireUserId()
+            val trips = tripDao.getAllTrips(userId)
             val docIds = trips.map { trip ->
                 trip.firestoreDocId?.takeIf { it.isNotBlank() } ?: trip.id
             }
             tripRemoteDataSource.resetRmvMesafeFields(docIds)
-            tripDao.resetAllRmvMesafeBackfillState()
+            tripDao.resetAllRmvMesafeBackfillState(userId)
             trips.size
         }
     }
 
     suspend fun cleanupRmvFallbackDistances(): Int = withContext(Dispatchers.IO) {
         withContext(NonCancellable) {
-            val trips = tripDao.getTripsWithRmvFallbackDistance()
+            val userId = CurrentUserProvider.requireUserId()
+            val trips = tripDao.getTripsWithRmvFallbackDistance(userId)
             val docIds = trips.map { trip ->
                 trip.firestoreDocId?.takeIf { it.isNotBlank() } ?: trip.id
             }
             tripRemoteDataSource.cleanupRmvFallbackFields(docIds)
-            tripDao.cleanupRmvFallbackDistances()
+            tripDao.cleanupRmvFallbackDistances(userId)
         }
     }
 
     suspend fun searchTrips(query: String): List<TripEntity> = withContext(Dispatchers.IO) {
-        tripDao.searchTrips("%$query%")
+        tripDao.searchTrips(CurrentUserProvider.requireUserId(), "%$query%")
     }
 
-    private fun getProfileDao() = com.example.toplutasima.data.local.AppDatabase.getDatabase(context).profileDao()
     private fun getTripProfileLinkDao() = com.example.toplutasima.data.local.AppDatabase.getDatabase(context).tripProfileLinkDao()
 
     suspend fun saveTrip(trip: TripEntity) = withContext(Dispatchers.IO) {
-        tripDao.upsertAll(listOf(trip))
-        val firestoreDocId = tripRemoteDataSource.saveTrip(trip.toMap())
-        if (trip.firestoreDocId.isNullOrBlank() && firestoreDocId.isNotBlank()) {
-            tripDao.upsertAll(listOf(trip.copy(firestoreDocId = firestoreDocId)))
-            getTripProfileLinkDao().updateStableKey(trip.id, firestoreDocId, System.currentTimeMillis())
+        val userId = CurrentUserProvider.requireUserId()
+        check(trip.userId.isBlank() || trip.userId == userId) {
+            "Cannot save a trip owned by a different user"
         }
+        val existingFirestoreDocId = trip.firestoreDocId?.takeIf { it.isNotBlank() }
+            ?: tripDao.getTripById(userId, trip.id)?.firestoreDocId?.takeIf { it.isNotBlank() }
+        val firestoreDocId = existingFirestoreDocId ?: tripRemoteDataSource.newTripDocumentId()
+        val tripWithDocumentId = trip.copy(firestoreDocId = firestoreDocId, userId = userId)
+        // Persist the client-generated ID before Firestore so retries reuse the same document.
+        tripDao.upsertAll(listOf(tripWithDocumentId))
+        getTripProfileLinkDao().updateStableKey(userId, trip.id, firestoreDocId, System.currentTimeMillis())
+        ensureCurrentUser(userId)
+        tripRemoteDataSource.saveTrip(tripWithDocumentId.toMap())
     }
 
     suspend fun updateTripMesafeBackfill(trip: TripEntity, fields: Map<String, Any?>) = withContext(Dispatchers.IO) {
         withContext(NonCancellable) {
+            val userId = CurrentUserProvider.requireUserId()
+            check(trip.userId == userId) {
+                "Cannot update distance fields for a trip owned by a different user"
+            }
             val docId = trip.firestoreDocId?.takeIf { it.isNotBlank() } ?: trip.id
             try {
                 tripRemoteDataSource.updateTrip(docId, fields)
-                tripDao.upsertAll(listOf(trip.withMesafeBackfillFields(fields)))
+                tripDao.upsertAll(listOf(trip.withMesafeBackfillFields(fields).copy(userId = userId)))
             } catch (e: Exception) {
-                tripDao.upsertAll(listOf(trip.withMesafeBackfillFields(fields.asFailedMesafeBackfillFields())))
+                tripDao.upsertAll(
+                    listOf(trip.withMesafeBackfillFields(fields.asFailedMesafeBackfillFields()).copy(userId = userId))
+                )
                 throw e
             }
         }
@@ -219,38 +250,49 @@ class LocalTripRepository(
         }
 
     suspend fun deleteTrip(id: String) = withContext(Dispatchers.IO) {
-        val localTrip = tripDao.getTripByFirestoreDocId(id) ?: tripDao.getTripById(id)
-        if (localTrip != null) {
-            tripDao.deleteTrip(localTrip.id)
-        } else {
-            tripDao.deleteTrip(id)
-            tripDao.deleteTripByFirestoreDocId(id)
-        }
-        
-        // programatik temizlik (cascade alternatifi)
+        val userId = CurrentUserProvider.requireUserId()
+        val localTrip = tripDao.getTripByFirestoreDocId(userId, id) ?: tripDao.getTripById(userId, id)
         val tripId = localTrip?.id ?: id
         val firestoreDocId = localTrip?.firestoreDocId ?: ""
-        getTripProfileLinkDao().deleteLinksForTrip(tripId, firestoreDocId)
-        
-        val collection = FirestoreHelper.tripsCollection()
         val docId = localTrip?.firestoreDocId?.takeIf { it.isNotBlank() } ?: id
-        if (docId.isNotBlank()) {
-            tripRemoteDataSource.deleteTrip(docId)
-        }
-
         val appId = localTrip?.id ?: id
-        val snapshot = collection
-            .whereEqualTo("id", appId)
-            .get()
-            .await()
-            
-        for (doc in snapshot.documents) {
-            doc.reference.delete().await()
-        }
+
+        deleteRemoteTripThenLocal(
+            deleteRemote = {
+                ensureCurrentUser(userId)
+                val collection = FirestoreHelper.tripsCollection()
+                if (docId.isNotBlank()) {
+                    check(tripRemoteDataSource.deleteTrip(docId)) {
+                        "Firestore trip delete failed for document $docId"
+                    }
+                }
+
+                val snapshot = collection
+                    .whereEqualTo("id", appId)
+                    .get()
+                    .await()
+
+                for (doc in snapshot.documents) {
+                    doc.reference.delete().await()
+                }
+            },
+            deleteLocal = {
+                ensureCurrentUser(userId)
+                if (localTrip != null) {
+                    tripDao.deleteTrip(userId, localTrip.id)
+                } else {
+                    tripDao.deleteTrip(userId, id)
+                    tripDao.deleteTripByFirestoreDocId(userId, id)
+                }
+
+                // Programmatic cleanup for links that do not cascade from the trip table.
+                getTripProfileLinkDao().deleteLinksForTrip(userId, tripId, firestoreDocId)
+            }
+        )
     }
 
     suspend fun getMonthSummaries(): List<MonthSummary> = withContext(Dispatchers.IO) {
-        val tuples = tripDao.getMonthSummaries()
+        val tuples = tripDao.getMonthSummaries(CurrentUserProvider.requireUserId())
         val monthNames = mapOf(
             "01" to "Ocak", "02" to "Şubat", "03" to "Mart", "04" to "Nisan",
             "05" to "Mayıs", "06" to "Haziran", "07" to "Temmuz", "08" to "Ağustos",
@@ -271,9 +313,17 @@ class LocalTripRepository(
     }
 
     suspend fun getSummaryStats(sheetName: String = "Tümü"): Pair<SummaryData, List<String>> = withContext(Dispatchers.IO) {
-        val entities = tripDao.getAllTrips()
+        val entities = tripDao.getAllTrips(CurrentUserProvider.requireUserId())
         @Suppress("UNCHECKED_CAST")
         val allDocs = entities.map { it.toMap() } as List<Map<String, Any>>
         SummaryCalculator.computeSummary(allDocs, sheetName)
+    }
+
+    private fun scopedKey(key: String, userId: String): String = "$key:$userId"
+
+    private fun ensureCurrentUser(expectedUserId: String) {
+        if (CurrentUserProvider.currentUserIdOrNull() != expectedUserId) {
+            throw CancellationException("Authenticated user changed during local/remote sync")
+        }
     }
 }

@@ -89,6 +89,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Keys must come only from gitignored local.properties or CI environment variables;
+        // never place their literal values in this version-controlled build file.
         // SECURITY TODO: BuildConfig fields are compiled into the DEX and are trivially
         // extractable from the APK with apktool/jadx. Before any public distribution,
         // replace these with a backend token-proxy or server-side secret delivery so
@@ -164,6 +166,11 @@ kotlin {
     jvmToolchain(17)
 }
 
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -177,6 +184,9 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     testImplementation(libs.junit)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.work.testing)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -29,15 +29,9 @@ val SuccessGreen = Color(0xFF2ECC7A)
 val WarningAmber = Color(0xFFFFA040)
 val DangerRed = Color(0xFFFF5E5E)
 
-// Line type chips
-val DirectLineColor = Color(0xFF2ECC7A)
-val TransferLineColor = Color(0xFFFFA040)
-
 // Compatibility tokens used by existing UI components.
-val SurfaceL0 = BackgroundLight
 val SurfaceL1 = SurfaceCardLight
 val SurfaceL2 = SurfaceElevatedLight
-val SurfaceD0 = BackgroundDark
 val SurfaceD1 = SurfaceCard
 val SurfaceD2 = SurfaceElevated
 

@@ -20,7 +20,4 @@ object PlateCountries {
         val normalized = code.orEmpty().trim().uppercase()
         return options.firstOrNull { it.code == normalized }?.code ?: DEFAULT
     }
-
-    fun labelFor(code: String): String =
-        options.firstOrNull { it.code == normalize(code) }?.label ?: normalize(code)
 }

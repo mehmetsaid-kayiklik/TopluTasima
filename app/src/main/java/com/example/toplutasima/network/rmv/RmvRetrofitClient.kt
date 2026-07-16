@@ -96,21 +96,6 @@ interface RmvApi {
         @Query("requestId") requestId: String? = null
     ): kotlinx.serialization.json.JsonObject      // polymorphic → parse manually
 
-    @GET("himsearch")
-    suspend fun getTransitAlerts(
-        @Query("line") line: String? = null,
-        @Query("dateB") date: String? = null,
-        @Query("format") format: String = "json",
-        @Query("requestId") requestId: String? = null
-    ): JsonObject
-
-    @GET("trafficmessages/datex2")
-    suspend fun getTrafficMessages(
-        @Query("line") line: String? = null,
-        @Query("format") format: String = "json",
-        @Query("requestId") requestId: String? = null
-    ): JsonObject
-
     @GET("location.search")
     suspend fun searchLocations(
         @Query("input") input: String,

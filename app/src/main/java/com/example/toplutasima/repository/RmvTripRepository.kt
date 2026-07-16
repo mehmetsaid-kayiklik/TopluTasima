@@ -38,8 +38,8 @@ class RmvTripRepository {
     ): List<RmvApiService.NearbyStop> =
         RmvApiService.searchNearbyStops(lat, lon, radiusMeters)
 
-    suspend fun fetchTransitAlerts(line: String, date: String = ""): List<TransitAlert> =
-        RmvApiService.fetchTransitAlerts(line, date)
+    suspend fun fetchTransitAlerts(departure: Departure): List<TransitAlert> =
+        RmvApiService.fetchTransitAlerts(departure)
 
     suspend fun matchJourneyTrack(
         points: List<Pair<Double, Double>>,

@@ -1,5 +1,6 @@
 package com.example.toplutasima.data
 
+import android.util.Log
 import com.example.toplutasima.model.JourneyMatchCandidate
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.asSharedFlow
  * ayrıca DB/prefs'ten tazelemeli.
  */
 object AppEventBus {
+
+    private const val TAG = "AppEventBus"
 
     sealed class Event {
         /**
@@ -40,6 +43,13 @@ object AppEventBus {
 
     /** Worker veya Receiver'dan çağrılır; coroutine suspend gerektirmez. */
     fun emit(event: Event) {
-        _events.tryEmit(event)
+        val eventType = event.javaClass.simpleName
+        val hadActiveSubscriber = _events.subscriptionCount.value > 0
+        val emitted = _events.tryEmit(event)
+        if (!emitted) {
+            Log.w(TAG, "Dropped event type=$eventType because the SharedFlow buffer is full")
+        } else if (!hadActiveSubscriber && _events.subscriptionCount.value == 0) {
+            Log.w(TAG, "Dropped event type=$eventType because there is no active subscriber")
+        }
     }
 }

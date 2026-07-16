@@ -67,7 +67,9 @@ data class Departure(
     val journeyDetailRef: String = "",
     val realtime: String = "",
     val realtimeDate: String = "",
-    val cancelled: Boolean = false
+    val cancelled: Boolean = false,
+    val lineRef: String = "",
+    val operatorRef: String = ""
 ) {
     val displayTime: String get() = realtime.ifBlank { time }
     val hasRealtime: Boolean get() = realtime.isNotBlank()

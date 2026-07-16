@@ -34,10 +34,10 @@ class TripProfileLinkDaoTest {
         profileDao.upsertAll(listOf(profile))
         linkDao.upsertAll(listOf(link))
 
-        assertEquals(1, linkDao.getAllLinks().size)
+        assertEquals(1, linkDao.getAllLinks(TestProfileFixtures.USER_ID).size)
 
-        profileDao.deleteProfile("profile-1")
-        assertEquals(0, linkDao.getAllLinks().size)
+        profileDao.deleteProfile(TestProfileFixtures.USER_ID, "profile-1")
+        assertEquals(0, linkDao.getAllLinks(TestProfileFixtures.USER_ID).size)
     }
 
     @Test
@@ -53,12 +53,13 @@ class TripProfileLinkDaoTest {
         linkDao.upsertAll(listOf(link))
 
         linkDao.updateStableKey(
+            userId = TestProfileFixtures.USER_ID,
             oldStableKey = "local-trip-uuid",
             newStableKey = "firestore-doc-id",
             updatedAt = 2000L
         )
 
-        val updatedLink = linkDao.getLinksForTrip("firestore-doc-id")
+        val updatedLink = linkDao.getLinksForTrip(TestProfileFixtures.USER_ID, "firestore-doc-id")
         assertEquals(1, updatedLink.size)
         assertEquals("link-1", updatedLink[0].id)
         assertEquals(2000L, updatedLink[0].updatedAt)
@@ -81,10 +82,14 @@ class TripProfileLinkDaoTest {
         profileDao.upsertAll(listOf(profile))
         linkDao.upsertAll(listOf(link1, link2))
 
-        assertEquals(2, linkDao.getAllLinks().size)
+        assertEquals(2, linkDao.getAllLinks(TestProfileFixtures.USER_ID).size)
 
-        linkDao.deleteLinksForTrip("trip-local-id", "trip-firestore-id")
+        linkDao.deleteLinksForTrip(
+            TestProfileFixtures.USER_ID,
+            "trip-local-id",
+            "trip-firestore-id"
+        )
 
-        assertEquals(0, linkDao.getAllLinks().size)
+        assertEquals(0, linkDao.getAllLinks(TestProfileFixtures.USER_ID).size)
     }
 }

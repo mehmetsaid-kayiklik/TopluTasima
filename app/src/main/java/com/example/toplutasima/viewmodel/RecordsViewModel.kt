@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.BuildConfig
 import com.example.toplutasima.TopluTasimaApp
+import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.data.repository.ProfileSyncRepository
 import com.example.toplutasima.data.repository.toEntity
@@ -16,38 +17,62 @@ import com.example.toplutasima.usecase.RecordFilterUtils
 import com.example.toplutasima.usecase.RecordRowMapper
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.viewmodel.records.DayGroup
+import com.example.toplutasima.viewmodel.records.LocalRecordsTripDataSource
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
+import com.example.toplutasima.viewmodel.records.RecordsTripDataSource
 import com.example.toplutasima.viewmodel.records.RecordsUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
-class RecordsViewModel(
+class RecordsViewModel internal constructor(
     application: Application,
-    private val profileSyncRepository: ProfileSyncRepository
+    private val profileSyncRepository: ProfileSyncRepository,
+    private val tripRepository: RecordsTripDataSource,
+    autoLoad: Boolean
 ) : AndroidViewModel(application) {
+    constructor(
+        application: Application,
+        profileSyncRepository: ProfileSyncRepository
+    ) : this(
+        application = application,
+        profileSyncRepository = profileSyncRepository,
+        tripRepository = LocalRecordsTripDataSource(
+            LocalTripRepository(
+                application,
+                (application as TopluTasimaApp).database.tripDao()
+            )
+        ),
+        autoLoad = true
+    )
+
     private val _uiState = MutableStateFlow(RecordsUiState())
     val uiState: StateFlow<RecordsUiState> = _uiState.asStateFlow()
 
-    private val tripRepository: LocalTripRepository
+    private var monthLoadJob: Job? = null
+    private var latestMonthRequestId = 0L
+    private var searchJob: Job? = null
+    private var latestSearchRequestId = 0L
 
     private var allProfilesMap = emptyMap<String, com.example.toplutasima.data.local.entity.ProfileEntity>()
     private var allLinksMap = emptyMap<String, com.example.toplutasima.data.local.entity.TripProfileLinkEntity>()
 
     init {
-        val app = application as TopluTasimaApp
-        tripRepository = LocalTripRepository(application, app.database.tripDao())
-
-        loadProfileData()
-        loadMonthSummaries()
+        if (autoLoad) {
+            loadProfileData()
+            loadMonthSummaries()
+        }
     }
 
     fun loadProfileData() {
@@ -59,9 +84,10 @@ class RecordsViewModel(
                     profileSyncRepository.refreshSharedProfiles()
                 } catch (_: Exception) {}
 
+                val userId = CurrentUserProvider.requireUserId()
                 val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
-                val profiles = db.profileDao().getAllProfiles()
-                val links = db.tripProfileLinkDao().getAllLinks()
+                val profiles = db.profileDao().getAllProfiles(userId)
+                val links = db.tripProfileLinkDao().getAllLinks(userId)
 
                 allProfilesMap = profiles.associateBy { it.id }
                 allLinksMap = links.associateBy { it.tripStableKey }
@@ -136,7 +162,10 @@ class RecordsViewModel(
     }
 
     fun selectMonth(month: MonthSummary) {
-        viewModelScope.launch {
+        val requestId = beginMonthRequest()
+        invalidateSearchRequest()
+        monthLoadJob = viewModelScope.launch {
+            if (!isLatestMonthRequest(requestId)) return@launch
             _uiState.value = _uiState.value.copy(
                 selectedMonth = month,
                 isLoading = true,
@@ -202,6 +231,7 @@ class RecordsViewModel(
                 val totalCount = RecordFilterUtils.countFilteredRecords(groups)
                 val incomplete = RecordFilterUtils.findIncompleteRecords(groups)
 
+                if (!isLatestMonthRequest(requestId)) return@launch
                 _uiState.value = _uiState.value.copy(
                     selectedMonthTrips = groups,
                     filteredTrips = groups,
@@ -210,7 +240,10 @@ class RecordsViewModel(
                     incompleteRecords = incomplete,
                     isLoading = false
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (!isLatestMonthRequest(requestId)) return@launch
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     errorMsg = "Ay kayıtları yüklenemedi: ${e.message}"
@@ -220,10 +253,13 @@ class RecordsViewModel(
     }
 
     fun clearSelectedMonth() {
+        invalidateMonthRequest()
+        invalidateSearchRequest()
         _uiState.value = _uiState.value.copy(
             selectedMonth = null,
             selectedMonthTrips = emptyList(),
             filteredTrips = emptyList(),
+            isLoading = false,
             filteredTotalCount = 0,
             unfilteredTotalCount = 0,
             incompleteRecords = emptyList(),
@@ -237,6 +273,7 @@ class RecordsViewModel(
     }
 
     fun clearGlobalSearch() {
+        invalidateSearchRequest()
         _uiState.value = _uiState.value.copy(
             globalSearchResults = emptyList(),
             globalSearchError = "",
@@ -250,7 +287,9 @@ class RecordsViewModel(
             clearGlobalSearch()
             return
         }
-        viewModelScope.launch {
+        val requestId = beginSearchRequest()
+        searchJob = viewModelScope.launch {
+            if (!isLatestSearchRequest(requestId)) return@launch
             _uiState.value = _uiState.value.copy(
                 globalSearchLoading = true,
                 globalSearchError = "",
@@ -261,11 +300,15 @@ class RecordsViewModel(
                 val raw = rawEntities.map { it.toMap() }
                 val rows = raw
                     .map { mapFirestoreRecordToRow(it as Map<String, Any>) }
+                if (!isLatestSearchRequest(requestId)) return@launch
                 _uiState.value = _uiState.value.copy(
                     globalSearchLoading = false,
                     globalSearchResults = rows
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (!isLatestSearchRequest(requestId)) return@launch
                 _uiState.value = _uiState.value.copy(
                     globalSearchLoading = false,
                     globalSearchError = e.message ?: "Error"
@@ -273,6 +316,34 @@ class RecordsViewModel(
             }
         }
     }
+
+    private fun beginMonthRequest(): Long {
+        monthLoadJob?.takeIf { it.isActive }?.cancel()
+        latestMonthRequestId += 1
+        return latestMonthRequestId
+    }
+
+    private fun invalidateMonthRequest() {
+        monthLoadJob?.takeIf { it.isActive }?.cancel()
+        latestMonthRequestId += 1
+    }
+
+    private suspend fun isLatestMonthRequest(requestId: Long): Boolean =
+        requestId == latestMonthRequestId && currentCoroutineContext().isActive
+
+    private fun beginSearchRequest(): Long {
+        searchJob?.takeIf { it.isActive }?.cancel()
+        latestSearchRequestId += 1
+        return latestSearchRequestId
+    }
+
+    private fun invalidateSearchRequest() {
+        searchJob?.takeIf { it.isActive }?.cancel()
+        latestSearchRequestId += 1
+    }
+
+    private suspend fun isLatestSearchRequest(requestId: Long): Boolean =
+        requestId == latestSearchRequestId && currentCoroutineContext().isActive
 
     fun openLatestTransitRecord() {
         viewModelScope.launch {
@@ -332,6 +403,7 @@ class RecordsViewModel(
             _uiState.value = _uiState.value.copy(isSaving = true, saveMsg = "")
             try {
                 val ok = withContext(Dispatchers.IO) {
+                    val userId = CurrentUserProvider.requireUserId()
                     val existingEntity = tripRepository.getTripByFirestoreDocId(docId)
                         ?: tripRepository.getTripById(docId)
                     if (existingEntity != null) {
@@ -339,20 +411,20 @@ class RecordsViewModel(
                         mergedMap.putAll(fields)
                         recalculateDerivedFields(mergedMap)
                         mergedMap["firestoreDocId"] = existingEntity.firestoreDocId?.takeIf { it.isNotBlank() } ?: docId
-                        tripRepository.saveTrip(mergedMap.toEntity())
+                        tripRepository.saveTrip(mergedMap.toEntity(userId))
 
                         // Update local-only profile link
                         if (profileId != null) {
                             val db = com.example.toplutasima.data.local.AppDatabase.getDatabase(getApplication())
                             val linkDao = db.tripProfileLinkDao()
                             if (profileId.isBlank()) {
-                                linkDao.deleteLinksForTrip(docId, existingEntity.firestoreDocId ?: "")
+                                linkDao.deleteLinksForTrip(userId, docId, existingEntity.firestoreDocId ?: "")
                             } else {
                                 val tripKey = existingEntity.firestoreDocId?.takeIf { it.isNotBlank() } ?: docId
                                 val existingLinks = if (existingEntity.firestoreDocId.orEmpty().isNotBlank()) {
-                                    linkDao.getLinksForTrip(existingEntity.firestoreDocId.orEmpty())
+                                    linkDao.getLinksForTrip(userId, existingEntity.firestoreDocId.orEmpty())
                                 } else {
-                                    linkDao.getLinksForTrip(docId)
+                                    linkDao.getLinksForTrip(userId, docId)
                                 }
                                 if (existingLinks.isNotEmpty()) {
                                     val existing = existingLinks.first()
@@ -360,7 +432,8 @@ class RecordsViewModel(
                                         existing.copy(
                                             profileId = profileId,
                                             seatmateNote = seatmateNote,
-                                            updatedAt = System.currentTimeMillis()
+                                            updatedAt = System.currentTimeMillis(),
+                                            userId = userId
                                         )
                                     )
                                 } else {
@@ -371,7 +444,8 @@ class RecordsViewModel(
                                             profileId = profileId,
                                             seatmateNote = seatmateNote,
                                             createdAt = System.currentTimeMillis(),
-                                            updatedAt = System.currentTimeMillis()
+                                            updatedAt = System.currentTimeMillis(),
+                                            userId = userId
                                         )
                                     )
                                 }
@@ -543,9 +617,5 @@ class RecordsViewModel(
                 )
             }
         }
-    }
-
-    fun dismissExportResult() {
-        _uiState.value = _uiState.value.copy(exportResult = "")
     }
 }

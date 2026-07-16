@@ -115,6 +115,22 @@ object RmvSegmentParser {
         return VehicleType.BUS.key
     }
 
+    fun extractLineRefKtx(product: JsonObject?): String {
+        val productContext = product?.objectValue("prodCtx", "productContext")
+        return productContext?.stringValue("lineId", "lineRef", "matchId", "line")
+            ?: product?.stringValue("lineId", "lineRef", "matchId", "line")
+            ?: ""
+    }
+
+    fun extractOperatorRefKtx(product: JsonObject?): String {
+        val productContext = product?.objectValue("prodCtx", "productContext")
+        val operator = product?.objectValue("Operator", "operator")
+        return productContext?.stringValue("operatorCode", "operatorId", "admin")
+            ?: product?.stringValue("operatorCode", "operatorId", "admin", "operator")
+            ?: operator?.stringValue("code", "id", "name")
+            ?: ""
+    }
+
     fun normalizeLineCode(raw: String): String {
         var value = raw.trim().uppercase().replace(" ", "")
         for (prefix in LINE_PREFIXES_TO_STRIP) {
@@ -188,6 +204,21 @@ object RmvSegmentParser {
             catOut.contains("Stra\u00dfenbahn", ignoreCase = true) ||
             typeStr.contains("Tram", ignoreCase = true) ||
             cls == 16
+
+    private fun JsonObject.stringValue(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            entries.firstOrNull { it.key.equals(key, ignoreCase = true) }
+                ?.value
+                ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
+                ?.content
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+        }
+
+    private fun JsonObject.objectValue(vararg keys: String): JsonObject? =
+        keys.firstNotNullOfOrNull { key ->
+            entries.firstOrNull { it.key.equals(key, ignoreCase = true) }?.value as? JsonObject
+        }
 
     private val LINE_CODE_REGEX = Regex(
         """\b([A-Za-z]{1,4}-?\s?\d{1,3}|RB\s?\d{1,3}|RE\s?\d{1,3}|S\s?\d{1,2}|U\s?\d{1,2}|X\s?\d{1,3}|\d{1,3})\b""",

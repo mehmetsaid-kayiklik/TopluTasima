@@ -30,29 +30,6 @@ data class RmvLocationResponse(
 
 // ── Departure board (departureBoard) ─────────────────────────────────────────
 
-@Serializable
-data class RmvProduct(
-    val name: String = "",
-    val num: String = "",
-    val catOut: String = "",
-    val type: String = "",
-    val cls: Int = 0
-)
-
-@Serializable
-data class RmvJourneyDetailRef(val ref: String = "")
-
-@Serializable
-data class RmvDeparture(
-    val time: String = "",
-    val direction: String = "",
-    val track: String = "",
-    val name: String = "",
-    @SerialName("Product") val product: RmvProduct? = null,
-    @SerialName("ProductAtStop") val productAtStop: RmvProduct? = null,
-    @SerialName("JourneyDetailRef") val journeyDetailRef: RmvJourneyDetailRef? = null
-)
-
 /**
  * "Departure" field can be a single object or array — captured as JsonElement.
  */

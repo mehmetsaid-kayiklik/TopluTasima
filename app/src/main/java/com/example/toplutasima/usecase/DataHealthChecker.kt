@@ -171,16 +171,6 @@ object DataHealthChecker {
         HealthIssueType.ABNORMAL_DELAY -> "anormal gecikme"
     }
 
-    fun typeEmoji(type: HealthIssueType): String = when (type) {
-        HealthIssueType.DUPLICATE -> "🔁"
-        HealthIssueType.MISSING_FIELD -> "⛔"
-        HealthIssueType.BAD_DATE -> "📅"
-        HealthIssueType.BAD_TIME -> "⏰"
-        HealthIssueType.INCONSISTENT_DURATION -> "⏱️"
-        HealthIssueType.MISSING_DERIVED -> "🔗"
-        HealthIssueType.ABNORMAL_DELAY -> "⚠️"
-    }
-
     private fun buildTripSummary(tur: String, hat: String, tarih: String): String {
         val emoji = when (tur) {
             "Otobüs" -> "🚌"

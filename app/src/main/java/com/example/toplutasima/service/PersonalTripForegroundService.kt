@@ -20,15 +20,58 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
+
+internal data class PersonalTripFinalDistanceResult(
+    val distanceKm: Double,
+    val flushSucceeded: Boolean
+)
+
+internal suspend fun completePersonalTripFinalization(
+    timeoutMillis: Long,
+    flushFinalDistance: suspend () -> Boolean,
+    currentDistanceKm: () -> Double,
+    logFailure: (String, Throwable?) -> Unit,
+    onFinalized: (PersonalTripFinalDistanceResult) -> Unit
+) {
+    var failureWasLogged = false
+    val flushSucceeded = try {
+        withTimeout(timeoutMillis) { flushFinalDistance() }
+    } catch (e: TimeoutCancellationException) {
+        logFailure("Final ORS flush timed out after ${timeoutMillis}ms", e)
+        failureWasLogged = true
+        false
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        logFailure("Final ORS flush failed: ${e.message}", e)
+        failureWasLogged = true
+        false
+    }
+    if (!flushSucceeded && !failureWasLogged) {
+        logFailure("Final ORS flush completed without a distance result", null)
+    }
+    onFinalized(
+        PersonalTripFinalDistanceResult(
+            distanceKm = currentDistanceKm(),
+            flushSucceeded = flushSucceeded
+        )
+    )
+}
 
 /**
  * Kişisel araç yolculuğu sırasında arka planda GPS takibi yapar.
@@ -42,6 +85,13 @@ import java.util.Locale
  */
 class PersonalTripForegroundService : Service() {
 
+    data class TripFinalization(
+        val sequence: Long,
+        val tripDocumentId: String,
+        val distanceKm: Double,
+        val flushSucceeded: Boolean
+    )
+
     companion object {
         private const val TAG = "PersonalTripService"
         private const val CHANNEL_ID = "personal_trip_tracking"
@@ -50,6 +100,8 @@ class PersonalTripForegroundService : Service() {
         private const val DEFAULT_FILTER_DISTANCE_M = 30.0
         private const val HIGH_SPEED_FILTER_DISTANCE_M = 15.0
         private const val HIGH_SPEED_THRESHOLD_MPS = 15.0
+        private const val FINAL_FLUSH_TIMEOUT_MS = 10_000L
+        private const val LOCATION_REMOVAL_TIMEOUT_MS = 2_000L
 
         // ViewModel tarafından gözlemlenen durum akışları
         private val _liveDistanceKm = MutableStateFlow(0.0)
@@ -59,6 +111,10 @@ class PersonalTripForegroundService : Service() {
         private val _isTracking = MutableStateFlow(false)
         val isTracking: StateFlow<Boolean> = _isTracking
 
+        private val finalizationSequence = AtomicLong(0L)
+        private val _lastFinalization = MutableStateFlow<TripFinalization?>(null)
+        val lastFinalization: StateFlow<TripFinalization?> = _lastFinalization
+
         /** Servisi başlatmak/durdurmak için Intent Action'ları */
         const val ACTION_START = "com.example.toplutasima.personal.START"
         const val ACTION_STOP  = "com.example.toplutasima.personal.STOP"
@@ -66,6 +122,7 @@ class PersonalTripForegroundService : Service() {
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val finalizationScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private lateinit var locationHelper: PersonalLocationHelper
 
     /** Birikmiş ama henüz ORS'e gönderilmemiş waypoint'ler */
@@ -112,6 +169,7 @@ class PersonalTripForegroundService : Service() {
     }
 
     private var orsBatchJob: Job? = null
+    private var stopJob: Job? = null
 
     // ── Service Lifecycle ────────────────────────────────────────────────────
 
@@ -162,9 +220,13 @@ class PersonalTripForegroundService : Service() {
 
     override fun onDestroy() {
         logD("onDestroy tracking=${_isTracking.value} pending=${pendingCount()} totalKm=${formatKm(totalDistanceMeters)}")
+        if (stopJob == null && (_isTracking.value || pendingCount() > 0)) {
+            stopTracking()
+        } else if (stopJob == null) {
+            serviceScope.cancel()
+            finalizationScope.cancel()
+        }
         super.onDestroy()
-        stopTracking()
-        serviceScope.cancel()
     }
 
     // ── Takip Başlat / Durdur ────────────────────────────────────────────────
@@ -246,26 +308,64 @@ class PersonalTripForegroundService : Service() {
             "stopTracking requested tracking=${_isTracking.value} jobActive=${orsBatchJob?.isActive == true} " +
                 "pending=${pendingCount()} totalKm=${formatKm(totalDistanceMeters)}"
         )
-        PersonalTripTrackingState.setTracking(this, false)
-        orsBatchJob?.cancel()
-        orsBatchJob = null
-        fusedClient.removeLocationUpdates(locationCallback)
-        logD("location updates removed; final batch will run if enough pending waypoints exist")
+        if (stopJob != null) {
+            logD("stopTracking skipped reason=finalization_already_started")
+            return
+        }
 
-        // Son batch
-        serviceScope.launch {
-            sendBatchToOrs(trigger = "stop")
-            _isTracking.value = false
-            PersonalTripTrackingState.setTracking(this@PersonalTripForegroundService, false)
-            logD("tracking stopped finalTotalKm=${formatKm(totalDistanceMeters)}")
+        val periodicBatchJob = orsBatchJob
+        orsBatchJob = null
+        val tripDocumentId = activeTripDocId
+        stopJob = finalizationScope.launch {
+            periodicBatchJob?.cancelAndJoin()
+            runCatching {
+                withTimeout(LOCATION_REMOVAL_TIMEOUT_MS) {
+                    fusedClient.removeLocationUpdates(locationCallback).await()
+                }
+            }.onFailure { error ->
+                Log.w(TAG, "Location updates could not be fully removed before final flush", error)
+                logD("location removal failed before final flush: ${error.message}")
+            }
+            logD("location updates removed; awaiting final ORS batch")
+
+            completePersonalTripFinalization(
+                timeoutMillis = FINAL_FLUSH_TIMEOUT_MS,
+                flushFinalDistance = { sendBatchToOrs(trigger = "stop") },
+                currentDistanceKm = { currentDistanceKm },
+                logFailure = { message, error ->
+                    if (error != null) Log.w(TAG, message, error) else Log.w(TAG, message)
+                    logD(message)
+                },
+                onFinalized = { result ->
+                    _lastFinalization.value = TripFinalization(
+                        sequence = finalizationSequence.incrementAndGet(),
+                        tripDocumentId = tripDocumentId,
+                        distanceKm = result.distanceKm,
+                        flushSucceeded = result.flushSucceeded
+                    )
+                    _isTracking.value = false
+                    PersonalTripTrackingState.setTracking(
+                        this@PersonalTripForegroundService,
+                        false
+                    )
+                    logD(
+                        "tracking finalized flushSucceeded=${result.flushSucceeded} " +
+                            "finalTotalKm=${formatKm(totalDistanceMeters)}"
+                    )
+                }
+            )
+
+            serviceScope.cancel()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
+        }.also { finalizationJob ->
+            finalizationJob.invokeOnCompletion { finalizationScope.cancel() }
         }
     }
 
     // ── ORS Batch ─────────────────────────────────────────────────────────────
 
-    private suspend fun sendBatchToOrs(trigger: String = "manual") {
+    private suspend fun sendBatchToOrs(trigger: String = "manual"): Boolean {
         val batchId = ++orsBatchSequence
         var pendingAtSnapshot = 0
         val batch = synchronized(pendingWaypoints) {
@@ -275,7 +375,7 @@ class PersonalTripForegroundService : Service() {
 
         if (batch.size < 2) {
             logD("BATCH#$batchId skip trigger=$trigger reason=not_enough_waypoints pending=$pendingAtSnapshot")
-            return
+            return true
         }
 
         logD(
@@ -313,7 +413,7 @@ class PersonalTripForegroundService : Service() {
 
         if (filtered.size < 2) {
             logD("BATCH#$batchId skip trigger=$trigger reason=filtered_not_enough raw=${batch.size} filtered=${filtered.size}")
-            return
+            return true
         }
 
         val filteredStraightPathMeters = pathDistanceMeters(filtered)
@@ -347,9 +447,11 @@ class PersonalTripForegroundService : Service() {
                         "uniqueRemove=$uniqueBatchPoints after=${pendingWaypoints.size} restoredLastPoint=$restoredLastPoint"
                 )
             }
+            return true
         } else {
             Log.w(TAG, "ORS yanıt vermedi, bu batch atlandı")
             logD("BATCH#$batchId ORS failed trigger=$trigger raw=${batch.size} filtered=${filtered.size}")
+            return false
         }
     }
 

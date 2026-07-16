@@ -35,19 +35,48 @@ class ProfileDaoTest {
 
         profileDao.upsertAll(listOf(profile))
 
-        val allProfiles = profileDao.getAllProfiles()
+        val allProfiles = profileDao.getAllProfiles(TestProfileFixtures.USER_ID)
         assertEquals(1, allProfiles.size)
         assertEquals("Mehmet", allProfiles[0].displayName)
 
         val updatedProfile = profile.copy(displayName = "Mehmet Said", updatedAt = 2000L)
         profileDao.upsertAll(listOf(updatedProfile))
 
-        val readUpdated = profileDao.getProfileById("profile-1")
+        val readUpdated = profileDao.getProfileById(TestProfileFixtures.USER_ID, "profile-1")
         assertNotNull(readUpdated)
         assertEquals("Mehmet Said", readUpdated?.displayName)
         assertEquals(2000L, readUpdated?.updatedAt)
 
-        profileDao.deleteProfile(profile.id)
-        assertNull(profileDao.getProfileById("profile-1"))
+        profileDao.deleteProfile(TestProfileFixtures.USER_ID, profile.id)
+        assertNull(profileDao.getProfileById(TestProfileFixtures.USER_ID, "profile-1"))
+    }
+
+    @Test
+    fun testProfileDao_UpsertPreservesTripProfileLinks() = runBlocking {
+        val profileDao = db.profileDao()
+        val linkDao = db.tripProfileLinkDao()
+        val profile = TestProfileFixtures.profile()
+        val link = TestProfileFixtures.tripProfileLink(
+            profileId = profile.id,
+            seatmateNote = "Pencere kenari"
+        )
+
+        profileDao.upsert(profile)
+        linkDao.upsert(link)
+
+        profileDao.upsert(
+            profile.copy(
+                displayName = "Mehmet Said",
+                updatedAt = 2000L
+            )
+        )
+
+        val updatedProfile = profileDao.getProfileById(TestProfileFixtures.USER_ID, profile.id)
+        val preservedLinks = linkDao.getLinksForTrip(TestProfileFixtures.USER_ID, link.tripStableKey)
+
+        assertEquals("Mehmet Said", updatedProfile?.displayName)
+        assertEquals(1, preservedLinks.size)
+        assertEquals(link.id, preservedLinks.single().id)
+        assertEquals("Pencere kenari", preservedLinks.single().seatmateNote)
     }
 }

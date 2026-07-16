@@ -1,6 +1,7 @@
 package com.example.toplutasima.data
 
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,10 +9,14 @@ import com.example.toplutasima.model.FavoriteStop
 import com.example.toplutasima.model.StopOption
 import com.example.toplutasima.model.ThemeMode
 import com.example.toplutasima.model.UsageType
+import com.example.toplutasima.network.firestore.FavoriteRemoteDataSource
 import com.example.toplutasima.network.firestore.FirestoreFavoriteDataSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -34,6 +39,14 @@ enum class TransitReminderType { LOCATION, TIME, NONE }
  */
 enum class TransitAutoActualTimeMode { OFF, CONFIRM, AUTO }
 
+enum class FavoriteSyncOperation { ADD, UPDATE, DELETE }
+
+data class FavoriteSyncFailure(
+    val operation: FavoriteSyncOperation,
+    val favoriteId: String,
+    val message: String
+)
+
 /**
  * Centralized SharedPreferences manager for favorites, theme, etc.
  * Follows the same singleton-with-observable-state pattern as LocaleManager.
@@ -43,7 +56,10 @@ object PrefsManager {
     private lateinit var prefs: SharedPreferences
     private var appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-    private val favoriteDataSource by lazy { FirestoreFavoriteDataSource() }
+    private var favoriteDataSource: FavoriteRemoteDataSource = FirestoreFavoriteDataSource()
+    private var favoriteSyncErrorLogger: (String, Throwable) -> Unit = ::logFavoriteSyncError
+    private val _favoriteSyncFailure = MutableStateFlow<FavoriteSyncFailure?>(null)
+    val favoriteSyncFailure = _favoriteSyncFailure.asStateFlow()
     private const val STOP_CACHE_KEY = "stop_search_cache"
     private const val STOP_CACHE_TTL_MS = 7L * 24L * 60L * 60L * 1000L
     private const val STOP_CACHE_MAX_ENTRIES = 30
@@ -108,6 +124,25 @@ object PrefsManager {
         transitReminderType = loadTransitReminderType()
         gpsJourneyMatchEnabled = prefs.getBoolean("gps_journey_match_enabled", false)
         transitAutoActualTimeMode = loadTransitAutoActualTimeMode()
+    }
+
+    fun clearFavoriteSyncFailure() {
+        _favoriteSyncFailure.value = null
+    }
+
+    internal fun configureFavoriteSyncForTesting(
+        dataSource: FavoriteRemoteDataSource,
+        errorLogger: (String, Throwable) -> Unit = { _, _ -> }
+    ) {
+        favoriteDataSource = dataSource
+        favoriteSyncErrorLogger = errorLogger
+        clearFavoriteSyncFailure()
+    }
+
+    internal fun resetFavoriteSyncAfterTesting() {
+        favoriteDataSource = FirestoreFavoriteDataSource()
+        favoriteSyncErrorLogger = ::logFavoriteSyncError
+        clearFavoriteSyncFailure()
     }
 
     // ── Theme ────────────────────────────────────────────────────────────────
@@ -186,14 +221,18 @@ object PrefsManager {
         favorites = favorites + fav
         saveFavorites()
         // Fire-and-forget Firebase backup
-        appScope.launch { favoriteDataSource.saveFavorite(fav) }
+        launchFavoriteSync(FavoriteSyncOperation.ADD, fav.id) {
+            saveFavorite(fav)
+        }
         return fav
     }
 
     fun removeFavorite(id: String) {
         favorites = favorites.filter { it.id != id }
         saveFavorites()
-        appScope.launch { favoriteDataSource.deleteFavorite(id) }
+        launchFavoriteSync(FavoriteSyncOperation.DELETE, id) {
+            deleteFavorite(id)
+        }
     }
 
     fun updateFavorite(id: String, label: String? = null, usageType: UsageType? = null) {
@@ -209,7 +248,9 @@ object PrefsManager {
         // Sync updated favorite to Firebase
         val updated = favorites.find { it.id == id }
         if (updated != null) {
-            appScope.launch { favoriteDataSource.saveFavorite(updated) }
+            launchFavoriteSync(FavoriteSyncOperation.UPDATE, updated.id) {
+                saveFavorite(updated)
+            }
         }
     }
 
@@ -279,6 +320,36 @@ object PrefsManager {
         prefs.edit().putString("favorite_stops", json.encodeToString(favorites)).apply()
     }
 
+    private fun launchFavoriteSync(
+        operation: FavoriteSyncOperation,
+        favoriteId: String,
+        block: suspend FavoriteRemoteDataSource.() -> Unit
+    ) {
+        val dataSource = favoriteDataSource
+        appScope.launch {
+            try {
+                dataSource.block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val message = e.message ?: e::class.java.simpleName
+                _favoriteSyncFailure.value = FavoriteSyncFailure(
+                    operation = operation,
+                    favoriteId = favoriteId,
+                    message = message
+                )
+                favoriteSyncErrorLogger(
+                    "Favorite ${operation.name.lowercase()} sync failed for id=$favoriteId",
+                    e
+                )
+            }
+        }
+    }
+
+    private fun logFavoriteSyncError(message: String, throwable: Throwable) {
+        Log.e(TAG, message, throwable)
+    }
+
     private fun loadStopSearchCache(): List<StopSearchCacheEntry> {
         val raw = prefs.getString(STOP_CACHE_KEY, null) ?: return emptyList()
         val now = System.currentTimeMillis()
@@ -292,4 +363,6 @@ object PrefsManager {
 
     private fun normalizeStopQuery(query: String): String =
         query.trim().lowercase().replace(Regex("\\s+"), " ")
+
+    private const val TAG = "PrefsManager"
 }

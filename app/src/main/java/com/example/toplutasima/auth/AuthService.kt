@@ -13,8 +13,7 @@ object AuthService {
         get() = auth.currentUser
 
     val uid: String
-        get() = auth.currentUser?.uid
-            ?: throw IllegalStateException("Kullanıcı giriş yapmamış")
+        get() = CurrentUserProvider.requireUserId()
 
     val isSignedIn: Boolean
         get() = auth.currentUser != null

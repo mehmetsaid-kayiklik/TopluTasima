@@ -14,21 +14,16 @@ interface TripProfileLinkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(links: List<TripProfileLinkEntity>)
 
-    @Query("SELECT * FROM trip_profile_links")
-    suspend fun getAllLinks(): List<TripProfileLinkEntity>
+    @Query("SELECT * FROM trip_profile_links WHERE userId = :userId")
+    suspend fun getAllLinks(userId: String): List<TripProfileLinkEntity>
 
-    @Query("SELECT * FROM trip_profile_links WHERE profileId = :profileId")
-    suspend fun getLinksForProfile(profileId: String): List<TripProfileLinkEntity>
+    @Query("SELECT * FROM trip_profile_links WHERE userId = :userId AND tripStableKey = :tripStableKey")
+    suspend fun getLinksForTrip(userId: String, tripStableKey: String): List<TripProfileLinkEntity>
 
-    @Query("SELECT * FROM trip_profile_links WHERE tripStableKey = :tripStableKey")
-    suspend fun getLinksForTrip(tripStableKey: String): List<TripProfileLinkEntity>
+    @Query("UPDATE trip_profile_links SET tripStableKey = :newStableKey, updatedAt = :updatedAt WHERE userId = :userId AND tripStableKey = :oldStableKey")
+    suspend fun updateStableKey(userId: String, oldStableKey: String, newStableKey: String, updatedAt: Long)
 
-    @Query("UPDATE trip_profile_links SET tripStableKey = :newStableKey, updatedAt = :updatedAt WHERE tripStableKey = :oldStableKey")
-    suspend fun updateStableKey(oldStableKey: String, newStableKey: String, updatedAt: Long)
+    @Query("DELETE FROM trip_profile_links WHERE userId = :userId AND (tripStableKey = :tripId OR tripStableKey = :firestoreDocId)")
+    suspend fun deleteLinksForTrip(userId: String, tripId: String, firestoreDocId: String)
 
-    @Query("DELETE FROM trip_profile_links WHERE tripStableKey = :tripId OR tripStableKey = :firestoreDocId")
-    suspend fun deleteLinksForTrip(tripId: String, firestoreDocId: String)
-
-    @Query("DELETE FROM trip_profile_links")
-    suspend fun deleteAllLinks()
 }

@@ -16,17 +16,17 @@ interface TripDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(trips: List<TripEntity>)
 
-    @Query("SELECT * FROM trips WHERE id = :id LIMIT 1")
-    suspend fun getTripById(id: String): TripEntity?
+    @Query("SELECT * FROM trips WHERE userId = :userId AND id = :id LIMIT 1")
+    suspend fun getTripById(userId: String, id: String): TripEntity?
 
-    @Query("SELECT * FROM trips WHERE firestoreDocId = :firestoreDocId LIMIT 1")
-    suspend fun getTripByFirestoreDocId(firestoreDocId: String): TripEntity?
+    @Query("SELECT * FROM trips WHERE userId = :userId AND firestoreDocId = :firestoreDocId LIMIT 1")
+    suspend fun getTripByFirestoreDocId(userId: String, firestoreDocId: String): TripEntity?
 
-    @Query("SELECT * FROM trips WHERE yearMonth = :yearMonth")
-    suspend fun getTripsForMonth(yearMonth: String): List<TripEntity>
+    @Query("SELECT * FROM trips WHERE userId = :userId AND yearMonth = :yearMonth")
+    suspend fun getTripsForMonth(userId: String, yearMonth: String): List<TripEntity>
 
-    @Query("SELECT * FROM trips ORDER BY sortDate DESC")
-    suspend fun getAllTrips(): List<TripEntity>
+    @Query("SELECT * FROM trips WHERE userId = :userId ORDER BY sortDate DESC")
+    suspend fun getAllTrips(userId: String): List<TripEntity>
 
     @Query("""
         UPDATE trips
@@ -36,11 +36,12 @@ interface TripDao {
             rmvMesafeDurumu = NULL,
             rmvMesafeGuncellemeTarihi = NULL,
             rmvApiVersion = NULL
+        WHERE userId = :userId
     """)
-    suspend fun resetAllRmvMesafeBackfillState(): Int
+    suspend fun resetAllRmvMesafeBackfillState(userId: String): Int
 
-    @Query("SELECT * FROM trips WHERE rmvMesafeDurumu = 'hazir_fallback'")
-    suspend fun getTripsWithRmvFallbackDistance(): List<TripEntity>
+    @Query("SELECT * FROM trips WHERE userId = :userId AND rmvMesafeDurumu = 'hazir_fallback'")
+    suspend fun getTripsWithRmvFallbackDistance(userId: String): List<TripEntity>
 
     @Query("""
         UPDATE trips
@@ -49,49 +50,50 @@ interface TripDao {
             rmvMesafeText = NULL,
             rmvApiVersion = NULL,
             rmvMesafeDurumu = 'poly_yok'
-        WHERE rmvMesafeDurumu = 'hazir_fallback'
+        WHERE userId = :userId AND rmvMesafeDurumu = 'hazir_fallback'
     """)
-    suspend fun cleanupRmvFallbackDistances(): Int
+    suspend fun cleanupRmvFallbackDistances(userId: String): Int
 
     @Query("""
         SELECT * FROM trips
-        WHERE rmvMesafeDurumu IS NULL
-        OR rmvMesafeDurumu = ''
-        OR rmvMesafeDurumu = 'bekliyor'
-        OR rmvMesafeDurumu = 'hata_rate_limit_429'
-        OR rmvMesafeDurumu = 'hata_timeout'
-        OR rmvMesafeDurumu = 'hata_sonuc_yok'
+        WHERE userId = :userId AND (
+            rmvMesafeDurumu IS NULL
+            OR rmvMesafeDurumu = ''
+            OR rmvMesafeDurumu = 'bekliyor'
+            OR rmvMesafeDurumu = 'hata_rate_limit_429'
+            OR rmvMesafeDurumu = 'hata_timeout'
+            OR rmvMesafeDurumu = 'hata_sonuc_yok'
+        )
         ORDER BY sortDate DESC
     """)
-    suspend fun getTripsNeedingMesafeBackfill(): List<TripEntity>
+    suspend fun getTripsNeedingMesafeBackfill(userId: String): List<TripEntity>
 
     @Query("""
         SELECT * FROM trips
-        WHERE hat LIKE :query
-        OR yon LIKE :query
-        OR binisDuragi LIKE :query
-        OR inisDuragi LIKE :query
-        OR tur LIKE :query
-        OR `not` LIKE :query
+        WHERE userId = :userId AND (
+            hat LIKE :query
+            OR yon LIKE :query
+            OR binisDuragi LIKE :query
+            OR inisDuragi LIKE :query
+            OR tur LIKE :query
+            OR `not` LIKE :query
+        )
         ORDER BY sortDate DESC
     """)
-    suspend fun searchTrips(query: String): List<TripEntity>
+    suspend fun searchTrips(userId: String, query: String): List<TripEntity>
 
-    @Query("DELETE FROM trips WHERE id = :id")
-    suspend fun deleteTrip(id: String)
+    @Query("DELETE FROM trips WHERE userId = :userId AND id = :id")
+    suspend fun deleteTrip(userId: String, id: String)
 
-    @Query("DELETE FROM trips WHERE firestoreDocId = :firestoreDocId")
-    suspend fun deleteTripByFirestoreDocId(firestoreDocId: String)
+    @Query("DELETE FROM trips WHERE userId = :userId AND firestoreDocId = :firestoreDocId")
+    suspend fun deleteTripByFirestoreDocId(userId: String, firestoreDocId: String)
 
-    @Query("DELETE FROM trips WHERE id IN (:ids)")
-    suspend fun deleteTripsByIds(ids: List<String>)
+    @Query("DELETE FROM trips WHERE userId = :userId AND id IN (:ids)")
+    suspend fun deleteTripsByIds(userId: String, ids: List<String>)
 
-    @Query("SELECT COUNT(*) FROM trips")
-    suspend fun getTripCount(): Int
+    @Query("SELECT COUNT(*) FROM trips WHERE userId = :userId")
+    suspend fun getTripCount(userId: String): Int
 
-    @Query("SELECT * FROM trips WHERE sortDate >= :sortDate ORDER BY sortDate ASC")
-    suspend fun getTripsAfter(sortDate: String): List<TripEntity>
-
-    @Query("SELECT yearMonth, COUNT(*) as count FROM trips WHERE yearMonth IS NOT NULL AND yearMonth != '' GROUP BY yearMonth ORDER BY yearMonth ASC")
-    suspend fun getMonthSummaries(): List<MonthSummaryTuple>
+    @Query("SELECT yearMonth, COUNT(*) as count FROM trips WHERE userId = :userId AND yearMonth IS NOT NULL AND yearMonth != '' GROUP BY yearMonth ORDER BY yearMonth ASC")
+    suspend fun getMonthSummaries(userId: String): List<MonthSummaryTuple>
 }

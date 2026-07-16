@@ -23,20 +23,50 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 class RmvJourneyService {
-    suspend fun fetchTransitAlerts(line: String, date: String = ""): List<TransitAlert> =
+    suspend fun fetchTransitAlerts(departure: Departure): List<TransitAlert> =
         withContext(Dispatchers.IO) {
-            val endpoint = "himsearch"
-            if (line.isBlank() || RmvEndpointAvailability.isUnavailable(endpoint)) {
+            val endpoint = "journeyDetail.alerts"
+            val journeyRef = departure.journeyDetailRef.trim()
+            if (journeyRef.isBlank() || RmvEndpointAvailability.isUnavailable(endpoint)) {
+                logD(
+                    "RmvHim",
+                    "EXCLUDE all: journeyRef='$journeyRef' lineRef='${departure.lineRef}' " +
+                        "operatorRef='${departure.operatorRef}' (missing journey reference or endpoint unavailable)"
+                )
                 return@withContext emptyList()
             }
             try {
                 val json = rmvCall(endpoint) { requestId ->
-                    rmvApi.getTransitAlerts(line = line, date = date.ifBlank { null }, requestId = requestId)
+                    rmvApi.getJourneyDetail(
+                        ref = journeyRef,
+                        poly = "0",
+                        requestId = requestId
+                    )
                 }
-                RmvFeatureParsers.parseTransitAlerts(json, line)
+                logD(
+                    "RmvHim",
+                    "Match journeyRef='$journeyRef' lineRef='${departure.lineRef}' " +
+                        "operatorRef='${departure.operatorRef}' displayLine='${departure.line}'"
+                )
+                RmvFeatureParsers.parseJourneyTransitAlerts(
+                    root = json,
+                    displayLine = departure.line,
+                    lineRef = departure.lineRef,
+                    operatorRef = departure.operatorRef
+                ) { messageId, included, reason ->
+                    logD(
+                        "RmvHim",
+                        "${if (included) "INCLUDE" else "EXCLUDE"} message='$messageId' " +
+                            "journeyRef='$journeyRef' lineRef='${departure.lineRef}' " +
+                            "operatorRef='${departure.operatorRef}': $reason"
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiRequestException) {
@@ -143,12 +173,6 @@ class RmvJourneyService {
             }
         }
 
-        val minTime = try {
-            LocalTime.parse(time.trim().take(5))
-        } catch (_: Exception) {
-            null
-        }
-
         val response = try {
             rmvCall("departureBoard") { requestId ->
                 rmvApi.getDepartures(
@@ -190,20 +214,24 @@ class RmvJourneyService {
                     ?: dep["estimatedTime"]?.jsonPrimitive?.content
                     ?: ""
             )
+            val departureDate = dep["date"]?.jsonPrimitive?.content?.trim().orEmpty()
             val realtimeDate = dep["rtDate"]?.jsonPrimitive?.content?.trim().orEmpty()
             val cancelled = dep["cancelled"]?.jsonPrimitive?.content?.equals("true", ignoreCase = true) == true
             val direction = dep["direction"]?.jsonPrimitive?.content?.trim().orEmpty()
             val track = dep["track"]?.jsonPrimitive?.content?.trim().orEmpty()
             val displayTime = realtime.ifBlank { depTime }
-
-            if (minTime != null && displayTime.length >= 5) {
-                try {
-                    if (LocalTime.parse(displayTime.take(5)).isBefore(minTime)) continue
-                } catch (_: Exception) {
-                }
+            val displayDate = if (realtime.isNotBlank()) {
+                realtimeDate.ifBlank { departureDate }
+            } else {
+                departureDate
             }
 
-            val product = RmvSegmentParser.safeProductKtx(dep["Product"] ?: dep["ProductAtStop"])
+            if (departureOccursBeforeRequest(date, time, displayDate, displayTime)) {
+                continue
+            }
+
+            val productAtStop = RmvSegmentParser.safeProductKtx(dep["ProductAtStop"])
+            val product = RmvSegmentParser.safeProductKtx(dep["Product"]) ?: productAtStop
             val rawName = product?.get("name")?.jsonPrimitive?.content?.trim()
                 ?: dep["name"]?.jsonPrimitive?.content?.trim().orEmpty()
             val rawNum = product?.get("num")?.jsonPrimitive?.content?.trim().orEmpty()
@@ -221,9 +249,10 @@ class RmvJourneyService {
             if (validLineDirections.isNotEmpty()) {
                 val normalizedLine = RmvSegmentParser.normalizeLineCode(line)
                 val validDirs = validLineDirections[normalizedLine]
-                val directionMatchesDestination = destinationDisplayName.isNotBlank() &&
-                    (direction.contains(destinationDisplayName, ignoreCase = true) ||
-                        destinationDisplayName.contains(direction, ignoreCase = true))
+                val directionMatchesDestination = departureDirectionMatchesDestination(
+                    direction = direction,
+                    destinationDisplayName = destinationDisplayName
+                )
                 if (validDirs == null) {
                     if (directionMatchesDestination) {
                         logD("DepartureBoard", "KEEP '$normalizedLine' dir='$direction' - direction matches destination (fallback)")
@@ -257,16 +286,23 @@ class RmvJourneyService {
             val journeyDetailRef = dep["JourneyDetailRef"]?.jsonObject?.get("ref")
                 ?.jsonPrimitive?.content.orEmpty()
 
+            val lineRef = RmvSegmentParser.extractLineRefKtx(product)
+                .ifBlank { RmvSegmentParser.extractLineRefKtx(productAtStop) }
+            val operatorRef = RmvSegmentParser.extractOperatorRefKtx(product)
+                .ifBlank { RmvSegmentParser.extractOperatorRefKtx(productAtStop) }
+
             departures += Departure(
-                cleanLine,
-                direction,
-                depTime,
-                track,
-                typeTr,
-                journeyDetailRef,
-                realtime,
-                realtimeDate,
-                cancelled
+                line = cleanLine,
+                direction = direction,
+                time = depTime,
+                track = track,
+                typeTr = typeTr,
+                journeyDetailRef = journeyDetailRef,
+                realtime = realtime,
+                realtimeDate = realtimeDate,
+                cancelled = cancelled,
+                lineRef = lineRef,
+                operatorRef = operatorRef
             )
         }
 
@@ -347,4 +383,45 @@ class RmvJourneyService {
             if (t != null) Log.e(tag, msg, t) else Log.e(tag, msg)
         }
     }
+}
+
+internal fun departureDirectionMatchesDestination(
+    direction: String,
+    destinationDisplayName: String
+): Boolean = direction.isNotBlank() &&
+    destinationDisplayName.isNotBlank() &&
+    (direction.contains(destinationDisplayName, ignoreCase = true) ||
+        destinationDisplayName.contains(direction, ignoreCase = true))
+
+internal fun departureOccursBeforeRequest(
+    requestDate: String,
+    requestTime: String,
+    departureDate: String,
+    departureTime: String
+): Boolean {
+    val parsedRequestDate = parseRmvDate(requestDate) ?: return false
+    val parsedRequestTime = parseRmvTime(requestTime) ?: return false
+    val parsedDepartureDate = parseRmvDate(departureDate) ?: parsedRequestDate
+    val parsedDepartureTime = parseRmvTime(departureTime) ?: return false
+
+    return LocalDateTime.of(parsedDepartureDate, parsedDepartureTime)
+        .isBefore(LocalDateTime.of(parsedRequestDate, parsedRequestTime))
+}
+
+private fun parseRmvDate(value: String): LocalDate? {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) return null
+    val formatters = listOf(
+        DateTimeFormatter.ISO_LOCAL_DATE,
+        DateTimeFormatter.BASIC_ISO_DATE,
+        DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    )
+    return formatters.firstNotNullOfOrNull { formatter ->
+        runCatching { LocalDate.parse(trimmed, formatter) }.getOrNull()
+    }
+}
+
+private fun parseRmvTime(value: String): LocalTime? {
+    val normalized = RmvTimeUtils.normalizeRmvClock(value)
+    return runCatching { LocalTime.parse(normalized.take(5)) }.getOrNull()
 }

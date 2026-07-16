@@ -2,18 +2,17 @@ package com.example.toplutasima.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.Index
-import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "trips",
+    primaryKeys = ["userId", "id"],
     indices = [
-        Index(value = ["yearMonth"]),
-        Index(value = ["sortDate"]),
-        Index(value = ["firestoreDocId"], unique = false)
+        Index(value = ["userId", "yearMonth"]),
+        Index(value = ["userId", "sortDate"]),
+        Index(value = ["userId", "firestoreDocId"], unique = false)
     ]
 )
 data class TripEntity(
-    @PrimaryKey
     val id: String,
     val firestoreDocId: String? = null,
     val tarih: String? = null,
@@ -50,5 +49,6 @@ data class TripEntity(
     val durakSayisi: String? = null,
     val yearMonth: String? = null,
     val sortDate: String? = null,
-    val seatmateUuid: String = ""
+    val seatmateUuid: String = "",
+    val userId: String = ""
 )

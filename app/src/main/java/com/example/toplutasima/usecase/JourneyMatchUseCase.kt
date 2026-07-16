@@ -1,16 +1,12 @@
 package com.example.toplutasima.usecase
 
 import com.example.toplutasima.model.JourneyMatchCandidate
-import com.example.toplutasima.model.Segment
 import com.example.toplutasima.network.RmvApiService
-import com.example.toplutasima.repository.RmvTripRepository
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-class JourneyMatchUseCase(
-    private val rmvTripRepository: RmvTripRepository
-) {
+class JourneyMatchUseCase {
     data class MatchStart(
         val state: RmvLogUiState,
         val apiDate: String,
@@ -53,21 +49,6 @@ class JourneyMatchUseCase(
         )
     }
 
-    suspend fun fetchJourneyDetail(segment: Segment): RmvApiService.SegmentDetails =
-        rmvTripRepository.fetchSegmentDetails(segment)
-
-    fun updateJourneyMatchCandidates(
-        state: RmvLogUiState,
-        candidates: List<JourneyMatchCandidate>,
-        message: String
-    ): RmvLogUiState =
-        state.copy(
-            journeyMatchLoading = false,
-            journeyMatchCandidates = candidates,
-            journeyMatchMessage = message,
-            status = message
-        )
-
     fun selectJourneyMatch(state: RmvLogUiState, candidate: JourneyMatchCandidate): JourneySelection {
         val matchingIndex = state.departures.indexOfFirst {
             RmvApiService.normalizeLineForDisplay(it.line) ==
@@ -83,11 +64,4 @@ class JourneyMatchUseCase(
             departureIndex = matchingIndex
         )
     }
-
-    fun clearJourneyMatch(state: RmvLogUiState): RmvLogUiState =
-        state.copy(
-            journeyMatchLoading = false,
-            journeyMatchCandidates = emptyList(),
-            journeyMatchMessage = ""
-        )
 }

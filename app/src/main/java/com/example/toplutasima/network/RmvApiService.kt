@@ -58,8 +58,8 @@ object RmvApiService {
     suspend fun searchLocationOptions(input: String, max: Int = 8): List<LocationOption> =
         stopService.searchLocationOptions(input, max)
 
-    suspend fun fetchTransitAlerts(line: String, date: String = ""): List<TransitAlert> =
-        journeyService.fetchTransitAlerts(line, date)
+    suspend fun fetchTransitAlerts(departure: Departure): List<TransitAlert> =
+        journeyService.fetchTransitAlerts(departure)
 
     suspend fun matchJourneyTrack(
         points: List<Pair<Double, Double>>,

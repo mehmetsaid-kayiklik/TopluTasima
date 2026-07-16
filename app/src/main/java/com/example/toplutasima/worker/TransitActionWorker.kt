@@ -11,11 +11,29 @@ import com.example.toplutasima.repository.TransitRecordRepository
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-class TransitActionWorker(
+internal fun interface TransitActualUpdater {
+    suspend fun updateActual(tripId: String, actualDeparture: String?, actualArrival: String?): Boolean
+}
+
+class TransitActionWorker internal constructor(
     appContext: Context,
     workerParams: WorkerParameters,
-    private val repository: TransitRecordRepository
+    private val actualUpdater: TransitActualUpdater,
+    dependencyDescription: Any
 ) : CoroutineWorker(appContext, workerParams) {
+
+    constructor(
+        appContext: Context,
+        workerParams: WorkerParameters,
+        repository: TransitRecordRepository
+    ) : this(
+        appContext = appContext,
+        workerParams = workerParams,
+        actualUpdater = TransitActualUpdater { tripId, actualDeparture, actualArrival ->
+            repository.updateActual(tripId, actualDeparture, actualArrival)
+        },
+        dependencyDescription = repository
+    )
 
     init {
         TransitTrackerLogger.log(
@@ -24,16 +42,7 @@ class TransitActionWorker(
             "CONSTRUCTOR called - instance created"
         )
 
-        // Defensive check: repository is non-null by Kotlin's type system,
-        // but Koin DI might inject a Java-null via unchecked cast.
-        @Suppress("SENSELESS_COMPARISON")
-        if (repository == null) {
-            val msg = "CRITICAL: repository is null at construction! DI injection failed."
-            Log.e(TAG, msg)
-            TransitTrackerLogger.log(appContext, TAG, msg)
-            throw IllegalStateException(msg)
-        }
-        Log.d(TAG, "TransitActionWorker constructed - repository=$repository")
+        Log.d(TAG, "TransitActionWorker constructed - repository=$dependencyDescription")
         TransitTrackerLogger.log(appContext, TAG, "TransitActionWorker constructed OK")
     }
 
@@ -46,6 +55,7 @@ class TransitActionWorker(
         const val OUTPUT_EXCEPTION_CLASS = "exceptionClass"
         const val OUTPUT_EXCEPTION_MESSAGE = "exceptionMessage"
         const val OUTPUT_STACK_TRACE = "stackTrace"
+        internal const val MAX_RETRY_ATTEMPTS = 5
         private const val MAX_OUTPUT_STRING_LENGTH = 1_000
         private const val MAX_STACK_TRACE_OUTPUT_LENGTH = 7_000
     }
@@ -70,14 +80,20 @@ class TransitActionWorker(
         Log.d(TAG, msgStart)
         TransitTrackerLogger.log(applicationContext, TAG, msgStart)
 
+        if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
+            return permanentRetryFailure(
+                "Transit action retry limit reached: trip=$tripId isBoarding=$isBoarding"
+            )
+        }
+
         val timestamp = inputData.getString(KEY_TIMESTAMP)
             ?: LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
         return try {
             val updated = if (isBoarding) {
-                repository.updateActual(tripId, timestamp, null)
+                actualUpdater.updateActual(tripId, timestamp, null)
             } else {
-                repository.updateActual(tripId, null, timestamp)
+                actualUpdater.updateActual(tripId, null, timestamp)
             }
             val msgResult = "updateActual result: $updated for tripId=$tripId"
             Log.d(TAG, msgResult)
@@ -88,12 +104,9 @@ class TransitActionWorker(
                 Log.w(TAG, msgNotFound)
                 TransitTrackerLogger.log(applicationContext, TAG, msgNotFound)
 
-                val msgFailed =
-                    "updateActual basarisiz: trip=$tripId isBoarding=$isBoarding time=$timestamp - Result.retry()"
-                Log.w(TAG, msgFailed)
-                TransitTrackerLogger.log(applicationContext, TAG, msgFailed)
-
-                return Result.retry()
+                return retryOrFailure(
+                    "updateActual basarisiz: trip=$tripId isBoarding=$isBoarding time=$timestamp"
+                )
             }
             val msgSuccess = "Yolculuk zamani islendi: trip=$tripId isBoarding=$isBoarding time=$timestamp"
             Log.d(TAG, msgSuccess)
@@ -109,10 +122,36 @@ class TransitActionWorker(
 
             Result.success()
         } catch (e: Exception) {
-            val msgError = "Firestore yazilamadi, yeniden deneniyor: ${e.message}"
-            logException(msgError, e)
-            Result.retry()
+            retryOrFailure("Firestore yazilamadi: ${e.message}", e)
         }
+    }
+
+    private fun retryOrFailure(reason: String, throwable: Throwable? = null): Result {
+        if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
+            return permanentRetryFailure(reason, throwable)
+        }
+
+        val retryMessage =
+            "$reason - Result.retry() attempt=${runAttemptCount + 1}/$MAX_RETRY_ATTEMPTS"
+        if (throwable != null) {
+            logException(retryMessage, throwable)
+        } else {
+            Log.w(TAG, retryMessage)
+            TransitTrackerLogger.log(applicationContext, TAG, retryMessage)
+        }
+        return Result.retry()
+    }
+
+    private fun permanentRetryFailure(reason: String, throwable: Throwable? = null): Result {
+        val permanentMessage =
+            "$reason - permanently failing after $runAttemptCount retry attempt(s)"
+        if (throwable != null) {
+            logException(permanentMessage, throwable)
+        } else {
+            Log.e(TAG, permanentMessage)
+            TransitTrackerLogger.log(applicationContext, TAG, permanentMessage)
+        }
+        return Result.failure(failureOutputData(permanentMessage, throwable))
     }
 
     private fun missingInputFailure(): Result {

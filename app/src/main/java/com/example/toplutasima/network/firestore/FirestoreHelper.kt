@@ -1,19 +1,20 @@
 package com.example.toplutasima.network.firestore
 
-import com.google.firebase.auth.FirebaseAuth
+import com.example.toplutasima.auth.CurrentUserProvider
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 
 object FirestoreHelper {
 
     private val db get() = FirebaseFirestore.getInstance()
-    private val uid get() = FirebaseAuth.getInstance().currentUser?.uid
-        ?: error("Kullanici oturumu yok")
+    val currentUserId: String
+        get() = CurrentUserProvider.requireUserId()
 
-    fun userRoot() = db.collection("users").document(uid)
+    fun userRoot(userId: String = currentUserId) =
+        db.collection("users").document(userId.also { require(it.isNotBlank()) })
 
-    fun tripsCollection(): CollectionReference =
-        userRoot().collection("trips")
+    fun tripsCollection(userId: String = currentUserId): CollectionReference =
+        userRoot(userId).collection("trips")
 
     fun favoritesCollection(): CollectionReference =
         userRoot().collection("favorite_stops")

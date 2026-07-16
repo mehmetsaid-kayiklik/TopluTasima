@@ -7,9 +7,7 @@ import androidx.work.Configuration
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -24,6 +22,7 @@ import com.example.toplutasima.ui.util.CrashLogger
 import com.example.toplutasima.worker.PeriodicSyncWorker
 import com.example.toplutasima.worker.TopluTasimaWorkerFactory
 import com.example.toplutasima.worker.TransitActionWorker
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,6 +33,9 @@ import java.util.concurrent.TimeUnit
 class TopluTasimaApp : Application() {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val loggedTransitWorkerTerminalStates = mutableSetOf<String>()
+    private val authStateListener = FirebaseAuth.AuthStateListener { auth ->
+        OfflineQueueStore.onAuthenticatedUserChanged(this, auth.currentUser?.uid)
+    }
 
     val database by lazy { com.example.toplutasima.data.local.AppDatabase.getDatabase(this) }
 
@@ -78,13 +80,8 @@ class TopluTasimaApp : Application() {
                 .setMinimumLoggingLevel(Log.DEBUG)
                 .build()
         )
-        val pingRequest = OneTimeWorkRequestBuilder<PeriodicSyncWorker>()
-            .build()
-        WorkManager.getInstance(this).enqueueUniqueWork(
-            "factory_selftest_ping",
-            ExistingWorkPolicy.REPLACE,
-            pingRequest
-        )
+        // The former factory_selftest_ping launch job was debugging-only and intentionally
+        // removed. Real Firestore/profile sync is scheduled solely by the unique periodic work below.
         val workManagerInstance = WorkManager.getInstance(this)
         TransitTrackerLogger.log(
             this,
@@ -95,10 +92,7 @@ class TopluTasimaApp : Application() {
         Log.d("WorkerFactory", workerFactoryMessage)
         TransitTrackerLogger.log(this, "WorkerFactory", workerFactoryMessage)
         observeTransitActionWorkerTerminalStates()
-
-        if (OfflineQueueStore.pendingCount(this) > 0) {
-            OfflineQueueStore.scheduleSync(this)
-        }
+        FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
 
         val syncRequest = PeriodicWorkRequestBuilder<PeriodicSyncWorker>(6, TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

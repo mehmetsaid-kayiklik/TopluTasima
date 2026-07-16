@@ -12,11 +12,6 @@ import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 
-internal data class ReportMetricModel(
-    val label: String,
-    val value: String
-)
-
 internal val summaryVehicleTypeEntries = listOf(
     VehicleType.BUS.key to "",
     VehicleType.SBAHN.key to "",

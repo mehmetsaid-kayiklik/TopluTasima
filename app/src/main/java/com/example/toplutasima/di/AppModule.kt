@@ -66,7 +66,7 @@ val appModule = module {
     // ── Use Case ────────────────────────────────────────────────────────────
     single { TripPlanningUseCase(get()) }
     single { StopSelectionUseCase(get(), PrefsManager) }
-    single { JourneyMatchUseCase(get()) }
+    single { JourneyMatchUseCase() }
     single { RecordSaveUseCase(get(), get()) }
     single { ManualEntryUseCase() }
     single { RmvMesafeBackfillUseCase(get()) }

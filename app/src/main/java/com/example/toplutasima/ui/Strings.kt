@@ -19,7 +19,6 @@ object S {
     fun logSubheader(l: AppLanguage) = m(l, "Yolculuk bilgilerini kaydet", "Reiseinformationen speichern", "Save trip information")
     fun manualLogTitle(l: AppLanguage) = m(l, "Manuel Kayıt", "Manuelle Aufnahme", "Manual Record")
     fun manualLogSubheader(l: AppLanguage) = m(l, "Bilgileri kendiniz girin", "Informationen manuell eingeben", "Enter info manually")
-    fun modeAuto(l: AppLanguage) = m(l, "Otomatik", "Automatisch", "Auto")
     fun modeManual(l: AppLanguage) = m(l, "Manuel", "Manuell", "Manual")
     fun directionLabel(l: AppLanguage) = m(l, "Yön", "Richtung", "Direction")
 
@@ -103,8 +102,6 @@ object S {
     // ── Status ──
     fun statusLabel(l: AppLanguage) = m(l, "Durum", "Status", "Status")
 
-    // ── All Stops (temporary) ──
-    fun allStopsTemp(l: AppLanguage) = m(l, "Tüm Duraklar (Geçici)", "Alle Haltestellen (Temp.)", "All Stops (Temp.)")
     fun lineStops(line: String, l: AppLanguage) = m(l, "$line durağı:", "$line Haltestellen:", "$line stops:")
 
     // ── Summary Screen ──
@@ -118,7 +115,6 @@ object S {
     fun weekday(l: AppLanguage) = m(l, "Hafta İçi", "Werktage", "Weekday")
     fun weekend(l: AppLanguage) = m(l, "Hafta Sonu", "Wochenende", "Weekend")
     fun busier(l: AppLanguage) = m(l, "Daha yoğun", "Stärker genutzt", "Busier")
-    fun equalDensity(l: AppLanguage) = m(l, "Dengeli", "Ausgeglichen", "Balanced")
     fun avgDistance(l: AppLanguage) = m(l, "Ort. mesafe", "Ø Entfernung", "Avg. distance")
     fun apiDistance(l: AppLanguage) = m(l, "API mesafe", "API-Distanz", "API distance")
     fun polyDistance(l: AppLanguage) = m(l, "Poly mesafe", "Poly-Distanz", "Poly distance")
@@ -146,7 +142,6 @@ object S {
     fun smartInsights(l: AppLanguage) = m(l, "Akıllı Özet", "Kurzübersicht", "Smart Insights")
     fun reportCards(l: AppLanguage) = m(l, "Rapor Kartları", "Berichtskarten", "Report Cards")
     fun monthlyTrendTitle(l: AppLanguage) = m(l, "Aylık Sefer Trendi", "Monatlicher Fahrtentrend", "Monthly Trip Trend")
-    fun monthlyTrendBusiest(l: AppLanguage) = m(l, "En Yoğun Ay", "Aktivster Monat", "Busiest Month")
     fun monthlyReport(l: AppLanguage) = m(l, "Aylık Rapor", "Monatsbericht", "Monthly Report")
     fun weeklyReport(l: AppLanguage) = m(l, "Haftalık Rapor", "Wochenbericht", "Weekly Report")
     fun reportTopLine(l: AppLanguage) = m(l, "En Çok Hat", "Top-Linie", "Top Line")
@@ -234,8 +229,6 @@ object S {
     fun settingsSectionBasic(l: AppLanguage) = m(l, "Temel", "Allgemein", "General")
     fun settingsSectionAdvanced(l: AppLanguage) = m(l, "Gelişmiş", "Erweitert", "Advanced")
     fun themeTitle(l: AppLanguage) = m(l, "Tema", "Design", "Theme")
-    fun darkThemeActive(l: AppLanguage) = m(l, "Koyu tema aktif", "Dunkles Design aktiv", "Dark theme active")
-    fun lightThemeActive(l: AppLanguage) = m(l, "Açık tema aktif", "Helles Design aktiv", "Light theme active")
     fun colorSettings(l: AppLanguage) = m(l, "Renk Ayarları", "Farbeinstellungen", "Color Settings")
     fun bgColorHex(l: AppLanguage) = m(l, "Arka Plan (HEX)", "Hintergrund (HEX)", "Background (HEX)")
     fun btnColorHex(l: AppLanguage) = m(l, "Buton Rengi (HEX)", "Buttonfarbe (HEX)", "Button Color (HEX)")
@@ -261,7 +254,6 @@ object S {
     fun statusPlanReady(count: Int, l: AppLanguage) = m(l, "Plan geldi ($count araç)", "Plan bereit ($count Fahrzeuge)", "Plan ready ($count vehicles)")
     fun statusSavingSheets(l: AppLanguage) = m(l, "Kaydediliyor...", "Wird gespeichert...", "Saving...")
     fun errorGetPlanFirst(l: AppLanguage) = m(l, "Önce plan çek", "Zuerst Plan abrufen", "Get plan first")
-    fun errorSaveFailed(l: AppLanguage) = m(l, "Kayıt hatası", "Speicherfehler", "Save error")
     fun statusSaved(l: AppLanguage) = m(l, "Kaydedildi", "Gespeichert", "Saved")
     fun statusSaving(l: AppLanguage) = m(l, "Kaydediliyor...", "Wird gespeichert...", "Saving...")
     fun statusBoarded(time: String, l: AppLanguage) = m(l, "Bindim ($time)", "Eingestiegen ($time)", "Boarded ($time)")
@@ -286,7 +278,6 @@ object S {
     fun stopUpdated(l: AppLanguage) = m(l, "Durak güncellendi", "Haltestelle aktualisiert", "Stop updated")
     fun stopUpdateFailed(l: AppLanguage) = m(l, "Durak güncellenemedi", "Aktualisierung fehlgeschlagen", "Stop update failed")
     fun savingStopChange(l: AppLanguage) = m(l, "Durak güncelleniyor...", "Haltestelle wird aktualisiert...", "Updating stop...")
-    fun enterNewStopManually(l: AppLanguage) = m(l, "Yeni durak adını girin:", "Neuen Haltestellennamen eingeben:", "Enter new stop name:")
     fun loadingStopList(l: AppLanguage) = m(l, "Durak listesi yükleniyor...", "Haltestellenliste wird geladen...", "Loading stop list...")
     fun errorStopNotFound(l: AppLanguage) = m(l, "Durak bulunamadı", "Haltestelle nicht gefunden", "Stop not found")
 
@@ -300,11 +291,7 @@ object S {
     fun recordsSearchRun(l: AppLanguage) = m(l, "Ara", "Suchen", "Search")
     fun recordsLastRecordQuick(l: AppLanguage) = m(l, "Son kayıt", "Letzter Eintrag", "Latest record")
     fun recordsGlobalSearchResults(l: AppLanguage) = m(l, "Eşleşen kayıtlar", "Treffer", "Matches")
-    fun filterMonth(l: AppLanguage) = m(l, "Ay", "Monat", "Month")
-    fun filterType(l: AppLanguage) = m(l, "Tür", "Typ", "Type")
     fun filterAll(l: AppLanguage) = m(l, "Tümü", "Alle", "All")
-    fun sortNewest(l: AppLanguage) = m(l, "Yeni → Eski", "Neu → Alt", "New → Old")
-    fun sortOldest(l: AppLanguage) = m(l, "Eski → Yeni", "Alt → Neu", "Old → New")
     fun colDate(l: AppLanguage) = m(l, "Tarih", "Datum", "Date")
     fun colDay(l: AppLanguage) = m(l, "Gün", "Tag", "Day")
     fun colType(l: AppLanguage) = m(l, "Tür", "Typ", "Type")
@@ -317,7 +304,6 @@ object S {
     fun colAlightingStop(l: AppLanguage) = m(l, "İniş Durağı", "Ausstieg", "Alighting Stop")
     fun colPlannedArr(l: AppLanguage) = m(l, "Plan. İniş", "Plan. Ank.", "Plan. Arr.")
     fun colActualArr(l: AppLanguage) = m(l, "Gerçek İniş", "Tats. Ank.", "Act. Arr.")
-    fun colDayType(l: AppLanguage) = m(l, "Gün Tipi", "Tagestyp", "Day Type")
     fun colWeather(l: AppLanguage) = m(l, "Hava", "Wetter", "Weather")
     fun colSeated(l: AppLanguage) = m(l, "Oturma", "Sitzplatz", "Seated")
     fun colPlannedDuration(l: AppLanguage) = m(l, "Plan. Süre", "Plan. Dauer", "Plan. Dur.")
@@ -326,7 +312,6 @@ object S {
     fun colTicketControl(l: AppLanguage) = m(l, "Bilet K.", "Fahrk.", "Ticket")
     fun colDistance(l: AppLanguage) = m(l, "Mesafe", "Entf.", "Dist.")
     fun colStops(l: AppLanguage) = m(l, "Durak", "Halt.", "Stops")
-    fun colId(l: AppLanguage) = m(l, "ID", "ID", "ID")
     fun plannedDurationLabel(l: AppLanguage) = m(l, "Planlanan Süre", "Geplante Dauer", "Planned Duration")
     fun actualDurationLabel(l: AppLanguage) = m(l, "Gerçek süre", "Tatsächliche Dauer", "Actual Duration")
     fun editRecord(l: AppLanguage) = m(l, "Kaydı Düzenle", "Eintrag bearbeiten", "Edit Record")
@@ -335,12 +320,7 @@ object S {
     fun save(l: AppLanguage) = m(l, "Kaydet", "Speichern", "Save")
     fun cancel(l: AppLanguage) = m(l, "İptal", "Abbrechen", "Cancel")
     fun noRecords(l: AppLanguage) = m(l, "Kayıt bulunamadı", "Keine Einträge gefunden", "No records found")
-    fun recordDeleted(l: AppLanguage) = m(l, "Kayıt silindi", "Eintrag gelöscht", "Record deleted")
-    fun recordUpdated(l: AppLanguage) = m(l, "Kayıt güncellendi", "Eintrag aktualisiert", "Record updated")
     fun yes(l: AppLanguage) = m(l, "Evet", "Ja", "Yes")
-    fun no(l: AppLanguage) = m(l, "Hayır", "Nein", "No")
-    fun happened(l: AppLanguage) = m(l, "Oldu", "Ja", "Yes")
-    fun didNotHappen(l: AppLanguage) = m(l, "Olmadı", "Nein", "No")
 
     // ── Time Migration ──
     fun stripSecondsButton(l: AppLanguage) = m(l, "Saatlerden Saniyeleri Temizle", "Sekunden aus Uhrzeiten entfernen", "Strip Seconds from Times")
@@ -401,8 +381,6 @@ object S {
 
     // ── Favorites ──
     fun favoritesTitle(l: AppLanguage) = m(l, "Favori Duraklar", "Lieblingshaltestellen", "Favorite Stops")
-    fun favBoardingStops(l: AppLanguage) = m(l, "Biniş Favorileri", "Einstieg-Favoriten", "Boarding Favorites")
-    fun favAlightingStops(l: AppLanguage) = m(l, "İniş Favorileri", "Ausstieg-Favoriten", "Alighting Favorites")
     fun addToFavorites(l: AppLanguage) = m(l, "Favorilere Ekle", "Zu Favoriten", "Add to Favorites")
     fun favLabel(l: AppLanguage) = m(l, "Etiket", "Bezeichnung", "Label")
     fun favLabelHint(l: AppLanguage) = m(l, "Ev, İş, Okul...", "Zuhause, Arbeit, Schule...", "Home, Work, School...")
@@ -411,10 +389,7 @@ object S {
     fun favUsageAlighting(l: AppLanguage) = m(l, "İniş", "Ausstieg", "Alighting")
     fun favUsageBoth(l: AppLanguage) = m(l, "Her İkisi", "Beides", "Both")
     fun favAdded(l: AppLanguage) = m(l, "Favoriye eklendi", "Zu Favoriten hinzugefügt", "Added to favorites")
-    fun favRemoved(l: AppLanguage) = m(l, "Silindi", "Entfernt", "Removed")
     fun favEmpty(l: AppLanguage) = m(l, "Henüz favori durak yok", "Noch keine Lieblingshaltestellen", "No favorite stops yet")
-    fun favManage(l: AppLanguage) = m(l, "Favori Yönetimi", "Favoritenverwaltung", "Manage Favorites")
-    fun favRename(l: AppLanguage) = m(l, "Yeniden Adlandır", "Umbenennen", "Rename")
     fun favDelete(l: AppLanguage) = m(l, "Sil", "Löschen", "Delete")
     fun favDeleteConfirm(l: AppLanguage) = m(l, "Bu favoriyi silmek istediğinize emin misiniz?", "Diesen Favoriten wirklich löschen?", "Are you sure you want to delete this favorite?")
     fun favEditTitle(l: AppLanguage) = m(l, "Favoriyi Düzenle", "Favorit bearbeiten", "Edit Favorite")
@@ -424,8 +399,6 @@ object S {
     fun nearbyLoading(l: AppLanguage) = m(l, "Konum alınıyor...", "Standort wird ermittelt...", "Getting location...")
     fun nearbyNone(l: AppLanguage) = m(l, "Yakında durak bulunamadı", "Keine Haltestellen in der Nähe", "No stops found nearby")
     fun nearbyRefreshHint(l: AppLanguage) = m(l, "Yakındaki durakları görmek için Yenile'ye bas", "Tippe auf Aktualisieren, um nahegelegene Haltestellen zu laden", "Tap Refresh to load nearby stops")
-    fun nearbyPermissionNeeded(l: AppLanguage) = m(l, "Konum izni gerekli", "Standortberechtigung erforderlich", "Location permission required")
-    fun nearbyUse(l: AppLanguage) = m(l, "Seç", "Wählen", "Select")
     fun nearbyMeters(dist: Int, l: AppLanguage) = m(l, "${dist}m", "${dist}m", "${dist}m")
     fun nearbyRefresh(l: AppLanguage) = m(l, "Yenile", "Aktualisieren", "Refresh")
 
@@ -462,7 +435,6 @@ object S {
     fun filterTicket(l: AppLanguage) = m(l, "Bilet Kontrolü", "Fahrkartenkontrolle", "Ticket Control")
     fun filterTicketYes(l: AppLanguage) = m(l, "Kontrol Oldu", "Kontrolliert", "Checked")
     fun filterTicketNo(l: AppLanguage) = m(l, "Kontrol Olmadı", "Nicht kontrolliert", "Not Checked")
-    fun filterDelayRange(l: AppLanguage) = m(l, "Gecikme Aralığı", "Verspätungsbereich", "Delay Range")
     fun filterDelayMin(l: AppLanguage) = m(l, "Min (dk)", "Min (Min)", "Min (min)")
     fun filterDelayMax(l: AppLanguage) = m(l, "Max (dk)", "Max (Min)", "Max (min)")
     fun filterStopName(l: AppLanguage) = m(l, "Durak Adı", "Haltestellenname", "Stop Name")
@@ -473,7 +445,6 @@ object S {
     fun filterNoResultsHint(l: AppLanguage) = m(l, "Farklı filtreler deneyin veya filtreleri temizleyin", "Versuche andere Filter oder setze sie zurück", "Try different filters or clear them")
     fun filterShow(l: AppLanguage) = m(l, "Filtrele", "Filtern", "Filter")
     fun filterHide(l: AppLanguage) = m(l, "Gizle", "Ausblenden", "Hide")
-    fun filterActiveCount(count: Int, l: AppLanguage) = m(l, "$count aktif filtre", "$count aktive Filter", "$count active filters")
 
     // ── Data Export ──
     fun exportTitle(l: AppLanguage) = m(l, "Dışa Aktar", "Exportieren", "Export")
@@ -487,12 +458,10 @@ object S {
 
     // ── Incomplete Records ──
     fun incompleteTitle(l: AppLanguage) = m(l, "Eksik Kayıtlar", "Unvollständige Einträge", "Incomplete Records")
-    fun incompleteCount(count: Int, l: AppLanguage) = m(l, "$count eksik", "$count unvollständig", "$count incomplete")
     fun incompleteDesc(l: AppLanguage) = m(l, "Gerçek biniş veya iniş saati eksik", "Tatsächliche Ein-/Ausstiegszeit fehlt", "Actual boarding or alighting time missing")
     fun incompleteMissingDep(l: AppLanguage) = m(l, "Gerçek biniş eksik", "Tatsächliche Abfahrt fehlt", "Actual departure missing")
     fun incompleteMissingArr(l: AppLanguage) = m(l, "Gerçek iniş eksik", "Tatsächliche Ankunft fehlt", "Actual arrival missing")
     fun incompleteMissingBoth(l: AppLanguage) = m(l, "Her iki saat eksik", "Beide Zeiten fehlen", "Both times missing")
-    fun incompleteTapToComplete(l: AppLanguage) = m(l, "Tamamlamak için dokun", "Zum Vervollständigen tippen", "Tap to complete")
     fun incompleteShowAll(l: AppLanguage) = m(l, "Tümünü Göster", "Alle anzeigen", "Show All")
     fun incompleteHide(l: AppLanguage) = m(l, "Gizle", "Ausblenden", "Hide")
 
@@ -502,19 +471,11 @@ object S {
     fun dataHealthRunning(l: AppLanguage) = m(l, "Kontrol ediliyor...", "Wird geprüft...", "Checking...")
     fun dataHealthNoIssues(l: AppLanguage) = m(l, "Sorun bulunamadı!", "Keine Probleme gefunden!", "No issues found!")
     fun dataHealthIssuesFound(count: Int, l: AppLanguage) = m(l, "$count sorun bulundu", "$count Probleme gefunden", "$count issues found")
-    fun healthDuplicate(l: AppLanguage) = m(l, "Yinelenen Kayıtlar", "Duplikate", "Duplicates")
-    fun healthMissingField(l: AppLanguage) = m(l, "Eksik Alanlar", "Fehlende Felder", "Missing Fields")
-    fun healthBadDate(l: AppLanguage) = m(l, "Bozuk Tarih", "Ungültiges Datum", "Bad Date")
-    fun healthBadTime(l: AppLanguage) = m(l, "Bozuk Saat", "Ungültige Zeit", "Bad Time")
-    fun healthInconsistentDuration(l: AppLanguage) = m(l, "Tutarsız Süre", "Inkonsistente Dauer", "Inconsistent Duration")
-    fun healthMissingDerived(l: AppLanguage) = m(l, "Eksik Türetilmiş Alan", "Fehlende abgeleitete Felder", "Missing Derived Fields")
-    fun healthAbnormalDelay(l: AppLanguage) = m(l, "Anormal Gecikme", "Abnormale Verspätung", "Abnormal Delay")
 
     // ── Monthly Comparison ──
     fun tabComparison(l: AppLanguage) = m(l, "Karşılaştırma", "Vergleich", "Comparison")
     fun comparisonTitle(l: AppLanguage) = m(l, "Aylık Karşılaştırma", "Monatsvergleich", "Monthly Comparison")
     fun comparisonPrevMonth(l: AppLanguage) = m(l, "Önceki Ay", "Vorheriger Monat", "Previous Month")
-    fun comparisonCurrentMonth(l: AppLanguage) = m(l, "Bu Ay", "Dieser Monat", "This Month")
     fun comparisonNoData(l: AppLanguage) = m(l, "Karşılaştırma için önceki ay verisi yok", "Keine Vormonatsdaten zum Vergleichen", "No previous month data for comparison")
     fun comparisonLoading(l: AppLanguage) = m(l, "Önceki ay yükleniyor...", "Vormonat wird geladen...", "Loading previous month...")
 
@@ -534,7 +495,6 @@ object S {
     fun streakLongest(l: AppLanguage) = m(l, "En Uzun Seri", "Längste Serie", "Longest Streak")
     fun streakActiveDays(l: AppLanguage) = m(l, "Aktif Gün", "Aktive Tage", "Active Days")
     fun streakDays(l: AppLanguage) = m(l, "gün", "Tage", "days")
-    fun streakNone(l: AppLanguage) = m(l, "Henüz seri yok", "Noch keine Serie", "No streak yet")
 
     // ── Ortak Yardımcı İfadeler ──
     fun delete(l: AppLanguage) = m(l, "Sil", "Löschen", "Delete")
@@ -545,32 +505,24 @@ object S {
     fun personalTitle(l: AppLanguage) = m(l, "Kişisel Binişler", "Persönliche Fahrten", "Personal Trips")
     fun personalVehicleType(l: AppLanguage) = m(l, "Araç Türü", "Fahrzeugtyp", "Vehicle Type")
     fun personalPlate(l: AppLanguage) = m(l, "Plaka", "Kennzeichen", "Plate")
-    fun personalDriver(l: AppLanguage) = m(l, "Sürücü Ben miydim?", "War ich der Fahrer?", "Was I the driver?")
-    fun personalPassengerCount(l: AppLanguage) = m(l, "Yolcu Sayısı", "Fahrgastzahl", "Passenger Count")
     fun personalBindim(l: AppLanguage) = m(l, "Bindim", "Eingestiegen", "Boarded")
     fun personalIndim(l: AppLanguage) = m(l, "İndim", "Ausgestiegen", "Alighted")
     fun personalFrom(l: AppLanguage) = m(l, "Kalkış Yeri", "Abfahrtsort", "Departure Place")
     fun personalTo(l: AppLanguage) = m(l, "Varış Yeri", "Ankunftsort", "Arrival Place")
-    fun personalDistance(l: AppLanguage) = m(l, "Yol Mesafesi", "Wegstrecke", "Road Distance")
-    fun personalDuration(l: AppLanguage) = m(l, "Süre", "Dauer", "Duration")
     fun personalStatusPending(l: AppLanguage) = m(l, "Beklemede", "Wartend", "Pending")
     fun personalStatusActive(l: AppLanguage) = m(l, "Sürüş Devam Ediyor", "Fahrt läuft", "Trip Active")
     fun personalStatusDone(l: AppLanguage) = m(l, "Tamamlandı", "Abgeschlossen", "Completed")
     fun personalLocating(l: AppLanguage) = m(l, "Konum alınıyor...", "Standort wird ermittelt...", "Getting location...")
-    fun personalLocationFailed(l: AppLanguage) = m(l, "Konum alınamadı", "Standort nicht verfügbar", "Location unavailable")
     fun personalAdd(l: AppLanguage) = m(l, "Biniş Ekle", "Fahrt hinzufügen", "Add Trip")
     fun personalSummaryTotal(l: AppLanguage) = m(l, "Toplam Biniş", "Gesamte Fahrten", "Total Trips")
-    fun personalSummaryTopType(l: AppLanguage) = m(l, "En Sık Araç", "Häufigstes Fahrzeug", "Most Used")
     fun personalSummaryTotalDist(l: AppLanguage) = m(l, "Toplam Mesafe", "Gesamtstrecke", "Total Distance")
     fun personalDeleteConfirm(l: AppLanguage) = m(l, "Bu kaydı silmek istediğinize emin misiniz?", "Soll dieser Eintrag gelöscht werden?", "Delete this trip record?")
-    fun personalNotifTitle(l: AppLanguage) = m(l, "Sürüş kaydediliyor", "Fahrt wird aufgezeichnet", "Recording trip")
     fun personalWaypointInterval(l: AppLanguage) = m(l, "Waypoint Aralığı", "Wegpunkt-Intervall", "Waypoint Interval")
     fun personalSettingsCard(l: AppLanguage) = m(l, "Kişisel Biniş Ayarları", "Persönliche Fahrteinstellungen", "Personal Trip Settings")
     fun personalSec(l: AppLanguage) = m(l, "sn", "Sek.", "sec")
     fun personalMin(l: AppLanguage) = m(l, "dk", "Min.", "min")
     fun personalDepartureTime(l: AppLanguage) = m(l, "Kalkış Saati", "Abfahrtszeit", "Departure Time")
     fun personalArrivalTime(l: AppLanguage) = m(l, "Varış Saati", "Ankunftszeit", "Arrival Time")
-    fun personalRecordsHint(l: AppLanguage) = m(l, "Geçmiş binişler \u2192 Kayıtlar sekmesindeki Kişisel butonu", "Vergangene Fahrten im Reiter Kişisel", "Past trips in Records tab")
 
     // Araç türleri
     val personalVehicleOptions = listOf(
@@ -612,8 +564,6 @@ object S {
     fun autoActualAuto(l: AppLanguage) = m(l, "Otomatik", "Automatisch", "Auto")
     fun autoActualModeDesc(l: AppLanguage) = m(l, "Otomatik modda iniş durağına yaklaştığında İndim saati yazılır; biniş tarafı GPS eşleştirme onayıyla ilerler.", "Im Automatikmodus wird beim Annähern an die Ausstiegshaltestelle die Ausstiegszeit gespeichert; Einstieg läuft über GPS-Abgleich.", "Auto mode records alighting near the destination stop; boarding still goes through GPS match confirmation.")
 
-    // ── Sonraki segment bekleniyor ──
-    fun transitWaitingNextSegment(l: AppLanguage) = m(l, "Sonraki aktarma bekleniyor...", "Warte auf nächsten Anschluss...", "Waiting for next connection...")
 
     fun diagnosticsTitle(l: AppLanguage) = m(l, "Tanılama ve Yerel Veri", "Diagnose und lokale Daten", "Diagnostics and Local Data")
     fun offlineQueueStatus(count: Int, l: AppLanguage) = m(l, "Bekleyen offline işlem: $count", "Ausstehende Offline-Aktionen: $count", "Pending offline actions: $count")
@@ -621,60 +571,15 @@ object S {
     fun offlineQueueClear(l: AppLanguage) = m(l, "Kuyruğu temizle", "Warteschlange leeren", "Clear queue")
     fun stopCacheStatus(count: Int, l: AppLanguage) = m(l, "Durak arama cache: $count sorgu", "Haltestellen-Cache: $count Suchen", "Stop search cache: $count queries")
     fun stopCacheClear(l: AppLanguage) = m(l, "Durak cache temizle", "Haltestellen-Cache leeren", "Clear stop cache")
-    fun noCrashReport(l: AppLanguage) = m(l, "Kayıtlı çökme raporu yok", "Kein Absturzbericht gespeichert", "No crash report saved")
-    fun lastCrashReport(l: AppLanguage) = m(l, "Son hata raporu", "Letzter Fehlerbericht", "Latest error report")
-    fun clearCrashReport(l: AppLanguage) = m(l, "Hata raporunu temizle", "Fehlerbericht löschen", "Clear error report")
 
     fun personalSummaryAvgDuration(l: AppLanguage) = m(l, "Ort. Süre", "Ø Dauer", "Avg. Duration")
     fun personalSummaryMonthly(l: AppLanguage) = m(l, "Aylık Kırılım", "Monatliche Aufschlüsselung", "Monthly Breakdown")
 
-    // ── Profil Yedeği ──
-    fun profileBackupSectionTitle(l: AppLanguage) = m(l, "Profil Yedeği", "Profil-Backup", "Profile Backup")
-    fun profileBackupDesc(l: AppLanguage) = m(l, "Profil ve yanıma oturan kişi bilgileri sadece bu cihazda saklanır. Şifreli dosya ile yedekleyebilirsiniz.", "Profil- und Sitzplatzdaten werden nur auf diesem Gerät gespeichert. Sie können sie als verschlüsselte Datei sichern.", "Profile and seatmate details are only stored on this device. You can back them up as an encrypted file.")
-    fun profileExportButton(l: AppLanguage) = m(l, "Yedeği Dışa Aktar", "Backup exportieren", "Export Backup")
-    fun profileImportButton(l: AppLanguage) = m(l, "Yedeği İçe Aktar", "Backup importieren", "Import Backup")
-    fun profileWipeButton(l: AppLanguage) = m(l, "Tüm Profil Verilerini Sil", "Alle Profildaten löschen", "Wipe All Profile Data")
-    fun profileWipeConfirmTitle(l: AppLanguage) = m(l, "Profil Verilerini Sil", "Profildaten löschen", "Wipe Profile Data")
-    fun profileWipeConfirmText(l: AppLanguage) = m(l, "Tüm yerel profiller ve bunlara bağlı seyahat eşleşmeleri kalıcı olarak silinecektir. Seyahat kayıtlarınız silinmez. Devam etmek istiyor musunuz?", "Alle lokalen Profile und deren Verknüpfungen werden unwiderruflich gelöscht. Ihre Fahrten werden nicht gelöscht. Fortfahren?", "All local profiles and their travel associations will be permanently deleted. Your trip logs will not be deleted. Do you want to proceed?")
-    fun profilePasswordTitle(l: AppLanguage) = m(l, "Parola Belirleyin / Girin", "Passwort festlegen / eingeben", "Set / Enter Password")
-    fun profilePasswordExportDesc(l: AppLanguage) = m(l, "Yedek dosyasını şifrelemek için en az 4 karakterli bir parola girin. Bu parolayı unutursanız yedek geri yüklenemez!", "Gib ein Passwort mit mindestens 4 Zeichen ein, um das Backup zu verschlüsseln. Wenn du dieses Passwort vergisst, kann das Backup nicht wiederhergestellt werden!", "Enter a password of at least 4 characters to encrypt the backup file. If you forget this password, the backup cannot be restored!")
-    fun profilePasswordImportDesc(l: AppLanguage) = m(l, "Yedek dosyasını çözmek için şifreleme parolasını girin.", "Gib das Passwort ein, um die Backup-Datei zu entschlüsseln.", "Enter the password to decrypt the backup file.")
-    fun profileImportSuccessTitle(l: AppLanguage) = m(l, "İçe Aktarma Tamamlandı", "Import abgeschlossen", "Import Completed")
-    fun profileImportSuccessText(addedP: Int, updatedP: Int, addedL: Int, updatedL: Int, skippedL: Int, l: AppLanguage) = m(
-        l,
-        "Yedek başarıyla içe aktarıldı:\n• Eklenen Profil: $addedP\n• Güncellenen Profil: $updatedP\n• Eklenen Bağlantı: $addedL\n• Güncellenen Bağlantı: $updatedL\n• Atlanan Yetim Bağlantı: $skippedL",
-        "Backup erfolgreich importiert:\n• Profile hinzugefügt: $addedP\n• Profile aktualisiert: $updatedP\n• Verbindungen hinzugefügt: $addedL\n• Verbindungen aktualisiert: $updatedL\n• Übersprungene verwaiste Verbindungen: $skippedL",
-        "Backup successfully imported:\n• Profiles added: $addedP\n• Profiles updated: $updatedP\n• Links added: $addedL\n• Links updated: $updatedL\n• Skipped orphan links: $skippedL"
-    )
-    fun profileErrorTitle(l: AppLanguage) = m(l, "Hata Oluştu", "Fehler aufgetreten", "Error Occurred")
-    fun profilePasswordHint(l: AppLanguage) = m(l, "Parola", "Passwort", "Password")
 
-    fun profileManagementTitle(l: AppLanguage) = m(l, "Yolculuk Arkadaşları", "Mitreisende", "Travel Companions")
-    fun profileManagementDesc(l: AppLanguage) = m(l, "Yolculuklarda seçebileceğin kişileri oluştur, düzenle veya arşivle.", "Erstelle, bearbeite oder archiviere Personen, die du bei Fahrten auswählen kannst.", "Create, edit or archive people you can select on trips.")
-    fun profileManageButton(l: AppLanguage) = m(l, "Yolculuk Arkadaşlarını Yönet", "Mitreisende verwalten", "Manage Travel Companions")
 
-    fun profileAddNewTitle(l: AppLanguage) = m(l, "Yeni Kişi Ekle", "Neue Person hinzufügen", "Add New Person")
-    fun profileEditTitle(l: AppLanguage) = m(l, "Kişiyi Düzenle", "Person bearbeiten", "Edit Person")
-    fun profileFieldDisplayName(l: AppLanguage) = m(l, "Kayıtta Görünecek Ad", "Angezeigter Name", "Display Name")
-    fun profileFieldNameKind(l: AppLanguage) = m(l, "Ad Bilgisi", "Namensangabe", "Name Info")
-    fun profileFieldInfoSource(l: AppLanguage) = m(l, "Nasıl Öğrendin?", "Wie erfahren?", "How Learned?")
-    fun profileFieldBirthHint(l: AppLanguage) = m(l, "Yaş / Doğum Notu", "Alter / Geburtsnotiz", "Age / Birth Note")
-    fun profileFieldMemoryNote(l: AppLanguage) = m(l, "Kişi Notu", "Personennotiz", "Person Note")
-    fun profileWarningMemoryNote(l: AppLanguage) = m(l, "Kişi notu yerel olarak şifreli saklanır. Lütfen hassas kişisel verileri kaydederken dikkatli ol.", "Die Personennotiz wird lokal verschlüsselt gespeichert. Bitte sei vorsichtig bei der Eingabe sensibler Daten.", "Person notes are stored encrypted locally. Please be careful when saving sensitive personal data.")
 
-    fun profileNameKindNickname(l: AppLanguage) = m(l, "Takma İsim", "Spitzname", "Nickname")
-    fun profileNameKindFirstName(l: AppLanguage) = m(l, "Ad Soyad", "Vor- und Nachname", "Full Name")
-    fun profileNameKindUnknown(l: AppLanguage) = m(l, "Belirsiz", "Unklar", "Unclear")
 
-    fun profileInfoSourceAsked(l: AppLanguage) = m(l, "Kendisine Sordum", "Nachgefragt", "Asked Them")
-    fun profileInfoSourceObserved(l: AppLanguage) = m(l, "Yolculuktan Hatırlıyorum", "Von der Fahrt gemerkt", "Remembered from Trip")
-    fun profileInfoSourceUnknown(l: AppLanguage) = m(l, "Emin Değilim", "Nicht sicher", "Not Sure")
 
-    fun profileAddButton(l: AppLanguage) = m(l, "Yeni Kişi Ekle", "Person hinzufügen", "Add Person")
-    fun profileNoProfilesYet(l: AppLanguage) = m(l, "Henüz kişi eklenmemiş.", "Noch keine Personen hinzugefügt.", "No people added yet.")
-    fun profileBirthHintPrefix(l: AppLanguage) = m(l, "Yaş / Doğum Notu", "Alter / Geburtsnotiz", "Age / Birth Note")
-    fun profileShareWithTransitTitle(l: AppLanguage) = m(l, "Yolculuklarda seçilebilir", "Bei Fahrten auswählbar", "Selectable on Trips")
-    fun profileShareWithTransitDesc(l: AppLanguage) = m(l, "Biniş kayıtlarında bu kişiyi yolculuk arkadaşı olarak seçebilirsin.", "Du kannst diese Person in Fahrtprotokollen als Mitreisende auswählen.", "You can select this person as a travel companion in trip records.")
 
     fun profileSelectionLabel(l: AppLanguage) = m(l, "Yolculuk Arkadaşı", "Reisebegleiter", "Travel Companion")
     fun profileNone(l: AppLanguage) = m(l, "Hiçbiri", "Keine", "None")
