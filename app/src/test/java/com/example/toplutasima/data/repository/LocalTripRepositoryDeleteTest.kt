@@ -38,4 +38,34 @@ class LocalTripRepositoryDeleteTest {
 
         assertEquals(listOf("remote", "local"), calls)
     }
+
+    @Test
+    fun `receipt path deletes locally before queueing cloud delete`() = runBlocking {
+        val calls = mutableListOf<String>()
+
+        deleteLocalTripThenQueue(
+            deleteLocal = { calls += "local" },
+            enqueueDelete = { calls += "queue" }
+        )
+
+        assertEquals(listOf("local", "queue"), calls)
+    }
+
+    @Test
+    fun `receipt path does not queue when local delete fails`() = runBlocking {
+        val localFailure = IllegalStateException("Room unavailable")
+        var queueCalled = false
+
+        try {
+            deleteLocalTripThenQueue(
+                deleteLocal = { throw localFailure },
+                enqueueDelete = { queueCalled = true }
+            )
+            fail("Expected local failure")
+        } catch (actual: IllegalStateException) {
+            assertSame(localFailure, actual)
+        }
+
+        assertFalse(queueCalled)
+    }
 }

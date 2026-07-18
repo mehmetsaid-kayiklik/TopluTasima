@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -240,5 +241,137 @@ class OfflineQueueStoreTest {
                     logItem.msg.contains("currentUid=user-B")
             }
         )
+    }
+
+    @Test
+    fun `queue lifecycle callbacks identify retry and success by record`() = runBlocking {
+        val succeeds = OfflineQueueStore.QueuedAction(
+            id = "queue-success",
+            userId = "user-A",
+            type = "updateRecord",
+            recordId = "record-success",
+            payload = "{}"
+        )
+        val retries = OfflineQueueStore.QueuedAction(
+            id = "queue-retry",
+            userId = "user-A",
+            type = "updateRecord",
+            recordId = "record-retry",
+            payload = "{}"
+        )
+        val storedActions = AtomicReference(listOf(succeeds, retries))
+        val processing = mutableListOf<String>()
+        val processed = mutableListOf<String>()
+        val failed = mutableListOf<String>()
+
+        val synced = OfflineQueueStore.drainQueue(
+            currentUserId = "user-A",
+            loadActions = storedActions::get,
+            saveActions = storedActions::set,
+            processAction = { action ->
+                if (action.id == retries.id) throw IOException("offline")
+            },
+            onProcessing = { processing += it.recordId },
+            onProcessed = { processed += it.recordId },
+            onProcessFailed = { action, _ -> failed += action.recordId }
+        )
+
+        assertEquals(1, synced)
+        assertEquals(listOf("record-success", "record-retry"), processing)
+        assertEquals(listOf("record-success"), processed)
+        assertEquals(listOf("record-retry"), failed)
+        assertEquals(listOf(retries), storedActions.get())
+    }
+
+    @Test
+    fun `delete dominates create and a later update for the same record`() = runBlocking {
+        val create = OfflineQueueStore.QueuedAction(
+            id = "create",
+            userId = "user-A",
+            type = "saveTrip",
+            recordId = "record-1",
+            payload = "{}",
+            createdAt = 100L
+        )
+        val delete = OfflineQueueStore.QueuedAction(
+            id = "delete",
+            userId = "user-A",
+            type = "deleteTrip",
+            recordId = "record-1",
+            payload = "{\"firestoreDocId\":\"document-1\"}",
+            createdAt = 200L
+        )
+        val lateUpdate = OfflineQueueStore.QueuedAction(
+            id = "late-update",
+            userId = "user-A",
+            type = "updateRecord",
+            recordId = "record-1",
+            payload = "{}",
+            createdAt = 300L
+        )
+        val storedActions = AtomicReference(listOf(create, delete, lateUpdate))
+        val processed = mutableListOf<String>()
+
+        val synced = OfflineQueueStore.drainQueue(
+            currentUserId = "user-A",
+            loadActions = storedActions::get,
+            saveActions = storedActions::set,
+            processAction = { processed += it.id }
+        )
+
+        assertEquals(1, synced)
+        assertEquals(listOf("delete"), processed)
+        assertTrue(storedActions.get().isEmpty())
+    }
+
+    @Test
+    fun `duplicate deletes are coalesced idempotently`() = runBlocking {
+        val olderDelete = OfflineQueueStore.QueuedAction(
+            id = "delete-old",
+            userId = "user-A",
+            type = "deleteTrip",
+            recordId = "record-1",
+            payload = "{\"firestoreDocId\":\"document-1\"}",
+            createdAt = 100L
+        )
+        val newerDelete = olderDelete.copy(id = "delete-new", createdAt = 200L)
+        val storedActions = AtomicReference(listOf(olderDelete, newerDelete))
+        val processed = mutableListOf<String>()
+
+        OfflineQueueStore.drainQueue(
+            currentUserId = "user-A",
+            loadActions = storedActions::get,
+            saveActions = storedActions::set,
+            processAction = { processed += it.id }
+        )
+
+        assertEquals(listOf("delete-new"), processed)
+        assertTrue(storedActions.get().isEmpty())
+    }
+
+    @Test
+    fun `cancellation is rethrown and pending delete remains queued`() = runBlocking {
+        val delete = OfflineQueueStore.QueuedAction(
+            id = "delete-1",
+            userId = "user-A",
+            type = "deleteTrip",
+            recordId = "record-1",
+            payload = "{\"firestoreDocId\":\"document-1\"}"
+        )
+        val storedActions = AtomicReference(listOf(delete))
+
+        try {
+            OfflineQueueStore.drainQueue(
+                currentUserId = "user-A",
+                loadActions = storedActions::get,
+                saveActions = storedActions::set,
+                processAction = { throw CancellationException("cancelled") }
+            )
+            fail("Expected cancellation")
+        } catch (_: CancellationException) {
+            // Expected: cancellation is not converted into a retry/domain failure.
+        }
+
+        assertEquals(listOf(delete), storedActions.get())
     }
 }

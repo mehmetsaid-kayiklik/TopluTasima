@@ -49,7 +49,9 @@ object RecordRowMapper {
             originalRecord = rec,
             profileId = profileId,
             profileName = profileName,
-            seatmateNote = seatmateNote
+            seatmateNote = seatmateNote,
+            localRecordId = rec["id"]?.toString().orEmpty(),
+            firestoreDocumentId = rec["firestoreDocId"]?.toString().orEmpty()
         )
     }
 }

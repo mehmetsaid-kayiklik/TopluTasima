@@ -9,13 +9,20 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.toplutasima.auth.CurrentUserProvider
+import com.example.toplutasima.network.firestore.FirestoreHelper
 import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.sync.TransitOfflineQueueStatusAdapter
+import com.example.toplutasima.transit.sync.TransitDeleteDisposition
+import com.example.toplutasima.transit.sync.TransitSyncStatusStore
 import com.example.toplutasima.worker.OfflineSyncWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 import java.io.IOException
 import java.security.GeneralSecurityException
@@ -28,6 +35,8 @@ object OfflineQueueStore {
     private const val TYPE_SAVE_TRIP = "saveTrip"
     private const val TYPE_UPDATE_ACTUAL = "updateActual"
     private const val TYPE_UPDATE_RECORD = "updateRecord"
+    private const val TYPE_DELETE_TRIP = "deleteTrip"
+    private const val KEY_DELETE_FIRESTORE_DOC_ID = "firestoreDocId"
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val tripRemoteDataSource by lazy { FirestoreTripRemoteDataSource() }
     // WorkManager and queue callers run in the app process; these guards coordinate that
@@ -43,7 +52,19 @@ object OfflineQueueStore {
         val recordId: String = "",
         val payload: String,
         val createdAt: Long = System.currentTimeMillis()
-    )
+    ) {
+        val isDeleteAction: Boolean
+            get() = type == TYPE_DELETE_TRIP
+
+        val deleteFirestoreDocId: String?
+            get() = if (!isDeleteAction) {
+                null
+            } else {
+                runCatching {
+                    JSONObject(payload).optString(KEY_DELETE_FIRESTORE_DOC_ID).takeIf { it.isNotBlank() }
+                }.getOrNull()
+            }
+    }
 
     fun pendingCount(context: Context): Int = synchronized(queueStateLock) {
         val currentUserId = CurrentUserProvider.currentUserIdOrNull() ?: return@synchronized 0
@@ -122,6 +143,71 @@ object OfflineQueueStore {
         )
     }
 
+    fun enqueueDeleteTrip(
+        context: Context,
+        recordId: String,
+        firestoreDocId: String?,
+        userId: String = CurrentUserProvider.requireUserId()
+    ): QueuedAction {
+        require(recordId.isNotBlank()) { "Offline delete recordId must not be blank" }
+        return enqueue(
+            context = context,
+            action = QueuedAction(
+                userId = userId,
+                type = TYPE_DELETE_TRIP,
+                recordId = recordId,
+                payload = JSONObject(
+                    mapOf(KEY_DELETE_FIRESTORE_DOC_ID to firestoreDocId.orEmpty())
+                ).toString()
+            )
+        )
+    }
+
+    fun retryDelete(context: Context, userId: String, recordId: String): Boolean {
+        if (userId.isBlank() || recordId.isBlank()) return false
+        if (CurrentUserProvider.currentUserIdOrNull() != userId) return false
+        val existing = synchronized(queueStateLock) {
+            load(context).lastOrNull {
+                it.userId == userId && it.recordId == recordId && it.isDeleteAction
+            }
+        }
+        if (existing != null) {
+            TransitOfflineQueueStatusAdapter.onQueued(context, existing)
+            scheduleSync(context)
+            return true
+        }
+        val tombstone = TransitSyncStatusStore.get(context)
+            .deletionTombstonesForUser(userId)
+            .firstOrNull { it.recordId == recordId }
+            ?: return false
+        enqueueDeleteTrip(
+            context = context,
+            recordId = recordId,
+            firestoreDocId = tombstone.deleteMetadata?.firestoreDocId,
+            userId = userId
+        )
+        return true
+    }
+
+    fun discardPendingDelete(context: Context, userId: String, recordId: String): Boolean {
+        if (userId.isBlank() || recordId.isBlank()) return false
+        if (CurrentUserProvider.currentUserIdOrNull() != userId) return false
+        val removed = synchronized(queueStateLock) {
+            val actions = load(context)
+            val remaining = actions.filterNot {
+                it.userId == userId && it.recordId == recordId && it.isDeleteAction
+            }
+            if (remaining.size != actions.size) save(context, remaining)
+            remaining.size != actions.size
+        }
+        TransitSyncStatusStore.get(context).markDeleteLocalOnly(
+            userId = userId,
+            recordId = recordId,
+            detail = "Cloud delete discarded by user"
+        )
+        return removed
+    }
+
     fun scheduleSync(context: Context) {
         val request = OneTimeWorkRequestBuilder<OfflineSyncWorker>()
             .setConstraints(
@@ -141,13 +227,38 @@ object OfflineQueueStore {
 
     fun onAuthenticatedUserChanged(context: Context, userId: String?) {
         val appContext = context.applicationContext
+        TransitOfflineQueueStatusAdapter.onUserChanged(appContext, userId)
         WorkManager.getInstance(appContext).cancelUniqueWork(UNIQUE_WORK_NAME)
         android.util.Log.i(TAG, "Offline queue user changed; uid=${userId ?: "signed-out"}")
         if (!userId.isNullOrBlank() &&
-            CurrentUserProvider.currentUserIdOrNull() == userId &&
-            pendingCount(appContext) > 0
+            CurrentUserProvider.currentUserIdOrNull() == userId
         ) {
-            scheduleSync(appContext)
+            restorePendingDeleteActions(appContext, userId)
+            if (pendingCount(appContext) > 0) scheduleSync(appContext)
+        }
+    }
+
+    private fun restorePendingDeleteActions(context: Context, userId: String) {
+        val tombstones = TransitSyncStatusStore.get(context)
+            .deletionTombstonesForUser(userId)
+            .filter {
+                it.deleteMetadata?.disposition == TransitDeleteDisposition.PENDING_REMOTE
+            }
+        if (tombstones.isEmpty()) return
+        val existingRecordIds = synchronized(queueStateLock) {
+            load(context)
+                .filter { it.userId == userId && it.isDeleteAction }
+                .mapTo(mutableSetOf()) { it.recordId }
+        }
+        tombstones.forEach { state ->
+            if (state.recordId !in existingRecordIds) {
+                enqueueDeleteTrip(
+                    context = context,
+                    recordId = state.recordId,
+                    firestoreDocId = state.deleteMetadata?.firestoreDocId,
+                    userId = userId
+                )
+            }
         }
     }
 
@@ -160,7 +271,16 @@ object OfflineQueueStore {
             currentUserId = currentUserId,
             loadActions = { load(context) },
             saveActions = { actions -> save(context, actions) },
-            processAction = { action -> processAction(action, currentUserId) }
+            processAction = { action -> processAction(action, currentUserId) },
+            onProcessing = { action ->
+                TransitOfflineQueueStatusAdapter.onSyncing(context, action)
+            },
+            onProcessed = { action ->
+                TransitOfflineQueueStatusAdapter.onSynced(context, action)
+            },
+            onProcessFailed = { action, error ->
+                TransitOfflineQueueStatusAdapter.onTemporaryFailure(context, action, error)
+            }
         )
     }
 
@@ -171,7 +291,10 @@ object OfflineQueueStore {
         processAction: suspend (QueuedAction) -> Unit,
         onSuperseded: (QueuedAction, QueuedAction) -> Unit = ::logSupersededAction,
         onMismatched: (QueuedAction, String) -> Unit = ::logMismatchedAction,
-        onOwnerless: (QueuedAction) -> Unit = ::logOwnerlessAction
+        onOwnerless: (QueuedAction) -> Unit = ::logOwnerlessAction,
+        onProcessing: (QueuedAction) -> Unit = {},
+        onProcessed: (QueuedAction) -> Unit = {},
+        onProcessFailed: (QueuedAction, Throwable) -> Unit = { _, _ -> }
     ): Int = drainMutex.withLock {
         require(currentUserId.isNotBlank()) { "currentUserId must not be blank" }
         val actions = synchronized(queueStateLock) { loadActions() }
@@ -185,11 +308,16 @@ object OfflineQueueStore {
         var synced = 0
         val remaining = mutableListOf<QueuedAction>()
         for (action in actionsToProcess) {
+            onProcessing(action)
             try {
                 processAction(action)
                 synced++
-            } catch (_: Exception) {
+                onProcessed(action)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
                 remaining += action
+                onProcessFailed(action, error)
             }
         }
 
@@ -215,7 +343,13 @@ object OfflineQueueStore {
             val recordId = action.recordId.takeIf { it.isNotBlank() } ?: return@forEachIndexed
             val candidate = IndexedQueuedAction(index, action)
             val current = latestByRecordId[recordId]
-            if (current == null || candidate.isNewerThan(current)) {
+            val shouldReplace = when {
+                current == null -> true
+                current.action.isDeleteAction && !candidate.action.isDeleteAction -> false
+                !current.action.isDeleteAction && candidate.action.isDeleteAction -> true
+                else -> candidate.isNewerThan(current)
+            }
+            if (shouldReplace) {
                 latestByRecordId[recordId] = candidate
             }
         }
@@ -285,6 +419,24 @@ object OfflineQueueStore {
                 fields = action.payload.toAnyMap().filterValues { it != null }.mapValues { it.value as Any },
                 userId = action.userId
             )
+            TYPE_DELETE_TRIP -> {
+                val documentIds = listOfNotNull(
+                    action.deleteFirestoreDocId,
+                    action.recordId.takeIf { it.isNotBlank() }
+                ).distinct()
+                documentIds.forEach { documentId ->
+                    check(tripRemoteDataSource.deleteTrip(documentId)) {
+                        "Firestore trip delete failed for document $documentId"
+                    }
+                }
+                val legacyMatches = FirestoreHelper.tripsCollection(action.userId)
+                    .whereEqualTo("id", action.recordId)
+                    .get()
+                    .await()
+                legacyMatches.documents.forEach { document ->
+                    document.reference.delete().await()
+                }
+            }
             else -> Unit
         }
     }
@@ -296,12 +448,37 @@ object OfflineQueueStore {
         }
     }
 
-    private fun enqueue(context: Context, action: QueuedAction) {
+    private fun enqueue(context: Context, action: QueuedAction): QueuedAction {
         require(action.userId.isNotBlank()) { "Offline action userId must not be blank" }
-        synchronized(queueStateLock) {
-            save(context, load(context) + action)
+        if (!action.isDeleteAction &&
+            TransitFeatureFlags.SYNC_DELETE_RECEIPTS &&
+            TransitSyncStatusStore.get(context).isDeletionTombstoned(action.userId, action.recordId)
+        ) {
+            android.util.Log.w(
+                TAG,
+                "Ignoring ${action.type} for tombstoned transit record ${action.recordId}"
+            )
+            return action
         }
+        val effectiveAction = synchronized(queueStateLock) {
+            val actions = load(context)
+            val pendingDelete = actions.lastOrNull {
+                it.userId == action.userId &&
+                    it.recordId == action.recordId &&
+                    it.isDeleteAction
+            }
+            when {
+                action.isDeleteAction && pendingDelete != null -> pendingDelete
+                !action.isDeleteAction && pendingDelete != null -> {
+                    logSupersededAction(action, pendingDelete)
+                    pendingDelete
+                }
+                else -> action.also { save(context, actions + it) }
+            }
+        }
+        TransitOfflineQueueStatusAdapter.onQueued(context, effectiveAction)
         scheduleSync(context)
+        return effectiveAction
     }
 
     private fun load(context: Context): List<QueuedAction> {

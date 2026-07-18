@@ -2,11 +2,14 @@ package com.example.toplutasima.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -25,6 +29,10 @@ import com.example.toplutasima.ui.screens.records.DeleteRecordConfirmDialog
 import com.example.toplutasima.ui.screens.records.EditRecordDialog
 import com.example.toplutasima.ui.screens.records.MonthListScreen
 import com.example.toplutasima.ui.screens.records.PersonalRecordsContent
+import com.example.toplutasima.ui.components.transit.TransitDeleteReceiptHost
+import com.example.toplutasima.ui.components.transit.TransitHealthIssuesSheet
+import com.example.toplutasima.domain.transit.health.TransitHealthSeverity
+import com.example.toplutasima.transit.TransitFeatureFlags
 import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import com.example.toplutasima.viewmodel.RecordsViewModel
@@ -47,6 +55,8 @@ fun RecordsScreen(
 
     // Edit dialog state
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showCorrectionConfirm by remember { mutableStateOf(false) }
+    var correctionRecordId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.loadProfileData()
@@ -68,6 +78,7 @@ fun RecordsScreen(
                 onBack = { onTogglePersonal(false) }
             )
         } else if (state.selectedMonth == null) {
+            Box(modifier = Modifier.weight(1f)) {
             // ── LEVEL 1: Month List ──
             MonthListScreen(
                 summaries = state.monthSummaries,
@@ -85,7 +96,14 @@ fun RecordsScreen(
                 onGlobalResultClick = { viewModel.setEditingRecord(it.originalRecord) },
                 onOpenLatestTransitRecord = { viewModel.openLatestTransitRecord() }
             )
+                TransitDeleteReceiptHost(
+                    onRetry = viewModel::retryDelete,
+                    onKeepLocalOnly = viewModel::keepDeleteLocalOnly,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
+                )
+            }
         } else {
+            Box(modifier = Modifier.weight(1f)) {
             // ── LEVEL 2: Day/Trip List ──
             DayListScreen(
                 monthSummary = state.selectedMonth!!,
@@ -113,8 +131,26 @@ fun RecordsScreen(
                 isExporting = state.isExporting,
                 onToggleExportDialog = { viewModel.toggleExportDialog() },
                 onExport = { format -> viewModel.exportMonth(format, context) },
-                onRefresh = { viewModel.syncAndReload() }
+                onRefresh = { viewModel.syncAndReload() },
+                healthIssueCount = state.fullHealthIssueCount,
+                healthCriticalCount = state.healthIssuesByRecordId.values.flatten()
+                    .count { it.severity == TransitHealthSeverity.CRITICAL },
+                healthCorrectionCount = state.healthCorrections.size,
+                isHealthScanning = state.isHealthScanning,
+                healthScanMessage = state.fullHealthScanMessage,
+                onScanHealth = viewModel::scanAllTransitHistory,
+                onApplyHealthCorrections = {
+                    correctionRecordId = null
+                    showCorrectionConfirm = true
+                },
+                onHealthClick = { viewModel.showHealthIssues(it.localRecordId) }
             )
+                TransitDeleteReceiptHost(
+                    onRetry = viewModel::retryDelete,
+                    onKeepLocalOnly = viewModel::keepDeleteLocalOnly,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
+                )
+            }
         }
 
         // ── Status bar (only in transit mode) ──
@@ -160,7 +196,47 @@ fun RecordsScreen(
             onDismiss = { showDeleteConfirm = false },
             onConfirm = {
                 showDeleteConfirm = false
-                state.editingRecord?.get("firestoreDocId")?.toString()?.let(viewModel::deleteRecord)
+                state.editingRecord?.let { record ->
+                    val id = record["firestoreDocId"]?.toString()?.takeIf { it.isNotBlank() }
+                        ?: record["id"]?.toString().orEmpty()
+                    viewModel.deleteRecord(id)
+                }
+            }
+        )
+    }
+
+    if (!showPersonal && TransitFeatureFlags.POST_SAVE_DATA_HEALTH) {
+        val selectedId = state.selectedHealthRecordId
+        val issues = selectedId?.let(state.healthIssuesByRecordId::get).orEmpty()
+        if (selectedId != null && issues.isNotEmpty()) {
+            TransitHealthIssuesSheet(
+                issues = issues,
+                corrections = state.healthCorrections.filter { it.localRecordId == selectedId },
+                onDismiss = { viewModel.showHealthIssues(null) },
+                onOpenRecord = viewModel::openSelectedHealthRecord,
+                onApplyCorrections = {
+                    correctionRecordId = selectedId
+                    showCorrectionConfirm = true
+                }
+            )
+        }
+    }
+
+    if (!showPersonal && showCorrectionConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCorrectionConfirm = false },
+            title = { Text("Güvenli düzeltmeleri uygula?") },
+            text = { Text("Yalnız deterministik öneriler uygulanır. Kayıtlar kullanıcı onayı olmadan değiştirilmez.") },
+            dismissButton = {
+                TextButton(onClick = { showCorrectionConfirm = false }) { Text("Vazgeç") }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCorrectionConfirm = false
+                        viewModel.applySafeHealthCorrections(correctionRecordId)
+                    }
+                ) { Text("Uygula") }
             }
         )
     }

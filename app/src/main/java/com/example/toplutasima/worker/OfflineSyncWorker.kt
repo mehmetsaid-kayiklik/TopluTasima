@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.toplutasima.data.OfflineQueueStore
+import com.example.toplutasima.transit.sync.TransitOfflineQueueStatusAdapter
 
 internal interface OfflineQueueSyncOperations {
     suspend fun drain(context: Context): Int
@@ -57,10 +58,12 @@ class OfflineSyncWorker internal constructor(
         if (runAttemptCount >= MAX_RETRY_ATTEMPTS) {
             permanentFailure(reason, throwable)
         } else {
+            TransitOfflineQueueStatusAdapter.onWorkerRetry(applicationContext, reason)
             Result.retry()
         }
 
     private fun permanentFailure(reason: String, throwable: Throwable? = null): Result {
+        TransitOfflineQueueStatusAdapter.onWorkerPermanentFailure(applicationContext, reason)
         Log.e(
             TAG,
             "$reason; permanently failing after $runAttemptCount retry attempt(s)",

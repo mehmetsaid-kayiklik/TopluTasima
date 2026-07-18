@@ -27,6 +27,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.components.RmvFooter
+import com.example.toplutasima.ui.components.transit.TransitSyncReceipt
+import com.example.toplutasima.ui.components.transit.TransitValidationSheet
+import com.example.toplutasima.domain.transit.validation.TransitValidationField
+import com.example.toplutasima.transit.TransitFeatureFlags
 import com.example.toplutasima.ui.screens.rmvlog.ActualTimesSection
 import com.example.toplutasima.ui.screens.rmvlog.AddFavoriteDialog
 import com.example.toplutasima.ui.screens.rmvlog.AdditionalInfoSection
@@ -56,6 +60,7 @@ fun RMVLogScreen(
     val personalViewModel: PersonalTripViewModel = koinViewModel()
     val personalState by personalViewModel.uiState.collectAsStateWithLifecycle()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val validationState by viewModel.validationUiState.collectAsStateWithLifecycle()
     val scroll = rememberScrollState()
     val lang = LocaleManager.currentLanguage
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -79,6 +84,23 @@ fun RMVLogScreen(
         if (state.segmentIds.isNotEmpty()) {
             viewModel.refreshTransitServiceState()
         }
+    }
+
+    LaunchedEffect(validationState.focusField) {
+        val target = validationState.focusField ?: return@LaunchedEffect
+        val scrollTarget = when (target) {
+            TransitValidationField.BOARDING_STOP,
+            TransitValidationField.ALIGHTING_STOP -> 0
+            TransitValidationField.PLANNED_DEPARTURE,
+            TransitValidationField.PLANNED_ARRIVAL,
+            TransitValidationField.SEGMENTS -> scroll.maxValue / 2
+            TransitValidationField.ACTUAL_DEPARTURE,
+            TransitValidationField.ACTUAL_ARRIVAL,
+            TransitValidationField.DISTANCE,
+            TransitValidationField.RECORD -> scroll.maxValue
+        }
+        scroll.animateScrollTo(scrollTarget)
+        viewModel.consumeValidationFocus()
     }
 
     Column(
@@ -188,6 +210,10 @@ fun RMVLogScreen(
                 PersistentStopsSection(state, lang)
             }
 
+            if (TransitFeatureFlags.SYNC_RECEIPTS && !showPersonal && state.segmentIds.isNotEmpty()) {
+                TransitSyncReceipt(recordIds = state.segmentIds)
+            }
+
             Spacer(Modifier.height(12.dp))
             RmvFooter()
             Spacer(Modifier.height(16.dp))
@@ -196,4 +222,13 @@ fun RMVLogScreen(
 
     ChangeStopDialog(state, viewModel, lang)
     AddFavoriteDialog(state, viewModel, lang)
+    if (!showPersonal) {
+        TransitValidationSheet(
+            state = validationState,
+            lang = lang,
+            onDismiss = viewModel::dismissTransitValidation,
+            onIssueSelected = viewModel::focusValidationIssue,
+            onContinueWithWarnings = viewModel::continueAfterValidationWarnings
+        )
+    }
 }

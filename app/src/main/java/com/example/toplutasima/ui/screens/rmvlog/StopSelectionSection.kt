@@ -47,9 +47,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.focus.focusRequester
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.model.UsageType
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.provenance.TransitFieldProvenanceUseCase
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.SuccessGreen
+import com.example.toplutasima.ui.components.transit.TransitSourceBadge
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -63,6 +66,7 @@ internal fun StopSelectionSection(
     destFocusRequester: FocusRequester
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val provenanceUseCase = remember { TransitFieldProvenanceUseCase() }
     // --- YAKINDAKI DURAKLAR ---
     if (hasLocationPermission) {
         Card(
@@ -239,6 +243,18 @@ internal fun StopSelectionSection(
                     }
                 }
             }
+            if (TransitFeatureFlags.PROVENANCE_BADGES && state.fromOptions.isNotEmpty()) {
+                TransitSourceBadge(
+                    provenance = provenanceUseCase.plannedRmv(
+                        fieldId = "boarding-stop-search",
+                        observedAtEpochMillis = state.fromOptionsUpdatedAtEpochMillis
+                            ?: System.currentTimeMillis(),
+                        isFromCache = state.fromOptionsFromCache
+                    ),
+                    lang = lang,
+                    fieldLabel = S.boardingStop(lang)
+                )
+            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
@@ -313,6 +329,18 @@ internal fun StopSelectionSection(
                         )
                     }
                 }
+            }
+            if (TransitFeatureFlags.PROVENANCE_BADGES && state.toOptions.isNotEmpty()) {
+                TransitSourceBadge(
+                    provenance = provenanceUseCase.plannedRmv(
+                        fieldId = "alighting-stop-search",
+                        observedAtEpochMillis = state.toOptionsUpdatedAtEpochMillis
+                            ?: System.currentTimeMillis(),
+                        isFromCache = state.toOptionsFromCache
+                    ),
+                    lang = lang,
+                    fieldLabel = S.alightingStop(lang)
+                )
             }
         }
     }

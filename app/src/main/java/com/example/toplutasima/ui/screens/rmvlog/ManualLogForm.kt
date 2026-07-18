@@ -42,11 +42,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.PaddingValues
 import com.example.toplutasima.model.VehicleType
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.provenance.TransitFieldProvenanceUseCase
 import com.example.toplutasima.ui.ErrorRed
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.WarningAmber
 import com.example.toplutasima.ui.components.TimeVisualTransformation
+import com.example.toplutasima.ui.components.transit.TransitSourceBadge
 import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -57,6 +60,8 @@ internal fun ManualLogForm(
     viewModel: com.example.toplutasima.viewmodel.RmvLogViewModel,
     lang: com.example.toplutasima.ui.AppLanguage
 ) {
+    val provenanceUseCase = remember { TransitFieldProvenanceUseCase() }
+    val manualEditedAt = remember(state.manual) { System.currentTimeMillis() }
     // 1. Tarih & Araç Card
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -65,6 +70,16 @@ internal fun ManualLogForm(
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(S.dateTime(lang) + " & " + S.vehicleTypes(lang), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (TransitFeatureFlags.PROVENANCE_BADGES) {
+                TransitSourceBadge(
+                    provenance = provenanceUseCase.manual(
+                        fieldId = "manual-transit-record",
+                        editedAtEpochMillis = manualEditedAt
+                    ),
+                    lang = lang,
+                    fieldLabel = S.statusLabel(lang)
+                )
+            }
             
             OutlinedTextField(
                 value = state.date,

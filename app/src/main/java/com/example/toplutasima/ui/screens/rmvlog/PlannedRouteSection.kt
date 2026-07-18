@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -34,6 +35,9 @@ import androidx.compose.foundation.layout.Box
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.WarningAmber
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.provenance.TransitFieldProvenanceUseCase
+import com.example.toplutasima.ui.components.transit.TransitSourceBadge
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -43,6 +47,7 @@ internal fun PlannedRouteSection(
     viewModel: RmvLogViewModel,
     lang: AppLanguage
 ) {
+            val provenanceUseCase = remember { TransitFieldProvenanceUseCase() }
             // --- PLAN BİLGİSİ ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -165,19 +170,34 @@ internal fun PlannedRouteSection(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
+                                        val displayedDistanceKm = s.distanceKm.takeIf { it > 0.0 }
+                                            ?: s.polyDistanceKm?.takeIf { it > 0.0 }
                                         Text("${S.vehicleTypeName(s.typeTr, lang)} • ${s.line}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                         Text("${s.fromStop} ${s.dep} → ${s.toStop} ${s.arr}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        if (s.distanceKm > 0 || s.stopCount > 0) {
+                                        if (displayedDistanceKm != null || s.stopCount > 0) {
                                             Text(
                                                 buildString {
                                                     if (s.stopCount > 0) append("${s.stopCount} ${S.stops(lang)}")
-                                                    if (s.distanceKm > 0) {
+                                                    if (displayedDistanceKm != null) {
                                                         if (s.stopCount > 0) append("  •  ")
-                                                        append("${String.format(java.util.Locale.US, "%.2f", s.distanceKm)} km")
+                                                        append("${String.format(java.util.Locale.US, "%.2f", displayedDistanceKm)} km")
                                                     }
                                                 },
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        if (TransitFeatureFlags.PROVENANCE_BADGES && displayedDistanceKm != null) {
+                                            TransitSourceBadge(
+                                                provenance = provenanceUseCase.segmentDistance(
+                                                    fieldId = "segment-$idx-distance",
+                                                    segment = s,
+                                                    observedAtEpochMillis = state.tripUpdatedAtEpochMillis
+                                                        ?: System.currentTimeMillis()
+                                                ),
+                                                lang = lang,
+                                                fieldLabel = "Mesafe",
+                                                modifier = Modifier.padding(top = 4.dp)
                                             )
                                         }
                                     }

@@ -11,6 +11,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
@@ -31,6 +32,9 @@ import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.SuccessGreen
 import com.example.toplutasima.ui.components.TimeVisualTransformation
+import com.example.toplutasima.ui.components.transit.TransitSourceBadge
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.provenance.TransitFieldProvenanceUseCase
 import com.example.toplutasima.viewmodel.RmvLogViewModel
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
 
@@ -93,6 +97,7 @@ internal fun DepartureSection(
     viewModel: RmvLogViewModel,
     lang: AppLanguage
 ) {
+            val provenanceUseCase = remember { TransitFieldProvenanceUseCase() }
             if (state.departures.isNotEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -144,6 +149,20 @@ internal fun DepartureSection(
                                                 fontWeight = FontWeight.SemiBold,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        if (TransitFeatureFlags.PROVENANCE_BADGES) {
+                                            TransitSourceBadge(
+                                                provenance = provenanceUseCase.departureTime(
+                                                    fieldId = "departure-time",
+                                                    departure = dep,
+                                                    observedAtEpochMillis =
+                                                        state.departuresUpdatedAtEpochMillis
+                                                            ?: System.currentTimeMillis()
+                                                ),
+                                                lang = lang,
+                                                fieldLabel = S.departure(lang),
+                                                modifier = Modifier.padding(top = 4.dp)
                                             )
                                         }
                                     }

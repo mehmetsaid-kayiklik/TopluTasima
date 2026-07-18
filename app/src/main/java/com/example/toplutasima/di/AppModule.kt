@@ -35,6 +35,7 @@ import org.koin.dsl.module
  * Uygulamanın tek Koin modülü.
  */
 val appModule = module {
+    includes(transitFeatureModule)
 
     // ── Remote Data Sources ─────────────────────────────────────────────────
     single { FirestoreTripRemoteDataSource() }
@@ -81,17 +82,37 @@ val appModule = module {
             stopSelectionUseCase = get(),
             journeyMatchUseCase = get(),
             recordSaveUseCase = get(),
+            transitRecordValidationUseCase = get(),
             manualEntryUseCase = get(),
             rmvTripRepository = get(),
             transitRecordRepository = get(),
             tripProfileLinkRepository = get(),
             tripPlanner = get(),
             nearbyManager = get(),
-            profileSyncRepository = get()
+            profileSyncRepository = get(),
+            transitRecordProvenanceStore = get()
         )
     }
-    viewModel { SummaryViewModel(androidApplication()) }
-    viewModel { RecordsViewModel(androidApplication(), get()) }
+    viewModel {
+        SummaryViewModel(
+            application = androidApplication(),
+            dataSource = get(),
+            summaryEngine = get(),
+            liveSummariesEnabled = com.example.toplutasima.transit.TransitFeatureFlags.LIVE_ROOM_FLOWS &&
+                com.example.toplutasima.transit.TransitFeatureFlags.LIVE_TRANSIT_SUMMARIES,
+            autoLoad = true
+        )
+    }
+    viewModel {
+        RecordsViewModel(
+            application = androidApplication(),
+            profileSyncRepository = get(),
+            healthUseCase = get(),
+            healthCorrectionUseCase = get(),
+            provenanceStore = get(),
+            provenanceResolver = get()
+        )
+    }
     viewModel { BulkUpdateViewModel(androidApplication(), get()) }
     viewModel { SettingsViewModel(androidApplication(), get()) }
     viewModel { PersonalTripViewModel(androidApplication(), get()) }  // Kişisel Araç

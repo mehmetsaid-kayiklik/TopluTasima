@@ -1,6 +1,9 @@
 package com.example.toplutasima.viewmodel.records
 
 import com.example.toplutasima.model.MonthSummary
+import com.example.toplutasima.domain.transit.health.TransitHealthCorrection
+import com.example.toplutasima.domain.transit.health.TransitHealthIssue
+import com.example.toplutasima.transit.provenance.TransitFieldProvenance
 import com.example.toplutasima.usecase.RecordFilterState
 
 data class RecordRowUiModel(
@@ -33,7 +36,12 @@ data class RecordRowUiModel(
     val originalRecord: Map<String, Any>,
     val profileId: String = "",
     val profileName: String = "",
-    val seatmateNote: String = ""
+    val seatmateNote: String = "",
+    /** Canonical Room record ID; sync receipts and in-memory provenance are keyed by this value. */
+    val localRecordId: String = id,
+    val firestoreDocumentId: String = "",
+    val healthIssues: List<TransitHealthIssue> = emptyList(),
+    val provenanceByField: Map<String, TransitFieldProvenance> = emptyMap()
 )
 
 data class DayGroup(
@@ -66,5 +74,12 @@ data class RecordsUiState(
     val globalSearchLoading: Boolean = false,
     val globalSearchError: String = "",
     val globalSearchResults: List<RecordRowUiModel> = emptyList(),
-    val activeProfiles: List<com.example.toplutasima.data.local.entity.ProfileEntity> = emptyList()
+    val activeProfiles: List<com.example.toplutasima.data.local.entity.ProfileEntity> = emptyList(),
+    val healthIssuesByRecordId: Map<String, List<TransitHealthIssue>> = emptyMap(),
+    val healthCorrections: List<TransitHealthCorrection> = emptyList(),
+    val selectedHealthRecordId: String? = null,
+    val isHealthScanning: Boolean = false,
+    val isApplyingHealthCorrections: Boolean = false,
+    val fullHealthScanMessage: String = "",
+    val fullHealthIssueCount: Int = 0
 )

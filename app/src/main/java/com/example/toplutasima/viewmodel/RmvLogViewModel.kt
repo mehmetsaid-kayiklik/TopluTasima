@@ -6,6 +6,10 @@ import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.toplutasima.auth.CurrentUserProvider
+import com.example.toplutasima.domain.transit.validation.TransitRecordSegmentInput
+import com.example.toplutasima.domain.transit.validation.TransitRecordValidationInput
+import com.example.toplutasima.domain.transit.validation.TransitValidationField
+import com.example.toplutasima.domain.transit.validation.ValidationIssue
 import com.example.toplutasima.data.AppEventBus
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.data.repository.ProfileSyncRepository
@@ -20,10 +24,18 @@ import com.example.toplutasima.model.VehicleType
 import com.example.toplutasima.network.RmvApiService
 import com.example.toplutasima.repository.RmvTripRepository
 import com.example.toplutasima.repository.TransitRecordRepository
+import com.example.toplutasima.repository.TripRecordMapper
 import com.example.toplutasima.repository.TripProfileLinkRepository
 import com.example.toplutasima.service.JourneyMatchForegroundService
 import com.example.toplutasima.service.TransitTripForegroundService
 import com.example.toplutasima.service.transit.TransitServiceStateStore
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.provenance.TransitFieldProvenance
+import com.example.toplutasima.transit.provenance.TransitFieldProvenanceInput
+import com.example.toplutasima.transit.provenance.TransitFieldProvenanceUseCase
+import com.example.toplutasima.transit.provenance.TransitFieldSource
+import com.example.toplutasima.transit.provenance.TransitRecordProvenanceResolver
+import com.example.toplutasima.transit.provenance.TransitRecordProvenanceStore
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.TransitRecordCalculations
@@ -33,9 +45,12 @@ import com.example.toplutasima.usecase.JourneyMatchUseCase
 import com.example.toplutasima.usecase.ManualEntryUseCase
 import com.example.toplutasima.usecase.RecordSaveUseCase
 import com.example.toplutasima.usecase.StopSelectionUseCase
+import com.example.toplutasima.usecase.transit.TransitRecordValidationUseCase
 import com.example.toplutasima.viewmodel.rmvlog.LogMode
 import com.example.toplutasima.viewmodel.rmvlog.ManualEntryState
+import com.example.toplutasima.viewmodel.rmvlog.PendingTransitSaveAction
 import com.example.toplutasima.viewmodel.rmvlog.RmvLogUiState
+import com.example.toplutasima.viewmodel.rmvlog.TransitValidationUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -57,20 +72,31 @@ class RmvLogViewModel(
     private val stopSelectionUseCase: StopSelectionUseCase,
     private val journeyMatchUseCase: JourneyMatchUseCase,
     private val recordSaveUseCase: RecordSaveUseCase,
+    private val transitRecordValidationUseCase: TransitRecordValidationUseCase,
     private val manualEntryUseCase: ManualEntryUseCase,
     private val rmvTripRepository: RmvTripRepository,
     private val transitRecordRepository: TransitRecordRepository,
     private val tripProfileLinkRepository: TripProfileLinkRepository,
     private val tripPlanner: TripPlanningUseCase,
     private val nearbyManager: com.example.toplutasima.location.NearbyStopsManager,
-    private val profileSyncRepository: ProfileSyncRepository
+    private val profileSyncRepository: ProfileSyncRepository,
+    private val transitRecordProvenanceStore: TransitRecordProvenanceStore =
+        TransitRecordProvenanceStore()
 ) : AndroidViewModel(application) {
     private companion object {
         const val DEPARTURE_REFRESH_INTERVAL_MS = 30_000L
+        val TIME_FIELDS = setOf(
+            TransitValidationField.PLANNED_DEPARTURE,
+            TransitValidationField.PLANNED_ARRIVAL,
+            TransitValidationField.ACTUAL_DEPARTURE,
+            TransitValidationField.ACTUAL_ARRIVAL,
+            TransitValidationField.SEGMENTS
+        )
     }
 
     private val prefs = application.getSharedPreferences("rmv_prefs", Context.MODE_PRIVATE)
     private val transitServiceStateStore = TransitServiceStateStore(application)
+    private val transitFieldProvenanceUseCase = TransitFieldProvenanceUseCase()
 
     private var actualTimesRefreshJob: Job? = null
     private var departureRefreshJob: Job? = null
@@ -86,6 +112,9 @@ class RmvLogViewModel(
         )
     )
     val uiState: StateFlow<RmvLogUiState> = _uiState.asStateFlow()
+
+    private val _validationUiState = MutableStateFlow(TransitValidationUiState())
+    val validationUiState: StateFlow<TransitValidationUiState> = _validationUiState.asStateFlow()
 
     private fun lang() = LocaleManager.currentLanguage
     private fun ctx(): Context = getApplication()
@@ -151,6 +180,7 @@ class RmvLogViewModel(
                     }
                     _uiState.value = latest.copy(
                         departures = mergedDepartures,
+                        departuresUpdatedAtEpochMillis = System.currentTimeMillis(),
                         selectedDeparture = selected
                     )
                 } catch (e: CancellationException) {
@@ -323,12 +353,24 @@ class RmvLogViewModel(
 
     fun clearFrom() {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(from = "", fromId = "", fromOptions = emptyList())
+        _uiState.value = _uiState.value.copy(
+            from = "",
+            fromId = "",
+            fromOptions = emptyList(),
+            fromOptionsFromCache = false,
+            fromOptionsUpdatedAtEpochMillis = null
+        )
     }
 
     fun clearTo() {
         stopDepartureRefresh()
-        _uiState.value = _uiState.value.copy(to = "", toId = "", toOptions = emptyList())
+        _uiState.value = _uiState.value.copy(
+            to = "",
+            toId = "",
+            toOptions = emptyList(),
+            toOptionsFromCache = false,
+            toOptionsUpdatedAtEpochMillis = null
+        )
     }
 
     fun clearTime() {
@@ -438,10 +480,14 @@ class RmvLogViewModel(
         _uiState.value = _uiState.value.copy(
             date = LocalDate.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")),
             from = "", fromId = "", fromOptions = emptyList(),
+            fromOptionsFromCache = false, fromOptionsUpdatedAtEpochMillis = null,
             to = "", toId = "", toOptions = emptyList(),
+            toOptionsFromCache = false, toOptionsUpdatedAtEpochMillis = null,
             departures = emptyList(),
+            departuresUpdatedAtEpochMillis = null,
             selectedDeparture = null,
             trip = null,
+            tripUpdatedAtEpochMillis = null,
             customBindimTime = "",
             customIndimTime = "",
             firstSavedId = "",
@@ -476,10 +522,17 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 val query = _uiState.value.from.trim()
-                _uiState.value = _uiState.value.copy(status = S.statusSearchingFrom(lang()), fromOptions = emptyList())
+                _uiState.value = _uiState.value.copy(
+                    status = S.statusSearchingFrom(lang()),
+                    fromOptions = emptyList(),
+                    fromOptionsFromCache = false,
+                    fromOptionsUpdatedAtEpochMillis = null
+                )
                 val result = stopSelectionUseCase.searchStops(query, 5)
                 _uiState.value = _uiState.value.copy(
                     fromOptions = result.options,
+                    fromOptionsFromCache = result.fromCache,
+                    fromOptionsUpdatedAtEpochMillis = System.currentTimeMillis(),
                     fromMenuOpen = true,
                     status = if (result.options.isEmpty()) S.statusFromNoResult(lang()) else S.statusFromReady(lang())
                 )
@@ -494,10 +547,17 @@ class RmvLogViewModel(
         viewModelScope.launch {
             try {
                 val query = _uiState.value.to.trim()
-                _uiState.value = _uiState.value.copy(status = S.statusSearchingTo(lang()), toOptions = emptyList())
+                _uiState.value = _uiState.value.copy(
+                    status = S.statusSearchingTo(lang()),
+                    toOptions = emptyList(),
+                    toOptionsFromCache = false,
+                    toOptionsUpdatedAtEpochMillis = null
+                )
                 val result = stopSelectionUseCase.searchStops(query, 5)
                 _uiState.value = _uiState.value.copy(
                     toOptions = result.options,
+                    toOptionsFromCache = result.fromCache,
+                    toOptionsUpdatedAtEpochMillis = System.currentTimeMillis(),
                     toMenuOpen = true,
                     status = if (result.options.isEmpty()) S.statusToNoResult(lang()) else S.statusToReady(lang())
                 )
@@ -515,8 +575,10 @@ class RmvLogViewModel(
                 _uiState.value = s.copy(
                     status = S.statusFetchingDepartures(lang()),
                     departures = emptyList(),
+                    departuresUpdatedAtEpochMillis = null,
                     selectedDeparture = null,
                     trip = null,
+                    tripUpdatedAtEpochMillis = null,
                     transitAlerts = emptyList(),
                     journeyMatchCandidates = emptyList(),
                     journeyMatchMessage = "",
@@ -533,6 +595,7 @@ class RmvLogViewModel(
                 val deps = rmvTripRepository.fetchDepartures(s.fromId, s.toId, apiDate, searchTime)
                 _uiState.value = _uiState.value.copy(
                     departures = deps,
+                    departuresUpdatedAtEpochMillis = System.currentTimeMillis(),
                     status = if (deps.isEmpty()) S.statusNoDepartures(lang()) else S.statusDeparturesReady(deps.size, lang())
                 )
                 if (deps.isNotEmpty()) {
@@ -558,6 +621,7 @@ class RmvLogViewModel(
                 val result = stopSelectionUseCase.selectDeparture(dep, _uiState.value, tripPlanner, lang())
                 _uiState.value = _uiState.value.copy(
                     trip = result.trip,
+                    tripUpdatedAtEpochMillis = System.currentTimeMillis(),
                     persistentStops = result.persistentStops,
                     status = S.statusPlanReady(result.trip.segments.size, lang())
                 )
@@ -610,6 +674,10 @@ class RmvLogViewModel(
 
 
     fun saveToSheets() {
+        requestValidatedSave(PendingTransitSaveAction.RMV_RECORD)
+    }
+
+    private fun performRmvSave() {
         viewModelScope.launch {
             try {
                 val s = _uiState.value
@@ -617,6 +685,16 @@ class RmvLogViewModel(
                 _uiState.value = s.copy(status = S.statusSavingSheets(lang()))
                 val result = recordSaveUseCase.saveRmvRecord(s) { id, profileId, seatmateNote ->
                     tripProfileLinkRepository.updateTripProfileLink(id, profileId, seatmateNote)
+                }
+                CurrentUserProvider.currentUserIdOrNull()?.let { userId ->
+                    recordNewRmvSaveProvenance(
+                        store = transitRecordProvenanceStore,
+                        provenanceUseCase = transitFieldProvenanceUseCase,
+                        userId = userId,
+                        state = s,
+                        result = result,
+                        enabled = TransitFeatureFlags.PROVENANCE_BADGES
+                    )
                 }
                 if (result.segmentIds != null) {
                     prefs.edit().putString("first_id", result.firstId.orEmpty()).putString("last_id", result.lastId.orEmpty()).apply()
@@ -629,6 +707,118 @@ class RmvLogViewModel(
                 _uiState.value = _uiState.value.copy(status = "${S.errorPrefix(lang())}: ${e.message}")
             }
         }
+    }
+
+    private fun requestValidatedSave(action: PendingTransitSaveAction) {
+        if (!TransitFeatureFlags.PRE_SAVE_VALIDATION) {
+            performSaveAction(action)
+            return
+        }
+        val input = when (action) {
+            PendingTransitSaveAction.RMV_RECORD -> currentRmvValidationInput()
+            PendingTransitSaveAction.MANUAL_RECORD -> currentManualValidationInput()
+        }
+        val result = transitRecordValidationUseCase.validate(input)
+        if (result.canSave) {
+            performSaveAction(action)
+        } else {
+            _validationUiState.value = TransitValidationUiState(
+                showSheet = true,
+                result = result,
+                pendingAction = action
+            )
+        }
+    }
+
+    fun dismissTransitValidation() {
+        _validationUiState.value = TransitValidationUiState()
+    }
+
+    /** The only path that can acknowledge warnings; critical issues remain non-overridable. */
+    fun continueAfterValidationWarnings() {
+        val state = _validationUiState.value
+        val result = state.result ?: return
+        val action = state.pendingAction ?: return
+        val warningIds = result.pendingWarnings.mapTo(mutableSetOf()) { it.id }
+        val overridden = transitRecordValidationUseCase.applyUserOverride(result, warningIds)
+        if (!overridden.canSave) {
+            _validationUiState.value = state.copy(result = overridden)
+            return
+        }
+        _validationUiState.value = TransitValidationUiState()
+        performSaveAction(action)
+    }
+
+    fun focusValidationIssue(issue: ValidationIssue) {
+        val segmentIndex = issue.target.segmentIndex
+        if (segmentIndex != null && segmentIndex >= 0) {
+            val current = _uiState.value
+            val lastSegmentIndex = current.trip?.segments?.lastIndex ?: segmentIndex
+            _uiState.value = current.copy(
+                selectedSegmentIndex = segmentIndex.coerceAtMost(lastSegmentIndex.coerceAtLeast(0)),
+                isEditingTimes = current.mode == LogMode.AUTO && issue.target.field in TIME_FIELDS
+            )
+        }
+        _validationUiState.value = _validationUiState.value.copy(
+            showSheet = false,
+            focusField = issue.target.field
+        )
+    }
+
+    fun consumeValidationFocus() {
+        _validationUiState.value = _validationUiState.value.copy(focusField = null)
+    }
+
+    private fun performSaveAction(action: PendingTransitSaveAction) {
+        when (action) {
+            PendingTransitSaveAction.RMV_RECORD -> performRmvSave()
+            PendingTransitSaveAction.MANUAL_RECORD -> performManualSave()
+        }
+    }
+
+    private fun currentRmvValidationInput(): TransitRecordValidationInput {
+        val state = _uiState.value
+        val segments = state.trip?.segments.orEmpty().mapIndexed { index, segment ->
+            TransitRecordSegmentInput(
+                boardingStop = segment.fromStop,
+                alightingStop = segment.toStop,
+                plannedDeparture = segment.dep,
+                plannedArrival = segment.arr,
+                actualDeparture = state.customBindimTime
+                    .takeIf { index == state.selectedSegmentIndex && it.isNotBlank() }
+                    ?.let(TransitTimeUtils::formatTime)
+                    .orEmpty(),
+                actualArrival = state.customIndimTime
+                    .takeIf { index == state.selectedSegmentIndex && it.isNotBlank() }
+                    ?.let(TransitTimeUtils::formatTime)
+                    .orEmpty(),
+                boardingStopId = segment.fromStopId,
+                alightingStopId = segment.toStopId,
+                distanceKm = segment.distanceKm.takeIf { it > 0.0 },
+                orsDistanceKm = segment.distanceKm.takeIf { it > 0.0 },
+                rmvDistanceKm = segment.polyDistanceKm?.takeIf { it > 0.0 }
+            )
+        }
+        return TransitRecordValidationInput(segments = segments, actualTimesRequired = false)
+    }
+
+    private fun currentManualValidationInput(): TransitRecordValidationInput {
+        val manual = _uiState.value.manual
+        return TransitRecordValidationInput(
+            segments = listOf(
+                TransitRecordSegmentInput(
+                    boardingStop = manual.boardingStop,
+                    alightingStop = manual.alightingStop,
+                    plannedDeparture = TransitTimeUtils.formatTime(manual.plannedDep),
+                    plannedArrival = TransitTimeUtils.formatTime(manual.plannedArr),
+                    actualDeparture = TransitTimeUtils.formatTime(manual.actualDep),
+                    actualArrival = TransitTimeUtils.formatTime(manual.actualArr),
+                    distanceKm = manual.distance.takeIf { it.isNotBlank() },
+                    orsDistanceKm = manual.distance.takeIf { it.isNotBlank() }
+                )
+            ),
+            actualTimesRequired = true
+        )
     }
 
 
@@ -942,12 +1132,26 @@ class RmvLogViewModel(
 
 
     fun saveManualRecord() {
+        requestValidatedSave(PendingTransitSaveAction.MANUAL_RECORD)
+    }
+
+    private fun performManualSave() {
         viewModelScope.launch {
             try {
                 val s = _uiState.value
                 _uiState.value = s.copy(status = S.statusSavingSheets(lang()))
                 val result = recordSaveUseCase.saveManualRecord(s) { id, profileId, seatmateNote ->
                     tripProfileLinkRepository.updateTripProfileLink(id, profileId, seatmateNote)
+                }
+                CurrentUserProvider.currentUserIdOrNull()?.let { userId ->
+                    recordNewManualSaveProvenance(
+                        store = transitRecordProvenanceStore,
+                        provenanceUseCase = transitFieldProvenanceUseCase,
+                        userId = userId,
+                        state = s,
+                        result = result,
+                        enabled = TransitFeatureFlags.PROVENANCE_BADGES
+                    )
                 }
                 if (result.segmentIds != null) {
                     prefs.edit().putString("first_id", result.firstId.orEmpty()).putString("last_id", result.lastId.orEmpty()).apply()
@@ -1313,4 +1517,148 @@ class RmvLogViewModel(
         actualTimesRefreshJob?.cancel()
         super.onCleared()
     }
+}
+
+internal fun recordNewRmvSaveProvenance(
+    store: TransitRecordProvenanceStore,
+    provenanceUseCase: TransitFieldProvenanceUseCase,
+    userId: String,
+    state: RmvLogUiState,
+    result: RecordSaveUseCase.RmvSaveResult,
+    enabled: Boolean = true
+) {
+    if (!enabled || userId.isBlank()) return
+    val recordIds = result.segmentIds ?: return
+    val trip = state.trip ?: return
+    val observedAt = state.tripUpdatedAtEpochMillis ?: System.currentTimeMillis()
+
+    recordIds.forEachIndexed { index, localRecordId ->
+        if (localRecordId.isBlank()) return@forEachIndexed
+        val segment = trip.segments.getOrNull(index) ?: return@forEachIndexed
+        val values = TripRecordMapper.buildSegmentData(
+            id = localRecordId,
+            date = state.date,
+            seg = segment,
+            havaDurumu = state.segmentHavaDurumu[index] ?: "Bilinmiyor",
+            oturabildim = state.segmentOturabildim[index] ?: false,
+            biletKontrolu = state.segmentBiletKontrolu[index] ?: false,
+            note = state.segmentNote[index].orEmpty()
+        )
+        val provenance = linkedMapOf<String, TransitFieldProvenance>()
+
+        provenance[TransitRecordProvenanceResolver.FIELD_DATE] = provenanceUseCase.manual(
+            TransitRecordProvenanceResolver.FIELD_DATE,
+            observedAt
+        )
+        listOf(
+            TransitRecordProvenanceResolver.FIELD_LINE,
+            TransitRecordProvenanceResolver.FIELD_BOARDING_STOP,
+            TransitRecordProvenanceResolver.FIELD_ALIGHTING_STOP,
+            TransitRecordProvenanceResolver.FIELD_PLANNED_DEPARTURE,
+            TransitRecordProvenanceResolver.FIELD_PLANNED_ARRIVAL
+        ).forEach { fieldId ->
+            provenance[fieldId] = provenanceUseCase.plannedRmv(fieldId, observedAt)
+        }
+
+        provenance[TransitRecordProvenanceResolver.FIELD_DISTANCE] =
+            provenanceUseCase.segmentDistance(
+                fieldId = TransitRecordProvenanceResolver.FIELD_DISTANCE,
+                segment = segment,
+                observedAtEpochMillis = observedAt
+            )
+        if (
+            TransitRecordCalculations.parseDistanceKm(
+                values[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM]
+            ) != null
+        ) {
+            provenance[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM] =
+                provenanceUseCase.resolve(
+                    TransitFieldProvenanceInput(
+                        fieldId = TransitRecordCalculations.FIELD_ORS_DISTANCE_KM,
+                        source = TransitFieldSource.ORS_DISTANCE,
+                        lastUpdatedAtEpochMillis = observedAt
+                    )
+                )
+        }
+        if (
+            TransitRecordCalculations.parseDistanceKm(
+                values[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM]
+            ) != null
+        ) {
+            provenance[TransitRecordCalculations.FIELD_RMV_DISTANCE_KM] =
+                provenanceUseCase.resolve(
+                    TransitFieldProvenanceInput(
+                        fieldId = TransitRecordCalculations.FIELD_RMV_DISTANCE_KM,
+                        source = TransitFieldSource.RMV_DISTANCE,
+                        lastUpdatedAtEpochMillis = observedAt
+                    )
+                )
+        }
+
+        if (index == state.selectedSegmentIndex) {
+            state.customBindimTime.takeIf { it.isNotBlank() }?.let { raw ->
+                val actual = RmvApiService.formatTimeDigits(raw)
+                values[TransitRecordProvenanceResolver.FIELD_ACTUAL_DEPARTURE] = actual
+                provenance[TransitRecordProvenanceResolver.FIELD_ACTUAL_DEPARTURE] =
+                    provenanceUseCase.manual(
+                        TransitRecordProvenanceResolver.FIELD_ACTUAL_DEPARTURE,
+                        observedAt
+                    )
+            }
+            state.customIndimTime.takeIf { it.isNotBlank() }?.let { raw ->
+                val actual = RmvApiService.formatTimeDigits(raw)
+                values[TransitRecordProvenanceResolver.FIELD_ACTUAL_ARRIVAL] = actual
+                provenance[TransitRecordProvenanceResolver.FIELD_ACTUAL_ARRIVAL] =
+                    provenanceUseCase.manual(
+                        TransitRecordProvenanceResolver.FIELD_ACTUAL_ARRIVAL,
+                        observedAt
+                    )
+            }
+        }
+
+        store.putKnownFields(userId, localRecordId, values, provenance)
+    }
+}
+
+internal fun recordNewManualSaveProvenance(
+    store: TransitRecordProvenanceStore,
+    provenanceUseCase: TransitFieldProvenanceUseCase,
+    userId: String,
+    state: RmvLogUiState,
+    result: RecordSaveUseCase.RmvSaveResult,
+    enabled: Boolean = true
+) {
+    if (!enabled || userId.isBlank()) return
+    val localRecordId = result.segmentIds?.singleOrNull()?.takeIf { it.isNotBlank() } ?: return
+    val manual = state.manual
+    val observedAt = System.currentTimeMillis()
+    val distanceKm = manual.distance.replace(',', '.').toDoubleOrNull()
+    val values = linkedMapOf<String, Any?>(
+        TransitRecordProvenanceResolver.FIELD_DATE to state.date,
+        TransitRecordProvenanceResolver.FIELD_LINE to manual.line,
+        TransitRecordProvenanceResolver.FIELD_BOARDING_STOP to manual.boardingStop,
+        TransitRecordProvenanceResolver.FIELD_ALIGHTING_STOP to manual.alightingStop,
+        TransitRecordProvenanceResolver.FIELD_PLANNED_DEPARTURE to
+            TransitTimeUtils.formatTime(manual.plannedDep),
+        TransitRecordProvenanceResolver.FIELD_PLANNED_ARRIVAL to
+            TransitTimeUtils.formatTime(manual.plannedArr),
+        TransitRecordProvenanceResolver.FIELD_ACTUAL_DEPARTURE to
+            TransitTimeUtils.formatTime(manual.actualDep),
+        TransitRecordProvenanceResolver.FIELD_ACTUAL_ARRIVAL to
+            TransitTimeUtils.formatTime(manual.actualArr)
+    )
+    if (distanceKm != null && distanceKm > 0.0) {
+        values[TransitRecordProvenanceResolver.FIELD_DISTANCE] =
+            TransitRecordCalculations.formatDistanceKm(distanceKm)
+        values[TransitRecordCalculations.FIELD_ORS_DISTANCE_KM] = distanceKm
+    }
+
+    val provenance = values.mapNotNull { (fieldId, value) ->
+        if (value?.toString()?.isNotBlank() == true) {
+            fieldId to provenanceUseCase.manual(fieldId, observedAt)
+        } else {
+            null
+        }
+    }.toMap()
+    store.putKnownFields(userId, localRecordId, values, provenance)
 }

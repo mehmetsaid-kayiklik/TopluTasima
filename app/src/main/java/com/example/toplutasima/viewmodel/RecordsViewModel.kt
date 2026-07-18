@@ -12,10 +12,19 @@ import com.example.toplutasima.data.repository.ProfileSyncRepository
 import com.example.toplutasima.data.repository.toEntity
 import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.model.MonthSummary
+import com.example.toplutasima.domain.transit.health.TransitHealthCorrection
+import com.example.toplutasima.domain.transit.health.TransitHealthIssue
+import com.example.toplutasima.domain.transit.health.TransitHealthScanResult
+import com.example.toplutasima.domain.transit.health.TransitHealthSeverity
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.provenance.TransitRecordProvenanceResolver
+import com.example.toplutasima.transit.provenance.TransitRecordProvenanceStore
 import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.usecase.RecordFilterUtils
 import com.example.toplutasima.usecase.RecordRowMapper
 import com.example.toplutasima.usecase.TransitRecordCalculations
+import com.example.toplutasima.usecase.transit.TransitHealthCorrectionUseCase
+import com.example.toplutasima.usecase.transit.TransitPostSaveHealthUseCase
 import com.example.toplutasima.viewmodel.records.DayGroup
 import com.example.toplutasima.viewmodel.records.LocalRecordsTripDataSource
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
@@ -28,6 +37,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -40,7 +51,13 @@ class RecordsViewModel internal constructor(
     application: Application,
     private val profileSyncRepository: ProfileSyncRepository,
     private val tripRepository: RecordsTripDataSource,
-    autoLoad: Boolean
+    autoLoad: Boolean,
+    private val healthUseCase: TransitPostSaveHealthUseCase = TransitPostSaveHealthUseCase(),
+    private val healthCorrectionUseCase: TransitHealthCorrectionUseCase = TransitHealthCorrectionUseCase(),
+    private val provenanceStore: TransitRecordProvenanceStore = TransitRecordProvenanceStore(),
+    private val provenanceResolver: TransitRecordProvenanceResolver = TransitRecordProvenanceResolver(),
+    private val postSaveHealthEnabled: Boolean = TransitFeatureFlags.POST_SAVE_DATA_HEALTH,
+    private val provenanceEnabled: Boolean = TransitFeatureFlags.PROVENANCE_BADGES
 ) : AndroidViewModel(application) {
     constructor(
         application: Application,
@@ -55,6 +72,29 @@ class RecordsViewModel internal constructor(
             )
         ),
         autoLoad = true
+    )
+
+    constructor(
+        application: Application,
+        profileSyncRepository: ProfileSyncRepository,
+        healthUseCase: TransitPostSaveHealthUseCase,
+        healthCorrectionUseCase: TransitHealthCorrectionUseCase,
+        provenanceStore: TransitRecordProvenanceStore,
+        provenanceResolver: TransitRecordProvenanceResolver
+    ) : this(
+        application = application,
+        profileSyncRepository = profileSyncRepository,
+        tripRepository = LocalRecordsTripDataSource(
+            LocalTripRepository(
+                application,
+                (application as TopluTasimaApp).database.tripDao()
+            )
+        ),
+        autoLoad = true,
+        healthUseCase = healthUseCase,
+        healthCorrectionUseCase = healthCorrectionUseCase,
+        provenanceStore = provenanceStore,
+        provenanceResolver = provenanceResolver
     )
 
     private val _uiState = MutableStateFlow(RecordsUiState())
@@ -96,7 +136,9 @@ class RecordsViewModel internal constructor(
                     activeProfiles = profiles.filter { it.sharedWithTransit && !it.archived }
                 )
 
-                _uiState.value.selectedMonth?.let { selectMonth(it) }
+                if (!TransitFeatureFlags.LIVE_ROOM_FLOWS) {
+                    _uiState.value.selectedMonth?.let { selectMonth(it) }
+                }
             } catch (_: Exception) {}
         }
     }
@@ -178,68 +220,111 @@ class RecordsViewModel internal constructor(
                 globalSearchLoading = false
             )
             try {
-                val groups = withContext(Dispatchers.IO) {
-                    val yearMonth = "${month.sortKey.substring(0, 4)}-${month.sortKey.substring(4, 6)}"
-                    val rawEntities = tripRepository.getTripsForMonth(yearMonth).firstOrNull() ?: emptyList()
-                    val rawTrips = rawEntities.map { it.toMap() }
-
-                    val withDateTime = rawTrips.mapNotNull { rec ->
-                        val tarih = rec["tarih"]?.toString() ?: return@mapNotNull null
-                        val parts = tarih.split(".")
-                        if (parts.size < 3) return@mapNotNull null
-                        try {
-                            val date = LocalDate.of(parts[2].toInt(), parts[1].toInt(), parts[0].toInt())
-                            val timeParts = rec["planlananBinis"]?.toString()?.split(":")
-                            val time = if (timeParts != null && timeParts.size >= 2) {
-                                LocalTime.of(timeParts[0].toInt(), timeParts[1].toInt())
-                            } else {
-                                LocalTime.MIN
-                            }
-                            LocalDateTime.of(date, time) to rec
-                        } catch (_: Exception) {
+                val yearMonth = "${month.sortKey.substring(0, 4)}-${month.sortKey.substring(4, 6)}"
+                val recordsFlow = if (TransitFeatureFlags.LIVE_ROOM_FLOWS) {
+                    tripRepository.observeTripsForMonth(yearMonth)
+                } else {
+                    tripRepository.getTripsForMonth(yearMonth)
+                }
+                recordsFlow.flowOn(Dispatchers.IO).collectLatest { rawEntities ->
+                    val metadata = withContext(Dispatchers.Default) {
+                        val scan = if (postSaveHealthEnabled) {
+                            healthUseCase.scan(
+                                records = rawEntities,
+                                provenanceStore = provenanceStore,
+                                provenanceEnabled = provenanceEnabled
+                            )
+                        } else {
                             null
                         }
-                    }
-
-                    val sortedRecords = withDateTime.sortedBy { it.first }.map { it.second }
-
-                    val dayGroupsMap = mutableMapOf<String, MutableList<RecordRowUiModel>>()
-                    val dateToDayName = mutableMapOf<String, String>()
-
-                    for (rec in sortedRecords) {
-                        val date = rec["tarih"]?.toString() ?: continue
-                        val dayName = rec["gun"]?.toString() ?: ""
-                        dateToDayName[date] = dayName
-
-                        val rowModel = mapFirestoreRecordToRow(rec as Map<String, Any>)
-
-                        if (!dayGroupsMap.containsKey(date)) {
-                            dayGroupsMap[date] = mutableListOf()
+                        val provenance = if (provenanceEnabled) {
+                            rawEntities.associate { entity ->
+                                entity.id to provenanceResolver.resolveFields(
+                                    userId = entity.userId,
+                                    localRecordId = entity.id,
+                                    record = entity.toMap(),
+                                    store = provenanceStore,
+                                    enabled = true
+                                )
+                            }
+                        } else {
+                            emptyMap()
                         }
-                        dayGroupsMap[date]!!.add(rowModel)
+                        MonthRecordMetadata(scan = scan, provenanceByRecordId = provenance)
+                    }
+                    val groups = withContext(Dispatchers.Default) {
+                        val rawTrips = rawEntities.map { it.toMap() }
+
+                        val withDateTime = rawTrips.mapNotNull { rec ->
+                            val tarih = rec["tarih"]?.toString() ?: return@mapNotNull null
+                            val parts = tarih.split(".")
+                            if (parts.size < 3) return@mapNotNull null
+                            try {
+                                val date = LocalDate.of(parts[2].toInt(), parts[1].toInt(), parts[0].toInt())
+                                val timeParts = rec["planlananBinis"]?.toString()?.split(":")
+                                val time = if (timeParts != null && timeParts.size >= 2) {
+                                    LocalTime.of(timeParts[0].toInt(), timeParts[1].toInt())
+                                } else {
+                                    LocalTime.MIN
+                                }
+                                LocalDateTime.of(date, time) to rec
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+
+                        val sortedRecords = withDateTime.sortedBy { it.first }.map { it.second }
+
+                        val dayGroupsMap = mutableMapOf<String, MutableList<RecordRowUiModel>>()
+                        val dateToDayName = mutableMapOf<String, String>()
+
+                        for (rec in sortedRecords) {
+                            val date = rec["tarih"]?.toString() ?: continue
+                            val dayName = rec["gun"]?.toString() ?: ""
+                            dateToDayName[date] = dayName
+
+                            val baseRow = mapFirestoreRecordToRow(rec as Map<String, Any>)
+                            val rowModel = baseRow.copy(
+                                healthIssues = metadata.scan?.issuesByRecordId
+                                    ?.get(baseRow.localRecordId)
+                                    .orEmpty(),
+                                provenanceByField = metadata.provenanceByRecordId[baseRow.localRecordId]
+                                    .orEmpty()
+                            )
+
+                            if (!dayGroupsMap.containsKey(date)) {
+                                dayGroupsMap[date] = mutableListOf()
+                            }
+                            dayGroupsMap[date]!!.add(rowModel)
+                        }
+
+                        dayGroupsMap.entries.map { entry ->
+                            DayGroup(
+                                date = entry.key,
+                                dayName = dateToDayName[entry.key] ?: "",
+                                trips = entry.value
+                            )
+                        }
                     }
 
-                    dayGroupsMap.entries.map { entry ->
-                        DayGroup(
-                            date = entry.key,
-                            dayName = dateToDayName[entry.key] ?: "",
-                            trips = entry.value
-                        )
-                    }
+                    val totalCount = RecordFilterUtils.countFilteredRecords(groups)
+                    val incomplete = RecordFilterUtils.findIncompleteRecords(groups)
+
+                    if (!isLatestMonthRequest(requestId)) return@collectLatest
+                    val filterState = _uiState.value.filterState
+                    val filteredGroups = RecordFilterUtils.filterDayGroups(groups, filterState)
+                    _uiState.value = _uiState.value.copy(
+                        selectedMonthTrips = groups,
+                        filteredTrips = filteredGroups,
+                        filteredTotalCount = RecordFilterUtils.countFilteredRecords(filteredGroups),
+                        unfilteredTotalCount = totalCount,
+                        incompleteRecords = incomplete,
+                        healthIssuesByRecordId = metadata.scan?.issuesByRecordId.orEmpty(),
+                        healthCorrections = metadata.scan?.corrections.orEmpty(),
+                        fullHealthIssueCount = metadata.scan?.issues?.size ?: 0,
+                        isLoading = false
+                    )
                 }
-
-                val totalCount = RecordFilterUtils.countFilteredRecords(groups)
-                val incomplete = RecordFilterUtils.findIncompleteRecords(groups)
-
-                if (!isLatestMonthRequest(requestId)) return@launch
-                _uiState.value = _uiState.value.copy(
-                    selectedMonthTrips = groups,
-                    filteredTrips = groups,
-                    filteredTotalCount = totalCount,
-                    unfilteredTotalCount = totalCount,
-                    incompleteRecords = incomplete,
-                    isLoading = false
-                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -268,7 +353,12 @@ class RecordsViewModel internal constructor(
             isFilterPanelOpen = false,
             globalSearchResults = emptyList(),
             globalSearchError = "",
-            globalSearchLoading = false
+            globalSearchLoading = false,
+            healthIssuesByRecordId = emptyMap(),
+            healthCorrections = emptyList(),
+            selectedHealthRecordId = null,
+            fullHealthScanMessage = "",
+            fullHealthIssueCount = 0
         )
     }
 
@@ -407,11 +497,23 @@ class RecordsViewModel internal constructor(
                     val existingEntity = tripRepository.getTripByFirestoreDocId(docId)
                         ?: tripRepository.getTripById(docId)
                     if (existingEntity != null) {
-                        val mergedMap = existingEntity.toMap().toMutableMap()
+                        val existingMap = existingEntity.toMap()
+                        val changedFieldIds = fields.keys.filterTo(linkedSetOf()) { fieldId ->
+                            existingMap[fieldId]?.toString() != fields[fieldId]?.toString()
+                        }
+                        val mergedMap = existingMap.toMutableMap()
                         mergedMap.putAll(fields)
                         recalculateDerivedFields(mergedMap)
                         mergedMap["firestoreDocId"] = existingEntity.firestoreDocId?.takeIf { it.isNotBlank() } ?: docId
                         tripRepository.saveTrip(mergedMap.toEntity(userId))
+                        if (provenanceEnabled && changedFieldIds.isNotEmpty()) {
+                            provenanceStore.markManualFields(
+                                userId = userId,
+                                localRecordId = existingEntity.id,
+                                currentValues = mergedMap,
+                                changedFieldIds = changedFieldIds
+                            )
+                        }
 
                         // Update local-only profile link
                         if (profileId != null) {
@@ -463,9 +565,11 @@ class RecordsViewModel internal constructor(
                     editingRecord = null
                 )
                 if (ok) {
-                    loadProfileData() // will refresh maps and selectMonth automatically!
+                    loadProfileData()
                     loadMonthSummaries()
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
@@ -520,12 +624,142 @@ class RecordsViewModel internal constructor(
                 )
                 if (ok) {
                     loadMonthSummaries()
-                    currentMonth?.let { selectMonth(it) }
+                    if (!TransitFeatureFlags.LIVE_ROOM_FLOWS) {
+                        currentMonth?.let { selectMonth(it) }
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSaving = false,
                     saveMsg = "❌ ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun retryDelete(localRecordId: String) {
+        if (!TransitFeatureFlags.SYNC_DELETE_RECEIPTS || localRecordId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val queued = withContext(Dispatchers.IO) { tripRepository.retryDelete(localRecordId) }
+                _uiState.value = _uiState.value.copy(
+                    saveMsg = if (queued) "Silme yeniden sıraya alındı" else "Silme yeniden sıraya alınamadı"
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(saveMsg = "Silme hatası: ${e.message}")
+            }
+        }
+    }
+
+    fun keepDeleteLocalOnly(localRecordId: String) {
+        if (!TransitFeatureFlags.SYNC_DELETE_RECEIPTS || localRecordId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val kept = withContext(Dispatchers.IO) {
+                    tripRepository.keepDeleteLocalOnly(localRecordId)
+                }
+                _uiState.value = _uiState.value.copy(
+                    saveMsg = if (kept) "Kayıt yalnız bu cihazda silinmiş olarak tutuluyor" else "İşlem uygulanamadı"
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(saveMsg = "Silme hatası: ${e.message}")
+            }
+        }
+    }
+
+    fun scanAllTransitHistory() {
+        if (!postSaveHealthEnabled || _uiState.value.isHealthScanning) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isHealthScanning = true,
+                fullHealthScanMessage = "Transit geçmişi denetleniyor"
+            )
+            try {
+                val records = withContext(Dispatchers.IO) {
+                    tripRepository.getAllTrips().firstOrNull().orEmpty()
+                }
+                val scan = withContext(Dispatchers.Default) {
+                    healthUseCase.scan(records, provenanceStore, provenanceEnabled)
+                }
+                _uiState.value = _uiState.value.copy(
+                    isHealthScanning = false,
+                    healthIssuesByRecordId = scan.issuesByRecordId,
+                    healthCorrections = scan.corrections,
+                    fullHealthIssueCount = scan.issues.size,
+                    fullHealthScanMessage = if (scan.issues.isEmpty()) {
+                        "${scan.scannedRecordCount} kayıt denetlendi; sorun bulunmadı"
+                    } else {
+                        "${scan.scannedRecordCount} kayıt denetlendi; ${scan.issues.size} bulgu var"
+                    }
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isHealthScanning = false,
+                    fullHealthScanMessage = "Denetim tamamlanamadı: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun showHealthIssues(localRecordId: String?) {
+        if (!postSaveHealthEnabled) return
+        _uiState.value = _uiState.value.copy(selectedHealthRecordId = localRecordId)
+    }
+
+    fun openSelectedHealthRecord() {
+        val localRecordId = _uiState.value.selectedHealthRecordId ?: return
+        val row = _uiState.value.selectedMonthTrips.asSequence()
+            .flatMap { it.trips.asSequence() }
+            .firstOrNull { it.localRecordId == localRecordId }
+        if (row != null) {
+            setEditingRecord(row.originalRecord)
+            showHealthIssues(null)
+            return
+        }
+        viewModelScope.launch {
+            val entity = withContext(Dispatchers.IO) { tripRepository.getTripById(localRecordId) }
+            entity?.toMap()?.let { setEditingRecord(it as Map<String, Any>) }
+            showHealthIssues(null)
+        }
+    }
+
+    fun applySafeHealthCorrections(localRecordId: String? = null) {
+        if (!postSaveHealthEnabled || _uiState.value.isApplyingHealthCorrections) return
+        val corrections = _uiState.value.healthCorrections.filter {
+            it.deterministic && (localRecordId == null || it.localRecordId == localRecordId)
+        }
+        if (corrections.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isApplyingHealthCorrections = true)
+            try {
+                withContext(Dispatchers.IO) {
+                    corrections.forEach { correction ->
+                        val current = tripRepository.getTripById(correction.localRecordId)
+                            ?: return@forEach
+                        val patched = healthCorrectionUseCase.preview(current.toMap(), correction)
+                        tripRepository.saveTrip(patched.toEntity(current.userId))
+                    }
+                }
+                _uiState.value = _uiState.value.copy(
+                    isApplyingHealthCorrections = false,
+                    selectedHealthRecordId = null,
+                    saveMsg = "Güvenli düzeltmeler uygulandı"
+                )
+                scanAllTransitHistory()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isApplyingHealthCorrections = false,
+                    saveMsg = "Düzeltme uygulanamadı: ${e.message}"
                 )
             }
         }
@@ -619,3 +853,8 @@ class RecordsViewModel internal constructor(
         }
     }
 }
+
+private data class MonthRecordMetadata(
+    val scan: TransitHealthScanResult?,
+    val provenanceByRecordId: Map<String, Map<String, com.example.toplutasima.transit.provenance.TransitFieldProvenance>>
+)

@@ -39,6 +39,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.components.transit.TransitSyncStatusChip
+import com.example.toplutasima.ui.components.transit.TransitHealthStatusChip
+import com.example.toplutasima.ui.components.transit.TransitRecordProvenanceChip
+import com.example.toplutasima.transit.TransitFeatureFlags
 import com.example.toplutasima.ui.theme.DangerRed
 import com.example.toplutasima.ui.theme.SurfaceCard
 import com.example.toplutasima.ui.theme.SurfaceElevated
@@ -50,7 +54,11 @@ import com.example.toplutasima.ui.theme.TransitBlueDim
 import com.example.toplutasima.viewmodel.records.RecordRowUiModel
 
 @Composable
-internal fun TripCard(trip: RecordRowUiModel, onClick: () -> Unit) {
+internal fun TripCard(
+    trip: RecordRowUiModel,
+    onClick: () -> Unit,
+    onHealthClick: () -> Unit = onClick
+) {
     val lang = LocaleManager.currentLanguage
     val delayNum = trip.delay.toIntOrNull() ?: 0
     val lineLabel = trip.line.ifBlank { trip.typeDisplay.ifBlank { "-" } }
@@ -114,6 +122,21 @@ internal fun TripCard(trip: RecordRowUiModel, onClick: () -> Unit) {
                                 color = TextSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (TransitFeatureFlags.SYNC_RECEIPTS) {
+                            TransitSyncStatusChip(recordId = trip.localRecordId)
+                        }
+                        if (TransitFeatureFlags.PROVENANCE_BADGES) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TransitRecordProvenanceChip(provenanceByField = trip.provenanceByField)
+                        }
+                        if (TransitFeatureFlags.POST_SAVE_DATA_HEALTH && trip.healthIssues.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TransitHealthStatusChip(
+                                issues = trip.healthIssues,
+                                onClick = onHealthClick
                             )
                         }
                     }

@@ -25,10 +25,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.summary.TransitSummaryDataQuality
+import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.screens.summary.ComparisonInsightSection
@@ -125,6 +130,16 @@ fun SummaryScreen(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
+                            val quality = state.dataQuality
+                            if (
+                                TransitFeatureFlags.POST_SAVE_DATA_HEALTH &&
+                                quality?.assessmentApplied == true &&
+                                quality.hasIssues
+                            ) {
+                                item(key = "transit-summary-data-quality") {
+                                    TransitSummaryDataQualityCard(quality = quality, lang = lang)
+                                }
+                            }
                             when (state.selectedInnerTab) {
                                 0 -> {
                                     TripStatsSection(
@@ -162,5 +177,53 @@ fun SummaryScreen(
             lang = lang,
             onDismiss = viewModel::dismissLineDetail
         )
+    }
+}
+
+@Composable
+private fun TransitSummaryDataQualityCard(
+    quality: TransitSummaryDataQuality,
+    lang: AppLanguage
+) {
+    val details = when (lang) {
+        AppLanguage.TR ->
+            "${quality.informationalIssueCount} bilgi, ${quality.warningIssueCount} uyarı, " +
+                "${quality.criticalIssueCount} kritik sorun. " +
+                "${quality.excludedRecordCount} kayıt istatistiklerden çıkarıldı."
+        AppLanguage.DE ->
+            "${quality.informationalIssueCount} Hinweise, ${quality.warningIssueCount} Warnungen, " +
+                "${quality.criticalIssueCount} kritische Probleme. " +
+                "${quality.excludedRecordCount} Einträge wurden von der Statistik ausgeschlossen."
+        AppLanguage.EN ->
+            "${quality.informationalIssueCount} informational, ${quality.warningIssueCount} warnings, " +
+                "${quality.criticalIssueCount} critical issues. " +
+                "${quality.excludedRecordCount} records were excluded from statistics."
+    }
+    val accessibilityText = "${S.dataHealthTitle(lang)}. " +
+        "${S.dataHealthIssuesFound(quality.issueCount, lang)}. $details"
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = accessibilityText },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        ),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = S.dataHealthTitle(lang),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Text(
+                text = details,
+                modifier = Modifier.padding(top = 4.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        }
     }
 }

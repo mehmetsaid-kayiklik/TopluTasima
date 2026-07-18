@@ -6,8 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.data.repository.ProfileSyncRepository
 import com.example.toplutasima.model.MonthSummary
+import com.example.toplutasima.usecase.RecordFilterState
 import com.example.toplutasima.viewmodel.records.RecordsTripDataSource
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -114,12 +116,68 @@ class RecordsViewModelTest {
         assertEquals("", viewModel.uiState.value.globalSearchError)
     }
 
-    private fun createViewModel(source: RecordsTripDataSource): RecordsViewModel =
+    @Test
+    fun `live month emit preserves selected month and active filter`() {
+        val month = MonthSummary("Ocak", "2026", 2, "202601")
+        val source = BlockingRecordsTripDataSource().apply {
+            liveMonthFlows["2026-01"] = MutableStateFlow(
+                listOf(testTrip("wanted", "01.01.2026"), testTrip("other", "02.01.2026"))
+            )
+        }
+        val viewModel = createViewModel(source)
+
+        viewModel.selectMonth(month)
+        awaitUiState(viewModel) { it.unfilteredTotalCount == 2 }
+        val filter = RecordFilterState(searchQuery = "wanted")
+        viewModel.updateFilter(filter)
+        assertEquals(listOf("wanted"), viewModel.uiState.value.filteredTrips.flatMap { it.trips }.map { it.id })
+
+        source.liveMonthFlows.getValue("2026-01").value = listOf(
+            testTrip("wanted", "01.01.2026").copy(not = "updated"),
+            testTrip("other", "02.01.2026"),
+            testTrip("new", "03.01.2026")
+        )
+        awaitUiState(viewModel) { it.unfilteredTotalCount == 3 }
+
+        assertEquals(month, viewModel.uiState.value.selectedMonth)
+        assertEquals(filter, viewModel.uiState.value.filterState)
+        assertEquals(listOf("wanted"), viewModel.uiState.value.filteredTrips.flatMap { it.trips }.map { it.id })
+    }
+
+    @Test
+    fun `disabled post-save health gate leaves legacy record projection unchanged`() {
+        val month = MonthSummary("Ocak", "2026", 1, "202601")
+        val source = BlockingRecordsTripDataSource().apply {
+            liveMonthFlows["2026-01"] = MutableStateFlow(listOf(testTrip("legacy", "01.01.2026")))
+        }
+        val viewModel = createViewModel(
+            source = source,
+            postSaveHealthEnabled = false,
+            provenanceEnabled = false
+        )
+
+        viewModel.selectMonth(month)
+        awaitUiState(viewModel) { it.unfilteredTotalCount == 1 }
+
+        val row = viewModel.uiState.value.selectedMonthTrips.single().trips.single()
+        assertTrue(row.healthIssues.isEmpty())
+        assertTrue(row.provenanceByField.isEmpty())
+        assertTrue(viewModel.uiState.value.healthIssuesByRecordId.isEmpty())
+        assertTrue(viewModel.uiState.value.healthCorrections.isEmpty())
+    }
+
+    private fun createViewModel(
+        source: RecordsTripDataSource,
+        postSaveHealthEnabled: Boolean = true,
+        provenanceEnabled: Boolean = true
+    ): RecordsViewModel =
         RecordsViewModel(
             application = application,
             profileSyncRepository = ProfileSyncRepository(application),
             tripRepository = source,
-            autoLoad = false
+            autoLoad = false,
+            postSaveHealthEnabled = postSaveHealthEnabled,
+            provenanceEnabled = provenanceEnabled
         )
 
     private fun testTrip(id: String, date: String) = TripEntity(
@@ -185,6 +243,7 @@ class RecordsViewModelTest {
     private class BlockingRecordsTripDataSource : RecordsTripDataSource {
         val monthLoads = mutableMapOf<String, BlockingLoad<List<TripEntity>>>()
         val searchLoads = mutableMapOf<String, BlockingLoad<List<TripEntity>>>()
+        val liveMonthFlows = mutableMapOf<String, MutableStateFlow<List<TripEntity>>>()
 
         override suspend fun syncFromFirestore(fullSync: Boolean) = Unit
 
@@ -197,6 +256,9 @@ class RecordsViewModelTest {
                 load.markFinished()
             }
         }
+
+        override fun observeTripsForMonth(yearMonth: String): Flow<List<TripEntity>> =
+            liveMonthFlows[yearMonth] ?: getTripsForMonth(yearMonth)
 
         override suspend fun getTripById(id: String): TripEntity? = null
 

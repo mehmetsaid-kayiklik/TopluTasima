@@ -58,7 +58,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.toplutasima.model.MonthSummary
+import com.example.toplutasima.transit.TransitFeatureFlags
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.components.transit.TransitHealthOverviewCard
 import com.example.toplutasima.ui.theme.AmberDark
 import com.example.toplutasima.ui.theme.AmberLight
 import com.example.toplutasima.ui.theme.BorderDark
@@ -111,7 +113,15 @@ internal fun DayListScreen(
     isExporting: Boolean = false,
     onToggleExportDialog: () -> Unit = {},
     onExport: (ExportFormat) -> Unit = {},
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    healthIssueCount: Int = 0,
+    healthCriticalCount: Int = 0,
+    healthCorrectionCount: Int = 0,
+    isHealthScanning: Boolean = false,
+    healthScanMessage: String = "",
+    onScanHealth: () -> Unit = {},
+    onApplyHealthCorrections: () -> Unit = {},
+    onHealthClick: (RecordRowUiModel) -> Unit = {}
 ) {
     val dark = isDark()
     val borderColor = if (dark) BorderDark else BorderLight
@@ -325,6 +335,20 @@ internal fun DayListScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = 16.dp)
                         ) {
+                            if (TransitFeatureFlags.POST_SAVE_DATA_HEALTH) {
+                                item(key = "transit-data-health") {
+                                    TransitHealthOverviewCard(
+                                        issueCount = healthIssueCount,
+                                        criticalCount = healthCriticalCount,
+                                        correctionCount = healthCorrectionCount,
+                                        isScanning = isHealthScanning,
+                                        scanMessage = healthScanMessage,
+                                        onScanAll = onScanHealth,
+                                        onApplySafeCorrections = onApplyHealthCorrections,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
                             dayGroups.forEach { group ->
                                 stickyHeader(key = group.date) {
                                 Box(
@@ -343,7 +367,11 @@ internal fun DayListScreen(
                             }
                             items(group.trips.size, key = { group.trips[it].id }) { i ->
                                 val trip = group.trips[i]
-                                TripCard(trip = trip, onClick = { onTripClick(trip.originalRecord) })
+                                TripCard(
+                                    trip = trip,
+                                    onClick = { onTripClick(trip.originalRecord) },
+                                    onHealthClick = { onHealthClick(trip) }
+                                )
                             }
                         }
                     }

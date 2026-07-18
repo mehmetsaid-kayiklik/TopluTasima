@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.toplutasima.data.local.entity.TripEntity
+import kotlinx.coroutines.flow.Flow
 
 data class MonthSummaryTuple(
     val yearMonth: String,
@@ -25,8 +26,25 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE userId = :userId AND yearMonth = :yearMonth")
     suspend fun getTripsForMonth(userId: String, yearMonth: String): List<TripEntity>
 
+    @Query("SELECT * FROM trips WHERE userId = :userId AND yearMonth = :yearMonth")
+    fun observeTripsForMonth(userId: String, yearMonth: String): Flow<List<TripEntity>>
+
     @Query("SELECT * FROM trips WHERE userId = :userId ORDER BY sortDate DESC")
     suspend fun getAllTrips(userId: String): List<TripEntity>
+
+    @Query("SELECT * FROM trips WHERE userId = :userId ORDER BY sortDate DESC")
+    fun observeAllTrips(userId: String): Flow<List<TripEntity>>
+
+    @Query(
+        "SELECT * FROM trips WHERE userId = :userId " +
+            "AND yearMonth >= :startYearMonth AND yearMonth <= :endYearMonth " +
+            "ORDER BY sortDate DESC"
+    )
+    fun observeTripsForMonthRange(
+        userId: String,
+        startYearMonth: String,
+        endYearMonth: String
+    ): Flow<List<TripEntity>>
 
     @Query("""
         UPDATE trips
@@ -96,4 +114,7 @@ interface TripDao {
 
     @Query("SELECT yearMonth, COUNT(*) as count FROM trips WHERE userId = :userId AND yearMonth IS NOT NULL AND yearMonth != '' GROUP BY yearMonth ORDER BY yearMonth ASC")
     suspend fun getMonthSummaries(userId: String): List<MonthSummaryTuple>
+
+    @Query("SELECT yearMonth, COUNT(*) as count FROM trips WHERE userId = :userId AND yearMonth IS NOT NULL AND yearMonth != '' GROUP BY yearMonth ORDER BY yearMonth ASC")
+    fun observeMonthSummaries(userId: String): Flow<List<MonthSummaryTuple>>
 }
