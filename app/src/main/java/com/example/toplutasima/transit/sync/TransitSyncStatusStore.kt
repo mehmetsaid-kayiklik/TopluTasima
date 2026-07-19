@@ -73,6 +73,15 @@ class TransitSyncStatusStore internal constructor(
     internal fun snapshotForUser(userId: String): List<TransitSyncState> =
         _states.value.values.filter { it.userId == userId }
 
+    /** Privacy-scoped read model for portable transit export and audit UI. */
+    fun stateForRecord(userId: String, recordId: String): TransitSyncState? =
+        if (userId.isBlank() || recordId.isBlank()) null else _states.value[key(userId, recordId)]
+
+    /** Returns only stable local IDs; queue payloads and Firestore document IDs never leave here. */
+    fun tombstonedRecordIds(userId: String): Set<String> =
+        if (userId.isBlank()) emptySet() else deletionTombstonesForUser(userId)
+            .mapTo(linkedSetOf()) { it.recordId }
+
     internal fun deletionTombstonesForUser(userId: String): List<TransitSyncState> =
         _states.value.values.filter {
             it.userId == userId &&

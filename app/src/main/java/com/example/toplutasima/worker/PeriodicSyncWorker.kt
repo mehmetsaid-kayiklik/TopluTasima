@@ -8,6 +8,9 @@ import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.data.local.AppDatabase
 import com.example.toplutasima.data.repository.LocalTripRepository
 import com.example.toplutasima.data.repository.ProfileSyncRepository
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.history.TransitChangeHistoryStore
+import com.example.toplutasima.transit.history.TransitRecordDiffUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -22,7 +25,15 @@ private object DefaultPeriodicSyncOperations : PeriodicSyncOperations {
 
     override suspend fun syncTrips(context: Context, fullSync: Boolean) {
         val database = AppDatabase.getDatabase(context)
-        LocalTripRepository(context, database.tripDao()).syncFromFirestore(fullSync = fullSync)
+        LocalTripRepository(
+            context = context,
+            tripDao = database.tripDao(),
+            changeHistoryStore = TransitChangeHistoryStore.create(
+                context,
+                TransitFeatureFlags.TRANSIT_CHANGE_HISTORY
+            ),
+            recordDiffUseCase = TransitRecordDiffUseCase()
+        ).syncFromFirestore(fullSync = fullSync)
     }
 
     override suspend fun syncProfiles(context: Context) {

@@ -10,6 +10,12 @@ import com.example.toplutasima.model.Segment
 import com.example.toplutasima.network.rmv.SegmentDistanceResult
 import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.history.TransitChangeEventDraft
+import com.example.toplutasima.transit.history.TransitChangeHistoryStore
+import com.example.toplutasima.transit.history.TransitChangeOperation
+import com.example.toplutasima.transit.history.TransitChangeSource
+import com.example.toplutasima.transit.history.TransitHistorySyncStatus
+import com.example.toplutasima.transit.history.TransitRecordDiffUseCase
 import com.example.toplutasima.transit.sync.TransitSyncStatusStore
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import kotlinx.coroutines.CancellationException
@@ -20,7 +26,9 @@ class TransitRecordRepository(
     private val appContext: Context? = null,
     private val profileLinkRepository: TripProfileLinkRepository = TripProfileLinkRepository(appContext),
     private val recordMapper: TripRecordMapper = TripRecordMapper,
-    private val tripRemoteDataSource: FirestoreTripRemoteDataSource = FirestoreTripRemoteDataSource()
+    private val tripRemoteDataSource: FirestoreTripRemoteDataSource = FirestoreTripRemoteDataSource(),
+    private val changeHistoryStore: TransitChangeHistoryStore? = null,
+    private val recordDiffUseCase: TransitRecordDiffUseCase = TransitRecordDiffUseCase()
 ) {
     private fun getTripDao() = appContext?.let { AppDatabase.getDatabase(it).tripDao() }
     private fun getSyncStatusStore() = if (TransitFeatureFlags.SYNC_RECEIPTS) {
@@ -56,15 +64,33 @@ class TransitRecordRepository(
             seatmateUuid = seatmateUuid
         )
         val tripDao = getTripDao()
+        val existingEntity = tripDao?.getTripById(userId, id)
         val existingFirestoreDocId = data["firestoreDocId"]
             ?.toString()
             ?.takeIf { it.isNotBlank() }
-            ?: tripDao?.getTripById(userId, id)?.firestoreDocId?.takeIf { it.isNotBlank() }
+            ?: existingEntity?.firestoreDocId?.takeIf { it.isNotBlank() }
         val firestoreDocId = existingFirestoreDocId ?: tripRemoteDataSource.newTripDocumentId()
         data["firestoreDocId"] = firestoreDocId
         // Persist the client-generated ID before Firestore so a timeout can only retry this ID.
         tripDao?.upsertAll(listOf(data.toEntity(userId)))
         syncStatusStore?.markLocalSafe(userId, id)
+        val historyEventId = appendRecordHistory(
+            userId = userId,
+            recordId = id,
+            operation = if (existingEntity == null) {
+                TransitChangeOperation.CREATE
+            } else {
+                TransitChangeOperation.REMOTE_UPDATE
+            },
+            source = if (seg.journeyRef.isNullOrBlank()) {
+                TransitChangeSource.USER
+            } else {
+                TransitChangeSource.RMV
+            },
+            before = existingEntity?.toMap(),
+            after = data,
+            deduplicationKey = if (existingEntity == null) "create:$id" else null
+        )
 
         profileLinkRepository.saveInitialLink(id, profileId, seatmateNote)
         profileLinkRepository.updateStableKey(id, firestoreDocId)
@@ -80,6 +106,7 @@ class TransitRecordRepository(
                 return@withContext false
             }
             syncStatusStore?.markSynced(userId, id)
+            updateHistorySyncStatus(userId, id, historyEventId, TransitHistorySyncStatus.SYNCED)
             true
         } catch (e: CancellationException) {
             syncStatusStore?.markLocalSafe(userId, id)
@@ -100,6 +127,7 @@ class TransitRecordRepository(
             if (isDeletionTombstoned(syncStatusStore, userId, id)) return@withContext false
             syncStatusStore?.markLocalSaving(userId, id)
             val tripDao = getTripDao()
+            var historyEventId: String? = null
             // Firestore'a gönderilecek ID: önce Room'dan doğru kaydı bul,
             // varsa Firestore doc içindeki "id" alanını kullan (doc'u "id" field'ı ile arıyoruz)
             var firestoreQueryId = id
@@ -111,7 +139,8 @@ class TransitRecordRepository(
                 // Room kaydındaki "id" alanı Firestore'daki "id" field'ı ile eşleşmeli
                 existingEntity?.id?.takeIf { it.isNotBlank() }?.let { firestoreQueryId = it }
 
-                val existing = existingEntity?.toMap()?.toMutableMap()
+                val before = existingEntity?.toMap()
+                val existing = before?.toMutableMap()
                 if (existing != null) {
                     if (!actualDep.isNullOrBlank()) existing["gercekBinis"] = actualDep
                     if (!actualArr.isNullOrBlank()) existing["gercekInis"] = actualArr
@@ -127,6 +156,14 @@ class TransitRecordRepository(
                     }
                     tripDao.upsertAll(listOf(existing.toEntity(userId)))
                     syncStatusStore?.markLocalSafe(userId, id)
+                    historyEventId = appendRecordHistory(
+                        userId = userId,
+                        recordId = existingEntity?.id ?: id,
+                        operation = TransitChangeOperation.MANUAL_EDIT,
+                        source = TransitChangeSource.USER,
+                        before = before,
+                        after = existing
+                    )
                 }
             }
             try {
@@ -134,6 +171,7 @@ class TransitRecordRepository(
                 val ok = tripRemoteDataSource.updateActual(firestoreQueryId, actualDep, actualArr)
                 if (ok) {
                     syncStatusStore?.markSynced(userId, id)
+                    updateHistorySyncStatus(userId, id, historyEventId, TransitHistorySyncStatus.SYNCED)
                 } else {
                     syncStatusStore?.markPermanentError(userId, id, "Remote record was not found")
                 }
@@ -163,8 +201,11 @@ class TransitRecordRepository(
             if (isDeletionTombstoned(syncStatusStore, userId, id)) return@withContext false
             syncStatusStore?.markLocalSaving(userId, id)
             val tripDao = getTripDao()
+            var historyEventId: String? = null
             if (tripDao != null) {
-                val existing = tripDao.getTripById(userId, id)?.toMap()?.toMutableMap()
+                val existingEntity = tripDao.getTripById(userId, id)
+                val before = existingEntity?.toMap()
+                val existing = before?.toMutableMap()
                 if (existing != null) {
                     if (clearDep) {
                         existing["gercekBinis"] = ""
@@ -181,6 +222,14 @@ class TransitRecordRepository(
                         }
                     tripDao.upsertAll(listOf(existing.toEntity(userId)))
                     syncStatusStore?.markLocalSafe(userId, id)
+                    historyEventId = appendRecordHistory(
+                        userId = userId,
+                        recordId = existingEntity?.id ?: id,
+                        operation = TransitChangeOperation.MANUAL_EDIT,
+                        source = TransitChangeSource.USER,
+                        before = before,
+                        after = existing
+                    )
                 }
             }
             try {
@@ -188,6 +237,7 @@ class TransitRecordRepository(
                 val ok = tripRemoteDataSource.clearActual(id, clearDep, clearArr)
                 if (ok) {
                     syncStatusStore?.markSynced(userId, id)
+                    updateHistorySyncStatus(userId, id, historyEventId, TransitHistorySyncStatus.SYNCED)
                 } else {
                     syncStatusStore?.markPermanentError(userId, id, "Remote record was not found")
                 }
@@ -229,8 +279,11 @@ class TransitRecordRepository(
         if (isDeletionTombstoned(syncStatusStore, userId, id)) return@withContext false
         syncStatusStore?.markLocalSaving(userId, id)
         val tripDao = getTripDao()
+        var historyEventId: String? = null
         if (tripDao != null) {
-            val existing = tripDao.getTripById(userId, id)?.toMap()?.toMutableMap()
+            val existingEntity = tripDao.getTripById(userId, id)
+            val before = existingEntity?.toMap()
+            val existing = before?.toMutableMap()
             if (existing != null) {
                 if (!binisDuragi.isNullOrBlank()) {
                     existing["binisDuragi"] = binisDuragi
@@ -262,6 +315,14 @@ class TransitRecordRepository(
                 }
                 tripDao.upsertAll(listOf(existing.toEntity(userId)))
                 syncStatusStore?.markLocalSafe(userId, id)
+                historyEventId = appendRecordHistory(
+                    userId = userId,
+                    recordId = existingEntity?.id ?: id,
+                    operation = TransitChangeOperation.MANUAL_EDIT,
+                    source = TransitChangeSource.USER,
+                    before = before,
+                    after = existing
+                )
             }
         }
         try {
@@ -278,6 +339,7 @@ class TransitRecordRepository(
             )
             if (ok) {
                 syncStatusStore?.markSynced(userId, id)
+                updateHistorySyncStatus(userId, id, historyEventId, TransitHistorySyncStatus.SYNCED)
             } else {
                 syncStatusStore?.markPermanentError(userId, id, "Remote record was not found")
             }
@@ -298,12 +360,23 @@ class TransitRecordRepository(
             if (isDeletionTombstoned(syncStatusStore, userId, id)) return@withContext false
             syncStatusStore?.markLocalSaving(userId, id)
             val tripDao = getTripDao()
+            var historyEventId: String? = null
             if (tripDao != null) {
-                val existing = tripDao.getTripById(userId, id)?.toMap()?.toMutableMap()
+                val existingEntity = tripDao.getTripById(userId, id)
+                val before = existingEntity?.toMap()
+                val existing = before?.toMutableMap()
                 if (existing != null) {
                     existing.putAll(fields)
                     tripDao.upsertAll(listOf(existing.toEntity(userId)))
                     syncStatusStore?.markLocalSafe(userId, id)
+                    historyEventId = appendRecordHistory(
+                        userId = userId,
+                        recordId = existingEntity?.id ?: id,
+                        operation = TransitChangeOperation.MANUAL_EDIT,
+                        source = TransitChangeSource.USER,
+                        before = before,
+                        after = existing
+                    )
                 }
             }
             try {
@@ -311,6 +384,7 @@ class TransitRecordRepository(
                 val ok = tripRemoteDataSource.updateExistingRecord(id, fields)
                 if (ok) {
                     syncStatusStore?.markSynced(userId, id)
+                    updateHistorySyncStatus(userId, id, historyEventId, TransitHistorySyncStatus.SYNCED)
                 } else {
                     syncStatusStore?.markPermanentError(userId, id, "Remote record was not found")
                 }
@@ -326,6 +400,42 @@ class TransitRecordRepository(
                 false
             }
         }
+
+    private fun appendRecordHistory(
+        userId: String,
+        recordId: String,
+        operation: TransitChangeOperation,
+        source: TransitChangeSource,
+        before: Map<String, Any?>?,
+        after: Map<String, Any?>,
+        deduplicationKey: String? = null
+    ): String? {
+        val store = changeHistoryStore?.takeIf { it.enabled } ?: return null
+        val changes = recordDiffUseCase.diff(before = before, after = after)
+        val result = store.append(
+            TransitChangeEventDraft(
+                userId = userId,
+                recordId = recordId,
+                operation = operation,
+                occurredAtEpochMillis = System.currentTimeMillis(),
+                source = source,
+                changes = changes,
+                syncStatus = TransitHistorySyncStatus.PENDING,
+                deduplicationKey = deduplicationKey
+            )
+        )
+        return result.event?.eventId
+    }
+
+    private fun updateHistorySyncStatus(
+        userId: String,
+        recordId: String,
+        eventId: String?,
+        status: TransitHistorySyncStatus
+    ) {
+        if (eventId.isNullOrBlank()) return
+        changeHistoryStore?.updateSyncStatus(userId, recordId, eventId, status)
+    }
 
     private fun isDeletionTombstoned(
         store: TransitSyncStatusStore?,

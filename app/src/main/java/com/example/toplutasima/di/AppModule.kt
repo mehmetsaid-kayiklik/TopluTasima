@@ -50,14 +50,18 @@ val appModule = module {
             appContext = androidContext(),
             profileLinkRepository = get(),
             recordMapper = TripRecordMapper,
-            tripRemoteDataSource = get()
+            tripRemoteDataSource = get(),
+            changeHistoryStore = get(),
+            recordDiffUseCase = get()
         )
     }
     single {
         LocalTripRepository(
-            androidContext(),
-            (androidApplication() as TopluTasimaApp).database.tripDao(),
-            get()
+            context = androidContext(),
+            tripDao = (androidApplication() as TopluTasimaApp).database.tripDao(),
+            tripRemoteDataSource = get(),
+            changeHistoryStore = get(),
+            recordDiffUseCase = get()
         )
     }
     single { PersonalTripRepository() }       // Kişisel Araç — "personaltrips"
@@ -100,6 +104,9 @@ val appModule = module {
             summaryEngine = get(),
             liveSummariesEnabled = com.example.toplutasima.transit.TransitFeatureFlags.LIVE_ROOM_FLOWS &&
                 com.example.toplutasima.transit.TransitFeatureFlags.LIVE_TRANSIT_SUMMARIES,
+            insightsEngine = get(),
+            provenanceStore = get(),
+            insightsEnabled = com.example.toplutasima.transit.TransitFeatureFlags.TRANSIT_INSIGHTS,
             autoLoad = true
         )
     }
@@ -107,10 +114,22 @@ val appModule = module {
         RecordsViewModel(
             application = androidApplication(),
             profileSyncRepository = get(),
+            localTripRepository = get(),
             healthUseCase = get(),
             healthCorrectionUseCase = get(),
             provenanceStore = get(),
-            provenanceResolver = get()
+            provenanceResolver = get(),
+            duplicateCandidateUseCase = get(),
+            duplicateMergeUseCase = get(),
+            duplicateResolutionCoordinator = get(),
+            duplicateDecisionStore = get(),
+            changeHistoryStore = get(),
+            recordDiffUseCase = get(),
+            historyUndoUseCase = get(),
+            transitExportUseCase = get(),
+            summaryEngine = get(),
+            insightsEngine = get(),
+            syncStatusStore = get()
         )
     }
     viewModel { BulkUpdateViewModel(androidApplication(), get()) }

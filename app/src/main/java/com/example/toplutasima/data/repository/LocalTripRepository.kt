@@ -11,6 +11,12 @@ import com.example.toplutasima.network.firestore.FirestoreHelper
 import com.example.toplutasima.network.firestore.FirestoreTripRemoteDataSource
 import com.example.toplutasima.transit.TransitFeatureFlags
 import com.example.toplutasima.transit.sync.TransitSyncStatusStore
+import com.example.toplutasima.transit.history.TransitChangeEventDraft
+import com.example.toplutasima.transit.history.TransitChangeHistoryStore
+import com.example.toplutasima.transit.history.TransitChangeOperation
+import com.example.toplutasima.transit.history.TransitChangeSource
+import com.example.toplutasima.transit.history.TransitHistorySyncStatus
+import com.example.toplutasima.transit.history.TransitRecordDiffUseCase
 import com.example.toplutasima.usecase.SummaryCalculator
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import kotlinx.coroutines.CancellationException
@@ -47,7 +53,9 @@ class LocalTripRepository(
     private val tripDao: TripDao,
     private val tripRemoteDataSource: FirestoreTripRemoteDataSource = FirestoreTripRemoteDataSource(),
     private val deleteReceiptsEnabled: Boolean = TransitFeatureFlags.SYNC_RECEIPTS &&
-        TransitFeatureFlags.SYNC_DELETE_RECEIPTS
+        TransitFeatureFlags.SYNC_DELETE_RECEIPTS,
+    private val changeHistoryStore: TransitChangeHistoryStore? = null,
+    private val recordDiffUseCase: TransitRecordDiffUseCase = TransitRecordDiffUseCase()
 ) {
 
     private fun deletionStore(): TransitSyncStatusStore? =
@@ -84,7 +92,37 @@ class LocalTripRepository(
         if (tripsEligibleForLocalUpsert.isNotEmpty()) {
             ensureCurrentUser(userId)
             val entities = tripsEligibleForLocalUpsert.map { it.toEntity(userId) }
+            val activeHistoryStore = changeHistoryStore?.takeIf { it.enabled }
+            val localBeforeSync = if (activeHistoryStore != null) {
+                tripDao.getAllTrips(userId).associateBy { it.id }
+            } else {
+                emptyMap()
+            }
             tripDao.upsertAll(entities)
+            if (activeHistoryStore != null) {
+                entities.forEach { entity ->
+                    val before = localBeforeSync[entity.id]
+                    val changes = recordDiffUseCase.diff(before?.toMap(), entity.toMap())
+                    if (before == null || changes.isNotEmpty()) {
+                        activeHistoryStore.append(
+                            TransitChangeEventDraft(
+                                userId = userId,
+                                recordId = entity.id,
+                                operation = if (before == null) {
+                                    TransitChangeOperation.CREATE
+                                } else {
+                                    TransitChangeOperation.REMOTE_UPDATE
+                                },
+                                occurredAtEpochMillis = now,
+                                source = TransitChangeSource.REMOTE,
+                                changes = changes,
+                                syncStatus = TransitHistorySyncStatus.SYNCED,
+                                deduplicationKey = if (before == null) "remote-create:${entity.id}" else null
+                            )
+                        )
+                    }
+                }
+            }
             
             // Son eklenenlerin en büyük sortDate'ini bul
             val maxSortDate = entities.mapNotNull { it.sortDate }.maxOrNull()
@@ -389,6 +427,25 @@ class LocalTripRepository(
 
             // Programmatic cleanup for links that do not cascade from the trip table.
             getTripProfileLinkDao().deleteLinksForTrip(userId, tripId, firestoreDocId)
+            changeHistoryStore?.takeIf { it.enabled }?.append(
+                TransitChangeEventDraft(
+                    userId = userId,
+                    recordId = tripId,
+                    operation = TransitChangeOperation.LOCAL_DELETE,
+                    occurredAtEpochMillis = System.currentTimeMillis(),
+                    source = TransitChangeSource.USER,
+                    syncStatus = if (deleteReceiptsEnabled) {
+                        TransitHistorySyncStatus.PENDING
+                    } else {
+                        TransitHistorySyncStatus.SYNCED
+                    },
+                    deduplicationKey = "local-delete:$tripId:${
+                        deletionStore()?.stateForRecord(userId, tripId)?.updatedAtEpochMillis
+                            ?: System.currentTimeMillis()
+                    }"
+                )
+            )
+            Unit
         }
 
         if (!deleteReceiptsEnabled) {

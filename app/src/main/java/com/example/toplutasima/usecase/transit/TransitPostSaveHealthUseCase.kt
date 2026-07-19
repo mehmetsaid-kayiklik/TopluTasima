@@ -17,7 +17,7 @@ import com.example.toplutasima.transit.provenance.TransitFieldFreshness
 import com.example.toplutasima.transit.provenance.TransitFieldSource
 import com.example.toplutasima.transit.provenance.TransitRecordProvenanceResolver
 import com.example.toplutasima.transit.provenance.TransitRecordProvenanceStore
-import com.example.toplutasima.usecase.DataHealthChecker
+import com.example.toplutasima.transit.duplicate.TransitDuplicateCandidateUseCase
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
 import java.time.LocalDate
@@ -33,6 +33,8 @@ class TransitPostSaveHealthUseCase(
     private val validationUseCase: TransitRecordValidationUseCase = TransitRecordValidationUseCase(),
     private val correctionUseCase: TransitHealthCorrectionUseCase = TransitHealthCorrectionUseCase(),
     private val provenanceResolver: TransitRecordProvenanceResolver = TransitRecordProvenanceResolver(),
+    private val duplicateCandidateUseCase: TransitDuplicateCandidateUseCase =
+        TransitDuplicateCandidateUseCase(),
     private val minimumReasonableDistanceKm: Double = DEFAULT_MIN_DISTANCE_KM,
     private val maximumReasonableDistanceKm: Double = DEFAULT_MAX_DISTANCE_KM
 ) {
@@ -199,42 +201,22 @@ class TransitPostSaveHealthUseCase(
     }
 
     private fun findPossibleDuplicates(records: List<TripEntity>): List<TransitHealthIssue> {
-        val rows = records
-            .filter { record ->
-                !record.tarih.isNullOrBlank() &&
-                    !record.hat.isNullOrBlank() &&
-                    !record.binisDuragi.isNullOrBlank() &&
-                    !record.planlananBinis.isNullOrBlank()
-            }
-            .map { it.toHealthMap() }
-        if (rows.size < 2) return emptyList()
-
-        val localIdByAnyId = records.flatMap { record ->
-            buildList {
-                add(record.id to record.id)
-                record.firestoreDocId?.takeIf { it.isNotBlank() }?.let { add(it to record.id) }
-            }
-        }.toMap()
-
-        return DataHealthChecker.analyzeTrips(rows)
-            .asSequence()
-            .filter { it.type == DataHealthChecker.HealthIssueType.DUPLICATE }
-            .mapNotNull { issue ->
-                val localId = localIdByAnyId[issue.docId] ?: return@mapNotNull null
+        return duplicateCandidateUseCase.findCandidates(records).flatMap { candidate ->
+            listOf(
+                candidate.firstRecordId to candidate.secondRecordId,
+                candidate.secondRecordId to candidate.firstRecordId
+            ).map { (localId, relatedId) ->
                 TransitHealthIssue(
                     code = TransitHealthIssueCode.POSSIBLE_DUPLICATE,
                     severity = TransitHealthSeverity.WARNING,
                     localRecordId = localId,
                     target = TransitHealthFieldTarget(TransitValidationField.RECORD),
-                    detail = issue.detail
+                    detail = candidate.reasons.joinToString(",") { it.name },
+                    relatedRecordIds = setOf(relatedId)
                 )
             }
-            .toList()
+        }
     }
-
-    private fun TripEntity.toHealthMap(): Map<String, Any> = toMap()
-        .mapNotNull { (key, value) -> value?.let { key to it } }
-        .toMap()
 
     /** Sweep-line detection: grouping/sorting is O(n log n), the sweep and output are O(n). */
     private fun findOverlappingSegments(records: List<TripEntity>): List<TransitHealthIssue> {

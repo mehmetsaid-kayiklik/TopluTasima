@@ -33,6 +33,7 @@ import com.example.toplutasima.ui.LocaleManager
 fun TransitDeleteReceiptHost(
     onRetry: (String) -> Unit,
     onKeepLocalOnly: (String) -> Unit,
+    onOpenHistory: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     store: TransitSyncStatusStore = TransitSyncStatusStore.get(LocalContext.current),
     lang: AppLanguage = LocaleManager.currentLanguage
@@ -49,6 +50,7 @@ fun TransitDeleteReceiptHost(
         state = latest,
         onRetry = { onRetry(latest.recordId) },
         onKeepLocalOnly = { onKeepLocalOnly(latest.recordId) },
+        onOpenHistory = onOpenHistory?.let { callback -> { callback(latest.recordId) } },
         onDismiss = { dismissedKey = key },
         modifier = modifier,
         lang = lang
@@ -60,6 +62,7 @@ private fun DeleteReceiptCard(
     state: TransitSyncState,
     onRetry: () -> Unit,
     onKeepLocalOnly: () -> Unit,
+    onOpenHistory: (() -> Unit)?,
     onDismiss: () -> Unit,
     modifier: Modifier,
     lang: AppLanguage
@@ -90,6 +93,11 @@ private fun DeleteReceiptCard(
                     }
                     TextButton(onClick = onKeepLocalOnly) {
                         Text(trd(lang, "Yalnız yerel sil", "Nur lokal löschen", "Keep local delete"))
+                    }
+                }
+                if (TransitFeatureFlags.TRANSIT_CHANGE_HISTORY && onOpenHistory != null) {
+                    TextButton(onClick = onOpenHistory) {
+                        Text(trd(lang, "Geçmiş", "Verlauf", "History"))
                     }
                 }
                 TextButton(onClick = onDismiss) {

@@ -1,6 +1,8 @@
 package com.example.toplutasima.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,8 +33,15 @@ import com.example.toplutasima.ui.screens.records.MonthListScreen
 import com.example.toplutasima.ui.screens.records.PersonalRecordsContent
 import com.example.toplutasima.ui.components.transit.TransitDeleteReceiptHost
 import com.example.toplutasima.ui.components.transit.TransitHealthIssuesSheet
+import com.example.toplutasima.ui.components.transit.TransitExportDialog
+import com.example.toplutasima.ui.components.transit.TransitDuplicateRecordUiModel
+import com.example.toplutasima.ui.components.transit.TransitDuplicateResolutionSheet
+import com.example.toplutasima.ui.components.transit.TransitChangeHistorySheet
+import com.example.toplutasima.ui.components.transit.TransitHistoryUndoUiState
 import com.example.toplutasima.domain.transit.health.TransitHealthSeverity
 import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.duplicate.TransitDuplicateMergeSelection
+import com.example.toplutasima.data.repository.toEntity
 import com.example.toplutasima.ui.util.withoutEmojiCharacters
 import com.example.toplutasima.viewmodel.PersonalTripViewModel
 import com.example.toplutasima.viewmodel.RecordsViewModel
@@ -57,6 +66,32 @@ fun RecordsScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showCorrectionConfirm by remember { mutableStateOf(false) }
     var correctionRecordId by remember { mutableStateOf<String?>(null) }
+    var pendingHistoryUndoEventId by remember { mutableStateOf<String?>(null) }
+
+    val csvExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri -> viewModel.completeTransitExport(uri) }
+    val jsonExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> viewModel.completeTransitExport(uri) }
+    val exportDocumentRequest = state.transitExportDocumentRequest
+    LaunchedEffect(exportDocumentRequest, showPersonal) {
+        val request = exportDocumentRequest ?: return@LaunchedEffect
+        if (showPersonal || !TransitFeatureFlags.TRANSIT_EXPORT) return@LaunchedEffect
+        if (request.mimeType == "text/csv") {
+            csvExportLauncher.launch(request.suggestedFileName)
+        } else {
+            jsonExportLauncher.launch(request.suggestedFileName)
+        }
+        viewModel.onTransitExportPickerLaunched()
+    }
+
+    val visibleRowsById = state.selectedMonthTrips.asSequence()
+        .flatMap { it.trips.asSequence() }
+        .associateBy { it.localRecordId }
+    val visibleDuplicateCandidates = state.duplicateCandidates.filter {
+        it.firstRecordId in visibleRowsById && it.secondRecordId in visibleRowsById
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadProfileData()
@@ -99,6 +134,7 @@ fun RecordsScreen(
                 TransitDeleteReceiptHost(
                     onRetry = viewModel::retryDelete,
                     onKeepLocalOnly = viewModel::keepDeleteLocalOnly,
+                    onOpenHistory = viewModel::openChangeHistory,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
                 )
             }
@@ -143,11 +179,16 @@ fun RecordsScreen(
                     correctionRecordId = null
                     showCorrectionConfirm = true
                 },
-                onHealthClick = { viewModel.showHealthIssues(it.localRecordId) }
+                onHealthClick = { viewModel.showHealthIssues(it.localRecordId) },
+                duplicateCandidateCount = visibleDuplicateCandidates.size,
+                onReviewDuplicates = {
+                    visibleDuplicateCandidates.firstOrNull()?.let(viewModel::openDuplicateResolution)
+                }
             )
                 TransitDeleteReceiptHost(
                     onRetry = viewModel::retryDelete,
                     onKeepLocalOnly = viewModel::keepDeleteLocalOnly,
+                    onOpenHistory = viewModel::openChangeHistory,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)
                 )
             }
@@ -168,6 +209,18 @@ fun RecordsScreen(
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
         }
+        if (!showPersonal && state.exportResult.isNotBlank()) {
+            Text(
+                state.exportResult,
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (
+                    state.exportResult.contains("başarı", ignoreCase = true) ||
+                    state.exportResult.contains("güvenle", ignoreCase = true)
+                ) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+            )
+        }
     }
 
     // ── Edit Dialog (Unchanged) ──
@@ -185,7 +238,11 @@ fun RecordsScreen(
                     viewModel.setEditingRecord(null)
                     onRestoreRecord(record)
                 }
-            } else null
+            } else null,
+            historyEvents = state.selectedHistoryEvents.filter {
+                it.recordId == record["id"]?.toString().orEmpty()
+            },
+            onOpenHistory = viewModel::openChangeHistory
         )
     }
 
@@ -220,6 +277,106 @@ fun RecordsScreen(
                 }
             )
         }
+    }
+
+    if (
+        !showPersonal &&
+        TransitFeatureFlags.TRANSIT_EXPORT &&
+        state.showExportDialog
+    ) {
+        TransitExportDialog(
+            selectedMonthAvailable = state.selectedMonth != null,
+            insightsAvailable = TransitFeatureFlags.TRANSIT_INSIGHTS,
+            healthAvailable = TransitFeatureFlags.POST_SAVE_DATA_HEALTH,
+            onDismiss = viewModel::toggleExportDialog,
+            onExport = viewModel::prepareTransitExport
+        )
+    }
+
+    if (
+        !showPersonal &&
+        TransitFeatureFlags.POST_SAVE_DATA_HEALTH &&
+        TransitFeatureFlags.TRANSIT_DUPLICATE_RESOLUTION
+    ) {
+        state.selectedDuplicateCandidate?.let { candidate ->
+            val firstRow = visibleRowsById[candidate.firstRecordId]
+            val secondRow = visibleRowsById[candidate.secondRecordId]
+            if (firstRow != null && secondRow != null) {
+                val firstMap = firstRow.originalRecord
+                val secondMap = secondRow.originalRecord
+                TransitDuplicateResolutionSheet(
+                    candidate = candidate,
+                    first = TransitDuplicateRecordUiModel(
+                        record = firstMap.toEntity(firstMap["userId"]?.toString().orEmpty()),
+                        provenanceByField = firstRow.provenanceByField,
+                        healthIssues = firstRow.healthIssues
+                    ),
+                    second = TransitDuplicateRecordUiModel(
+                        record = secondMap.toEntity(secondMap["userId"]?.toString().orEmpty()),
+                        provenanceByField = secondRow.provenanceByField,
+                        healthIssues = secondRow.healthIssues
+                    ),
+                    selection = TransitDuplicateMergeSelection(state.duplicateFieldSelections),
+                    mergePreview = state.duplicateMergePreview,
+                    showProvenance = TransitFeatureFlags.PROVENANCE_BADGES,
+                    isWorking = state.isResolvingDuplicate,
+                    onSelectField = viewModel::selectDuplicateField,
+                    onKeepSeparate = viewModel::keepDuplicateSeparate,
+                    onKeepFirst = viewModel::keepFirstDuplicate,
+                    onKeepSecond = viewModel::keepSecondDuplicate,
+                    onMerge = viewModel::mergeDuplicateRecords,
+                    onReviewLater = viewModel::reviewDuplicateLater,
+                    onDismiss = viewModel::dismissDuplicateResolution,
+                    message = state.duplicateResolutionMessage.takeIf { it.isNotBlank() }
+                )
+            }
+        }
+    }
+
+    if (!showPersonal && TransitFeatureFlags.TRANSIT_CHANGE_HISTORY) {
+        state.selectedHistoryRecordId?.let { recordId ->
+            TransitChangeHistorySheet(
+                recordId = recordId,
+                events = state.selectedHistoryEvents,
+                onDismiss = viewModel::dismissChangeHistory,
+                onUndo = { event ->
+                    val undo = state.historyUndoByEventId[event.eventId]
+                    if (undo?.requiresWarningConfirmation == true) {
+                        pendingHistoryUndoEventId = event.eventId
+                    } else {
+                        viewModel.undoHistoryEvent(event.eventId)
+                    }
+                },
+                undoStateFor = { event ->
+                    state.historyUndoByEventId[event.eventId]?.let {
+                        TransitHistoryUndoUiState(
+                            enabled = it.enabled,
+                            disabledReason = it.disabledReason
+                        )
+                    } ?: TransitHistoryUndoUiState.Disabled
+                }
+            )
+        }
+    }
+
+    if (!showPersonal && pendingHistoryUndoEventId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingHistoryUndoEventId = null },
+            title = { Text("Değişikliği geri al?") },
+            text = { Text("Geri alma doğrulama uyarısı içeriyor. Eski değer yalnız bu onayla uygulanacak.") },
+            dismissButton = {
+                TextButton(onClick = { pendingHistoryUndoEventId = null }) { Text("Vazgeç") }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val eventId = pendingHistoryUndoEventId
+                        pendingHistoryUndoEventId = null
+                        if (eventId != null) viewModel.undoHistoryEvent(eventId, acknowledgeWarnings = true)
+                    }
+                ) { Text("Uyarıyla devam et") }
+            }
+        )
     }
 
     if (!showPersonal && showCorrectionConfirm) {

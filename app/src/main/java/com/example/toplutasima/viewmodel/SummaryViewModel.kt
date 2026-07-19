@@ -11,9 +11,15 @@ import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.model.SummaryData
 import com.example.toplutasima.model.WeekdayWeekendStats
 import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.insights.TransitInsight
+import com.example.toplutasima.transit.insights.TransitInsightsEngine
+import com.example.toplutasima.transit.insights.TransitInsightsRequest
+import com.example.toplutasima.transit.provenance.TransitFieldProvenance
+import com.example.toplutasima.transit.provenance.TransitRecordProvenanceStore
 import com.example.toplutasima.transit.summary.TransitSummaryDataQuality
 import com.example.toplutasima.transit.summary.TransitSummaryEngine
 import com.example.toplutasima.transit.summary.TransitSummaryRequest
+import com.example.toplutasima.transit.summary.TransitSummaryResult
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.HeatmapData
@@ -28,6 +34,7 @@ import com.example.toplutasima.viewmodel.summary.LocalTransitSummaryDataSource
 import com.example.toplutasima.viewmodel.summary.TransitSummaryDataSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +72,9 @@ data class SummaryUiState(
     val selectedLineDetail: LineDetailStats? = null,
     val weekdayWeekendStats: WeekdayWeekendStats = WeekdayWeekendStats(),
     val dataQuality: TransitSummaryDataQuality? = null,
-    val usingLiveRoomFlow: Boolean = false
+    val usingLiveRoomFlow: Boolean = false,
+    val insights: List<TransitInsight> = emptyList(),
+    val isInsightsLoading: Boolean = false
 )
 
 class SummaryViewModel internal constructor(
@@ -73,6 +82,9 @@ class SummaryViewModel internal constructor(
     private val dataSource: TransitSummaryDataSource,
     private val summaryEngine: TransitSummaryEngine,
     private val liveSummariesEnabled: Boolean,
+    private val insightsEngine: TransitInsightsEngine? = null,
+    private val provenanceStore: TransitRecordProvenanceStore? = null,
+    private val insightsEnabled: Boolean = TransitFeatureFlags.TRANSIT_INSIGHTS,
     autoLoad: Boolean
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(
@@ -99,6 +111,9 @@ class SummaryViewModel internal constructor(
     private var currentTripRows: List<Map<String, Any>> = emptyList()
     private var summaryJob: Job? = null
     private var latestSummaryRequestId: Long = 0L
+    private val resolvedInsightsEngine: TransitInsightsEngine by lazy(LazyThreadSafetyMode.NONE) {
+        insightsEngine ?: TransitInsightsEngine(summaryEngine)
+    }
 
     init {
         if (autoLoad) loadData()
@@ -127,13 +142,19 @@ class SummaryViewModel internal constructor(
                 previousSummary = null,
                 comparisonDeltas = emptyList(),
                 previousMonthName = "",
-                selectedLineDetail = null
+                selectedLineDetail = null,
+                insights = emptyList(),
+                isInsightsLoading = insightsEnabled && targetSheet != ALL_SHEET
             )
             loadedComparisonSheet = null
         }
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMsg = "")
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                errorMsg = "",
+                isInsightsLoading = insightsEnabled && targetSheet != ALL_SHEET
+            )
             try {
                 val (data, names, tripRows) = withContext(Dispatchers.IO) {
                     try {
@@ -170,6 +191,7 @@ class SummaryViewModel internal constructor(
                     }
                 }
                 val reportCards = reportSummary?.let { ReportCardUtils.build(it, heatmap) }
+                val insights = calculateLegacyInsights(targetSheet)
 
                 _uiState.value = _uiState.value.copy(
                     summary = data,
@@ -180,7 +202,9 @@ class SummaryViewModel internal constructor(
                     reportCards = reportCards,
                     reportSheetName = reportSheet.orEmpty(),
                     selectedLineDetail = null,
-                    weekdayWeekendStats = data.weekdayWeekendStats
+                    weekdayWeekendStats = data.weekdayWeekendStats,
+                    insights = insights,
+                    isInsightsLoading = false
                 )
 
                 // Auto-reload comparison if user is on tab 2
@@ -192,12 +216,14 @@ class SummaryViewModel internal constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     errorMsg = e.message ?: S.unknownError(lang()),
-                    isLoading = false
+                    isLoading = false,
+                    isInsightsLoading = false
                 )
             }
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun loadLiveData(sheetName: String? = null) {
         val targetSheet = sheetName ?: _uiState.value.selectedSheet
         if (sheetName == null && loadedSheet == targetSheet && summaryJob?.isActive == true) return
@@ -209,7 +235,9 @@ class SummaryViewModel internal constructor(
                 previousSummary = null,
                 comparisonDeltas = emptyList(),
                 previousMonthName = "",
-                selectedLineDetail = null
+                selectedLineDetail = null,
+                insights = emptyList(),
+                isInsightsLoading = insightsEnabled && targetSheet != ALL_SHEET
             )
             loadedComparisonSheet = null
         }
@@ -220,6 +248,7 @@ class SummaryViewModel internal constructor(
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
                 errorMsg = "",
+                isInsightsLoading = insightsEnabled && targetSheet != ALL_SHEET,
                 usingLiveRoomFlow = true
             )
             try {
@@ -251,6 +280,8 @@ class SummaryViewModel internal constructor(
                             selectedLineDetail = null,
                             weekdayWeekendStats = computation.summary.weekdayWeekendStats,
                             dataQuality = computation.dataQuality,
+                            insights = computation.insights,
+                            isInsightsLoading = false,
                             usingLiveRoomFlow = true
                         )
 
@@ -265,7 +296,8 @@ class SummaryViewModel internal constructor(
                 if (requestId == latestSummaryRequestId) {
                     _uiState.value = _uiState.value.copy(
                         errorMsg = e.message ?: S.unknownError(lang()),
-                        isLoading = false
+                        isLoading = false,
+                        isInsightsLoading = false
                     )
                 }
             }
@@ -329,6 +361,13 @@ class SummaryViewModel internal constructor(
                 availableSheetNames = sheetNames
             )
         )
+        val insights = calculateInsights(
+            selectedSheet = selectedSheet,
+            selectedRecords = bundle.selectedRecords,
+            selectedRows = selectedRows,
+            boundedTrendRows = trendRows,
+            selectedSummary = result
+        )
 
         return withContext(Dispatchers.Default) {
             val reportSheet = if (selectedSheet != ALL_SHEET) selectedSheet else sheetNames.lastOrNull()
@@ -355,9 +394,83 @@ class SummaryViewModel internal constructor(
                 heatmap = heatmap,
                 reportCards = reportSummary?.let { ReportCardUtils.build(it, heatmap) },
                 reportSheetName = reportSheet.orEmpty(),
-                dataQuality = result.selectedDataQuality
+                dataQuality = result.selectedDataQuality,
+                insights = insights
             )
         }
+    }
+
+    private suspend fun calculateLegacyInsights(selectedSheet: String): List<TransitInsight> {
+        if (!insightsEnabled || selectedSheet == ALL_SHEET) return emptyList()
+        val selectedYearMonth = yearMonthForSheet(selectedSheet) ?: return emptyList()
+        val previousYearMonth = selectedYearMonth.minusMonths(1)
+        val (selectedRecords, previousRecords) = withContext(Dispatchers.IO) {
+            dataSource.getTripsForMonthSnapshot(selectedYearMonth.toString()) to
+                dataSource.getTripsForMonthSnapshot(previousYearMonth.toString())
+        }
+        val selectedRows = withContext(Dispatchers.Default) {
+            selectedRecords.map(TripEntity::toSummaryMap)
+        }
+        val boundedRows = withContext(Dispatchers.Default) {
+            selectedRows + previousRecords.map(TripEntity::toSummaryMap)
+        }
+        return calculateInsights(
+            selectedSheet = selectedSheet,
+            selectedRecords = selectedRecords,
+            selectedRows = selectedRows,
+            boundedTrendRows = boundedRows,
+            selectedSummary = null
+        )
+    }
+
+    private suspend fun calculateInsights(
+        selectedSheet: String,
+        selectedRecords: List<TripEntity>,
+        selectedRows: List<Map<String, Any>>,
+        boundedTrendRows: List<Map<String, Any>>,
+        selectedSummary: TransitSummaryResult?
+    ): List<TransitInsight> {
+        if (!insightsEnabled || selectedSheet == ALL_SHEET) return emptyList()
+        val selectedYearMonth = yearMonthForSheet(selectedSheet) ?: return emptyList()
+        val previousYearMonth = selectedYearMonth.minusMonths(1)
+        val previousRows = withContext(Dispatchers.Default) {
+            boundedTrendRows.filter { rowYearMonth(it) == previousYearMonth.toString() }
+        }
+        val provenance = matchingProvenance(selectedRecords)
+
+        return try {
+            resolvedInsightsEngine.calculate(
+                TransitInsightsRequest(
+                    selectedPeriodLabel = selectedSheet,
+                    selectedRecords = selectedRows,
+                    previousPeriodLabel = previousRows.takeIf { it.isNotEmpty() }
+                        ?.let { sheetNameForYearMonth(previousYearMonth) },
+                    previousRecords = previousRows,
+                    selectedSummary = selectedSummary,
+                    provenanceByRecordId = provenance
+                )
+            ).insights
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+            // Insights are supplementary; a malformed legacy row must not hide the summary.
+            emptyList()
+        }
+    }
+
+    private fun matchingProvenance(
+        records: List<TripEntity>
+    ): Map<String, Map<String, TransitFieldProvenance>> {
+        val store = provenanceStore ?: return emptyMap()
+        return records.mapNotNull { record ->
+            val values = record.toSummaryMap()
+            val fields = store.matchingProvenance(
+                userId = record.userId,
+                localRecordId = record.id,
+                currentValues = values
+            )
+            record.id.takeIf { fields.isNotEmpty() }?.let { it to fields }
+        }.toMap()
     }
 
     fun setSheetMenuOpen(open: Boolean) {
@@ -483,7 +596,8 @@ private data class LiveSummaryComputation(
     val heatmap: HeatmapData?,
     val reportCards: TravelReportCards?,
     val reportSheetName: String,
-    val dataQuality: TransitSummaryDataQuality
+    val dataQuality: TransitSummaryDataQuality,
+    val insights: List<TransitInsight>
 )
 
 @Suppress("UNCHECKED_CAST")
@@ -502,6 +616,12 @@ private fun yearMonthForSheet(sheetName: String): YearMonth? {
     val year = parts.last().toIntOrNull() ?: return null
     return runCatching { YearMonth.of(year, month) }.getOrNull()
 }
+
+private fun sheetNameForYearMonth(period: YearMonth): String =
+    SUMMARY_MONTH_NUMBERS.entries.firstOrNull { it.value == period.monthValue }
+        ?.key
+        ?.let { monthName -> "$monthName ${period.year}" }
+        ?: period.toString()
 
 private val SUMMARY_MONTH_NUMBERS = mapOf(
     "Ocak" to 1,

@@ -36,6 +36,7 @@ import com.example.toplutasima.transit.summary.TransitSummaryDataQuality
 import com.example.toplutasima.ui.AppLanguage
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
+import com.example.toplutasima.ui.components.transit.TransitInsightsSection
 import com.example.toplutasima.ui.screens.summary.ComparisonInsightSection
 import com.example.toplutasima.ui.screens.summary.DurationDelaySection
 import com.example.toplutasima.ui.screens.summary.InsightSection
@@ -150,7 +151,19 @@ fun SummaryScreen(
                                         displaySheet = { displaySummarySheet(it, lang) },
                                         lang = lang
                                     )
-                                    InsightSection(summary, lang)
+                                    if (
+                                        TransitFeatureFlags.TRANSIT_INSIGHTS &&
+                                        state.selectedSheet != "T\u00fcm\u00fc"
+                                    ) {
+                                        item(key = "transit-insights-${state.selectedSheet}") {
+                                            TransitInsightsSection(
+                                                insights = state.insights,
+                                                lang = lang
+                                            )
+                                        }
+                                    } else {
+                                        InsightSection(summary, lang)
+                                    }
                                 }
                                 1 -> DurationDelaySection(
                                     s = summary,

@@ -4,6 +4,12 @@ import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.domain.transit.health.TransitHealthCorrection
 import com.example.toplutasima.domain.transit.health.TransitHealthIssue
 import com.example.toplutasima.transit.provenance.TransitFieldProvenance
+import com.example.toplutasima.transit.duplicate.TransitDuplicateCandidate
+import com.example.toplutasima.transit.duplicate.TransitDuplicateMergePreview
+import com.example.toplutasima.transit.duplicate.TransitMergeValueSource
+import com.example.toplutasima.transit.export.PreparedTransitExport
+import com.example.toplutasima.transit.export.TransitSafCreateDocumentRequest
+import com.example.toplutasima.transit.history.TransitChangeEvent
 import com.example.toplutasima.usecase.RecordFilterState
 
 data class RecordRowUiModel(
@@ -50,6 +56,12 @@ data class DayGroup(
     val trips: List<RecordRowUiModel>
 )
 
+data class TransitHistoryUndoUiModel(
+    val enabled: Boolean,
+    val requiresWarningConfirmation: Boolean = false,
+    val disabledReason: String? = null
+)
+
 data class RecordsUiState(
     val monthSummaries: List<MonthSummary> = emptyList(),
     val selectedMonth: MonthSummary? = null,
@@ -81,5 +93,19 @@ data class RecordsUiState(
     val isHealthScanning: Boolean = false,
     val isApplyingHealthCorrections: Boolean = false,
     val fullHealthScanMessage: String = "",
-    val fullHealthIssueCount: Int = 0
+    val fullHealthIssueCount: Int = 0,
+    val duplicateCandidates: List<TransitDuplicateCandidate> = emptyList(),
+    val selectedDuplicateCandidate: TransitDuplicateCandidate? = null,
+    val duplicateFieldSelections: Map<String, TransitMergeValueSource> = emptyMap(),
+    val duplicateMergePreview: TransitDuplicateMergePreview? = null,
+    val isResolvingDuplicate: Boolean = false,
+    val duplicateResolutionMessage: String = "",
+    val selectedHistoryRecordId: String? = null,
+    val selectedHistoryEvents: List<TransitChangeEvent> = emptyList(),
+    val selectedHistoryEventId: String? = null,
+    val historyUndoByEventId: Map<String, TransitHistoryUndoUiModel> = emptyMap(),
+    val isHistoryLoading: Boolean = false,
+    val historyMessage: String = "",
+    val preparedTransitExport: PreparedTransitExport? = null,
+    val transitExportDocumentRequest: TransitSafCreateDocumentRequest? = null
 )

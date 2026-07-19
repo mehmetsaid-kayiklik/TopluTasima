@@ -50,6 +50,9 @@ import com.example.toplutasima.model.TicketStatus
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.usecase.TransitRecordCalculations
 import com.example.toplutasima.usecase.TransitTimeUtils
+import com.example.toplutasima.transit.TransitFeatureFlags
+import com.example.toplutasima.transit.history.TransitChangeEvent
+import com.example.toplutasima.ui.components.transit.TransitChangeHistorySection
 
 // ── Edit Dialog ──
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +65,9 @@ internal fun EditRecordDialog(
     onDismiss: () -> Unit,
     onSave: (String, Map<String, Any?>, String?, String?) -> Unit,
     onDelete: () -> Unit,
-    onRestore: (() -> Unit)? = null
+    onRestore: (() -> Unit)? = null,
+    historyEvents: List<TransitChangeEvent> = emptyList(),
+    onOpenHistory: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val docId = record["firestoreDocId"]?.toString() ?: ""
@@ -341,6 +346,14 @@ internal fun EditRecordDialog(
                 ) {
                     Text(S.ticketControl(lang), style = MaterialTheme.typography.bodyMedium)
                     Switch(checked = biletKontrolu, onCheckedChange = { biletKontrolu = it })
+                }
+                if (TransitFeatureFlags.TRANSIT_CHANGE_HISTORY) {
+                    val localRecordId = record["id"]?.toString().orEmpty()
+                    TransitChangeHistorySection(
+                        recordId = localRecordId,
+                        events = historyEvents,
+                        onOpenHistory = onOpenHistory
+                    )
                 }
             }
         },

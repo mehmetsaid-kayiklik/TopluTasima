@@ -3,6 +3,7 @@ package com.example.toplutasima.usecase.transit
 import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.domain.transit.health.TransitHealthIssueCode
 import com.example.toplutasima.domain.transit.health.TransitHealthSeverity
+import com.example.toplutasima.transit.duplicate.TransitDuplicateCandidateUseCase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -21,6 +22,20 @@ class TransitPostSaveHealthUseCaseTest {
         val duplicates = result.issues.filter { it.code == TransitHealthIssueCode.POSSIBLE_DUPLICATE }
         assertEquals(setOf("one", "two"), duplicates.map { it.localRecordId }.toSet())
         assertTrue(duplicates.all { it.severity == TransitHealthSeverity.WARNING })
+    }
+
+    @Test
+    fun `disabled post-save health duplicate detector emits no duplicate warning`() {
+        val disabledDuplicateUseCase = TransitPostSaveHealthUseCase(
+            duplicateCandidateUseCase = TransitDuplicateCandidateUseCase(enabled = false)
+        )
+
+        val result = disabledDuplicateUseCase.scan(
+            listOf(healthyTrip("one"), healthyTrip("two")),
+            provenanceEnabled = false
+        )
+
+        assertFalse(result.issues.any { it.code == TransitHealthIssueCode.POSSIBLE_DUPLICATE })
     }
 
     @Test

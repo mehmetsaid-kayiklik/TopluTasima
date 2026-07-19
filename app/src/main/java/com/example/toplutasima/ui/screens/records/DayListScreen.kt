@@ -61,6 +61,7 @@ import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.transit.TransitFeatureFlags
 import com.example.toplutasima.ui.S
 import com.example.toplutasima.ui.components.transit.TransitHealthOverviewCard
+import com.example.toplutasima.ui.components.transit.TransitDuplicateOverviewCard
 import com.example.toplutasima.ui.theme.AmberDark
 import com.example.toplutasima.ui.theme.AmberLight
 import com.example.toplutasima.ui.theme.BorderDark
@@ -121,7 +122,9 @@ internal fun DayListScreen(
     healthScanMessage: String = "",
     onScanHealth: () -> Unit = {},
     onApplyHealthCorrections: () -> Unit = {},
-    onHealthClick: (RecordRowUiModel) -> Unit = {}
+    onHealthClick: (RecordRowUiModel) -> Unit = {},
+    duplicateCandidateCount: Int = 0,
+    onReviewDuplicates: () -> Unit = {}
 ) {
     val dark = isDark()
     val borderColor = if (dark) BorderDark else BorderLight
@@ -192,7 +195,7 @@ internal fun DayListScreen(
         Divider(color = borderColor, thickness = 0.5.dp)
 
         // ── Export Format Dialog ──
-        if (showExportDialog) {
+        if (showExportDialog && !TransitFeatureFlags.TRANSIT_EXPORT) {
             AlertDialog(
                 onDismissRequest = onToggleExportDialog,
                 title = { Text(S.exportChooseFormat(lang), fontWeight = FontWeight.Bold) },
@@ -345,6 +348,20 @@ internal fun DayListScreen(
                                         scanMessage = healthScanMessage,
                                         onScanAll = onScanHealth,
                                         onApplySafeCorrections = onApplyHealthCorrections,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                            if (
+                                TransitFeatureFlags.POST_SAVE_DATA_HEALTH &&
+                                TransitFeatureFlags.TRANSIT_DUPLICATE_RESOLUTION &&
+                                duplicateCandidateCount > 0
+                            ) {
+                                item(key = "transit-duplicate-resolution") {
+                                    TransitDuplicateOverviewCard(
+                                        candidateCount = duplicateCandidateCount,
+                                        isLoading = isHealthScanning,
+                                        onReviewCandidates = onReviewDuplicates,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                     )
                                 }

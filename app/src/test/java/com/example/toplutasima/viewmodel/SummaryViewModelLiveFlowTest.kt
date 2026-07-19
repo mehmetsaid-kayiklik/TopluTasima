@@ -7,6 +7,8 @@ import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.data.repository.toMap
 import com.example.toplutasima.model.MonthSummary
 import com.example.toplutasima.model.SummaryData
+import com.example.toplutasima.transit.insights.TransitInsightType
+import com.example.toplutasima.transit.insights.TransitInsightsEngine
 import com.example.toplutasima.transit.summary.TransitSummaryEngine
 import com.example.toplutasima.transit.summary.TransitSummaryHealthAssessment
 import com.example.toplutasima.transit.summary.TransitSummaryHealthAssessor
@@ -235,15 +237,164 @@ class SummaryViewModelLiveFlowTest {
         assertEquals(0, source.liveObserverCalls.get())
     }
 
+    @Test
+    fun `insights use only selected and immediately previous month`() {
+        val source = FakeTransitSummaryDataSource().apply {
+            monthSummaries.value = listOf(
+                monthSummary("Haziran", "2026", 2),
+                monthSummary("Temmuz", "2026", 3)
+            )
+            val current = listOf(
+                trip("july-1", line = "S8"),
+                trip("july-2", line = "S8", date = "19.07.2026"),
+                trip("july-3", line = "S8", date = "20.07.2026")
+            )
+            val previous = listOf(
+                trip("june-1", line = "U4", yearMonth = "2026-06", date = "18.06.2026"),
+                trip("june-2", line = "U4", yearMonth = "2026-06", date = "19.06.2026")
+            )
+            monthFlow("2026-07").value = current
+            rangeFlow("2026-02", "2026-07").value = previous + current
+        }
+        val viewModel = createViewModel(
+            source = source,
+            liveEnabled = true,
+            insightsEnabled = true
+        )
+
+        viewModel.loadData("Temmuz 2026")
+        awaitUiState(viewModel) { state ->
+            state.insights.any { it.type == TransitInsightType.USAGE_CHANGE }
+        }
+
+        val usage = viewModel.uiState.value.insights.single {
+            it.type == TransitInsightType.USAGE_CHANGE
+        }
+        assertEquals("Temmuz 2026", usage.periodLabel)
+        assertEquals("Haziran 2026", usage.explanation.comparisonPeriodLabel)
+        assertEquals(3, usage.explanation.recordCount)
+        assertEquals(listOf("2026-07"), source.observedMonths.toList())
+    }
+
+    @Test
+    fun `January insight comparison crosses to December of the previous year`() {
+        val source = FakeTransitSummaryDataSource().apply {
+            monthSummaries.value = listOf(
+                monthSummary("Aralık", "2025", 2),
+                monthSummary("Ocak", "2026", 3)
+            )
+            val current = listOf(
+                trip("jan-1", line = "S8", yearMonth = "2026-01", date = "18.01.2026"),
+                trip("jan-2", line = "S8", yearMonth = "2026-01", date = "19.01.2026"),
+                trip("jan-3", line = "S8", yearMonth = "2026-01", date = "20.01.2026")
+            )
+            val previous = listOf(
+                trip("dec-1", line = "U4", yearMonth = "2025-12", date = "18.12.2025"),
+                trip("dec-2", line = "U4", yearMonth = "2025-12", date = "19.12.2025")
+            )
+            monthFlow("2026-01").value = current
+            rangeFlow("2025-08", "2026-01").value = previous + current
+        }
+        val viewModel = createViewModel(
+            source = source,
+            liveEnabled = true,
+            insightsEnabled = true
+        )
+
+        viewModel.loadData("Ocak 2026")
+        awaitUiState(viewModel) { state ->
+            state.insights.any { it.type == TransitInsightType.USAGE_CHANGE }
+        }
+
+        val usage = viewModel.uiState.value.insights.single {
+            it.type == TransitInsightType.USAGE_CHANGE
+        }
+        assertEquals("Aralık 2025", usage.explanation.comparisonPeriodLabel)
+        assertEquals(listOf("2026-01"), source.observedMonths.toList())
+    }
+
+    @Test
+    fun `disabled insights gate never invokes insights engine`() {
+        val insightCalculationCount = AtomicInteger(0)
+        val guardedInsightEngine = TransitInsightsEngine(
+            summaryEngine = TransitSummaryEngine(
+                healthAssessor = TransitSummaryHealthAssessor { records ->
+                    insightCalculationCount.incrementAndGet()
+                    TransitSummaryHealthAssessment(recordsForStatistics = records)
+                }
+            )
+        )
+        val source = FakeTransitSummaryDataSource().apply {
+            monthSummaries.value = listOf(monthSummary("Temmuz", "2026", 2))
+            val records = listOf(
+                trip("gate-1", line = "S8"),
+                trip("gate-2", line = "S8", date = "19.07.2026")
+            )
+            monthFlow("2026-07").value = records
+            rangeFlow("2026-02", "2026-07").value = records
+        }
+        val viewModel = createViewModel(
+            source = source,
+            liveEnabled = true,
+            insightsEnabled = false,
+            insightsEngine = guardedInsightEngine
+        )
+
+        viewModel.loadData("Temmuz 2026")
+        awaitUiState(viewModel) { it.summary?.totalTrips == 2 }
+
+        assertTrue(viewModel.uiState.value.insights.isEmpty())
+        assertFalse(viewModel.uiState.value.isInsightsLoading)
+        assertEquals(0, insightCalculationCount.get())
+    }
+
+    @Test
+    fun `insights remain available through scoped snapshots when live summaries are disabled`() {
+        val current = listOf(
+            trip("legacy-july-1", line = "S8"),
+            trip("legacy-july-2", line = "S8", date = "19.07.2026")
+        )
+        val previous = listOf(
+            trip("legacy-june-1", line = "U4", yearMonth = "2026-06", date = "18.06.2026"),
+            trip("legacy-june-2", line = "U4", yearMonth = "2026-06", date = "19.06.2026")
+        )
+        val source = FakeTransitSummaryDataSource().apply {
+            legacyRecords = current
+            legacyResult = SummaryCalculator.computeSummary(current.map { it.summaryRow() })
+            monthFlow("2026-07").value = current
+            monthFlow("2026-06").value = previous
+        }
+        val viewModel = createViewModel(
+            source = source,
+            liveEnabled = false,
+            insightsEnabled = true
+        )
+
+        viewModel.loadData("Temmuz 2026")
+        awaitUiState(viewModel) { state ->
+            state.insights.any { it.type == TransitInsightType.USAGE_CHANGE }
+        }
+
+        assertFalse(viewModel.uiState.value.usingLiveRoomFlow)
+        assertEquals(0, source.liveObserverCalls.get())
+        assertEquals("Haziran 2026", viewModel.uiState.value.insights
+            .single { it.type == TransitInsightType.USAGE_CHANGE }
+            .explanation.comparisonPeriodLabel)
+    }
+
     private fun createViewModel(
         source: TransitSummaryDataSource,
         liveEnabled: Boolean,
-        engine: TransitSummaryEngine = TransitSummaryEngine()
+        engine: TransitSummaryEngine = TransitSummaryEngine(),
+        insightsEnabled: Boolean = false,
+        insightsEngine: TransitInsightsEngine = TransitInsightsEngine(engine)
     ): SummaryViewModel = SummaryViewModel(
         application = application,
         dataSource = source,
         summaryEngine = engine,
         liveSummariesEnabled = liveEnabled,
+        insightsEngine = insightsEngine,
+        insightsEnabled = insightsEnabled,
         autoLoad = false
     )
 
