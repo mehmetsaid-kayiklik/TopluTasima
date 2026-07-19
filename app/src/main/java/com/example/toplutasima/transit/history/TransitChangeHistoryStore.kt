@@ -260,7 +260,7 @@ class TransitChangeHistoryStore internal constructor(
             .toMutableList()
 
         while (userBounded.size > 1 && encodedSize(userBounded) > maximumEncodedBytes) {
-            userBounded.removeLast()
+            userBounded.removeAt(userBounded.lastIndex)
         }
         return userBounded.sortedWith(HISTORY_ORDER)
     }
