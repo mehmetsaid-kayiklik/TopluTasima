@@ -17,10 +17,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Create
 import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.List
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -31,6 +33,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import com.example.toplutasima.drive.DriveFeatureFlags
+import com.example.toplutasima.drive.ui.DriveVehiclesScreen
 import com.example.toplutasima.model.NavItem
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
@@ -52,7 +57,7 @@ import com.example.toplutasima.viewmodel.SummaryViewModel
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
-fun MainAppScreen() {
+fun MainAppScreen(initialVehicleId: String? = null) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showPersonal by remember { mutableStateOf(false) }
     val lang = LocaleManager.currentLanguage
@@ -61,12 +66,24 @@ fun MainAppScreen() {
     val rmvLogViewModel: RmvLogViewModel = koinViewModel()
     val summaryViewModel: SummaryViewModel = koinViewModel()
     val settingsViewModel: SettingsViewModel = koinViewModel()
-    val navItems = listOf(
+    val existingNavItems = listOf(
         NavItem(S.navRecord(lang), Icons.Filled.Create, Icons.Outlined.Create),
         NavItem(S.navSummary(lang), Icons.Filled.List, Icons.Outlined.List),
         NavItem(S.navRecords(lang), Icons.Filled.DateRange, Icons.Outlined.DateRange),
         NavItem(S.navSettings(lang), Icons.Filled.Settings, Icons.Outlined.Settings)
     )
+    val navItems = if (DriveFeatureFlags.DRIVE_CORE) {
+        existingNavItems + NavItem(
+            S.navVehicles(lang),
+            Icons.Filled.DirectionsCar,
+            Icons.Outlined.DirectionsCar
+        )
+    } else {
+        existingNavItems
+    }
+    LaunchedEffect(initialVehicleId) {
+        if (initialVehicleId != null && DriveFeatureFlags.DRIVE_CORE) selectedTab = 4
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -125,6 +142,12 @@ fun MainAppScreen() {
                     SettingsScreen(
                         modifier = Modifier.padding(innerPadding),
                         settingsViewModel = settingsViewModel
+                    )
+                }
+                4 -> if (DriveFeatureFlags.DRIVE_CORE) {
+                    DriveVehiclesScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        initialVehicleId = initialVehicleId
                     )
                 }
             }

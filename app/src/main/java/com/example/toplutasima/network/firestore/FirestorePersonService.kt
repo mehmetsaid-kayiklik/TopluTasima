@@ -9,7 +9,15 @@ object FirestorePersonService {
     data class PersonShareState(
         val id: String,
         val sharedWithTransit: Boolean,
-        val archived: Boolean
+        val archived: Boolean,
+        val documentId: String = id,
+        val payloadId: String? = id,
+        val identityValid: Boolean = documentId == payloadId
+    )
+
+    data class PersonTombstone(
+        val personId: String,
+        val deletedAt: Long
     )
 
     private fun collection() = FirestoreHelper.personsCollection()
@@ -25,8 +33,10 @@ object FirestorePersonService {
             .get().await()
         return snap.documents.mapNotNull { doc ->
             val d = doc.data ?: return@mapNotNull null
+            val payloadId = d["id"]?.toString() ?: return@mapNotNull null
+            if (payloadId != doc.id) return@mapNotNull null
             ProfileEntity(
-                id                = d["id"]?.toString() ?: doc.id,
+                id                = doc.id,
                 displayName       = d["displayName"]?.toString() ?: "",
                 memoryNote        = d["memoryNote"]?.toString(),
                 createdAt         = (d["createdAt"] as? Number)?.toLong() ?: 0L,
@@ -41,11 +51,26 @@ object FirestorePersonService {
         val snap = collection().get().await()
         return snap.documents.map { doc ->
             val d = doc.data.orEmpty()
+            val payloadId = d["id"]?.toString()
             PersonShareState(
-                id = d["id"]?.toString() ?: doc.id,
+                id = doc.id,
                 sharedWithTransit = d["sharedWithTransit"] as? Boolean ?: false,
-                archived = d["archived"] as? Boolean ?: false
+                archived = d["archived"] as? Boolean ?: false,
+                documentId = doc.id,
+                payloadId = payloadId,
+                identityValid = payloadId == doc.id
             )
+        }
+    }
+
+    suspend fun fetchPersonTombstones(): List<PersonTombstone> {
+        val snap = FirestoreHelper.userRoot().collection("sync_tombstones")
+            .whereEqualTo("entityType", "person")
+            .get().await()
+        return snap.documents.mapNotNull { doc ->
+            val personId = doc.getString("entityId") ?: return@mapNotNull null
+            val deletedAt = doc.getLong("deletedAt") ?: return@mapNotNull null
+            PersonTombstone(personId = personId, deletedAt = deletedAt)
         }
     }
 

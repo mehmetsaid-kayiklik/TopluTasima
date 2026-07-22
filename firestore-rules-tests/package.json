@@ -1,0 +1,13 @@
+{
+  "name": "toplutasima-firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "firebase --config ../firebase.json emulators:exec --only firestore --project toplutasima-sprint6a-test \"node vehicleAssignments.rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "4.0.1",
+    "firebase": "11.10.0",
+    "firebase-tools": "14.7.0"
+  }
+}

@@ -3,8 +3,15 @@ package com.example.toplutasima.data.local
 import android.app.Application
 import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
+import com.example.toplutasima.data.local.entity.DriveSyncOperationEntity
+import com.example.toplutasima.data.local.entity.DriveTripEntity
+import com.example.toplutasima.data.local.entity.DriveVehicleEntity
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -30,11 +37,16 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun `migration 7 to 8 attributes legacy rows to current user`() = runBlocking {
+    fun `migration 7 to 11 attributes legacy rows and preserves them`() = runBlocking {
         createVersion7Database()
 
         val database = Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
-            .addMigrations(AppDatabase.migration7To8("user-A"))
+            .addMigrations(
+                AppDatabase.migration7To8("user-A"),
+                AppDatabase.MIGRATION_8_9,
+                AppDatabase.MIGRATION_9_10,
+                AppDatabase.MIGRATION_10_11
+            )
             .allowMainThreadQueries()
             .build()
         database.openHelper.writableDatabase
@@ -50,6 +62,118 @@ class AppDatabaseMigrationTest {
             database.tripProfileLinkDao().getAllLinks("user-A").map { it.id }
         )
         database.close()
+    }
+
+    @Test
+    fun `migration 8 to 11 creates drive tables without changing existing rows`() = runBlocking {
+        createVersion8Database()
+
+        val database = Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
+            .addMigrations(
+                AppDatabase.MIGRATION_8_9,
+                AppDatabase.MIGRATION_9_10,
+                AppDatabase.MIGRATION_10_11
+            )
+            .allowMainThreadQueries()
+            .build()
+        database.openHelper.writableDatabase
+
+        assertEquals(listOf("legacy-trip"), database.tripDao().getAllTrips("user-A").map { it.id })
+        assertEquals(
+            listOf("legacy-profile"),
+            database.profileDao().getAllProfiles("user-A").map { it.id }
+        )
+        assertEquals(
+            listOf("legacy-link"),
+            database.tripProfileLinkDao().getAllLinks("user-A").map { it.id }
+        )
+
+        database.driveVehicleDao().upsert(vehicle())
+        database.driveTripDao().upsert(trip())
+        database.driveSyncOperationDao().upsert(operation())
+
+        assertEquals("Vehicle", database.driveVehicleDao().getVehicle("user-A", "vehicle-1")?.displayName)
+        assertEquals("vehicle-1", database.driveTripDao().getTrip("user-A", "drive-trip-1")?.vehicleId)
+        assertEquals(1, database.driveSyncOperationDao().pendingCount("user-A"))
+        assertEquals(0, database.driveSyncOperationDao().pendingCount("user-B"))
+        database.close()
+    }
+
+    @Test
+    fun `migration 9 to 11 preserves drive rows and creates sync metadata`() = runBlocking {
+        createVersion9Database()
+
+        val database = Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
+            .addMigrations(AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11)
+            .allowMainThreadQueries()
+            .build()
+        database.openHelper.writableDatabase
+
+        assertEquals("Vehicle", database.driveVehicleDao()
+            .getVehicle("user-A", "vehicle-1")?.displayName)
+        database.driveSyncMetadataDao().upsert(
+            com.example.toplutasima.data.local.entity.DriveSyncMetadataEntity(
+                userId = "user-A",
+                initialHydrationCompleted = true,
+                updatedAt = 30L
+            )
+        )
+        assertEquals(true, database.driveSyncMetadataDao().get("user-A")
+            ?.initialHydrationCompleted)
+        assertEquals(emptyList<Any>(), database.driveSyncReceiptDao()
+            .observeRecent("user-A", 10).first())
+        database.close()
+    }
+
+    private fun createVersion9Database() {
+        createVersion8Database()
+        val openHelper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(DATABASE_NAME)
+                .callback(object : SupportSQLiteOpenHelper.Callback(9) {
+                    override fun onCreate(db: SupportSQLiteDatabase) = Unit
+
+                    override fun onUpgrade(
+                        db: SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int
+                    ) {
+                        check(oldVersion == 8 && newVersion == 9)
+                        AppDatabase.MIGRATION_8_9.migrate(db)
+                        db.execSQL(
+                            "INSERT INTO drive_vehicles " +
+                                "(id, userId, displayName, createdAt, updatedAt, syncState) " +
+                                "VALUES ('vehicle-1', 'user-A', 'Vehicle', 10, 10, 'SYNCED')"
+                        )
+                    }
+                })
+                .build()
+        )
+        openHelper.writableDatabase
+        openHelper.close()
+    }
+
+    private fun createVersion8Database() {
+        createVersion7Database()
+        val openHelper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(DATABASE_NAME)
+                .callback(object : SupportSQLiteOpenHelper.Callback(8) {
+                    override fun onCreate(db: SupportSQLiteDatabase) = Unit
+
+                    override fun onUpgrade(
+                        db: SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int
+                    ) {
+                        check(oldVersion == 7 && newVersion == 8)
+                        AppDatabase.migration7To8("user-A").migrate(db)
+                    }
+                })
+                .build()
+        )
+        openHelper.writableDatabase
+        openHelper.close()
     }
 
     private fun createVersion7Database() {
@@ -138,6 +262,38 @@ class AppDatabaseMigrationTest {
         db.version = 7
         db.close()
     }
+
+    private fun vehicle() = DriveVehicleEntity(
+        id = "vehicle-1",
+        userId = "user-A",
+        displayName = "Vehicle",
+        createdAt = 10,
+        updatedAt = 10,
+        syncState = "PENDING_CREATE"
+    )
+
+    private fun trip() = DriveTripEntity(
+        id = "drive-trip-1",
+        userId = "user-A",
+        vehicleId = "vehicle-1",
+        startedAt = 20,
+        distanceKm = 12.5,
+        purpose = "PERSONAL",
+        entrySource = "MANUAL",
+        createdAt = 20,
+        updatedAt = 20,
+        syncState = "PENDING_CREATE"
+    )
+
+    private fun operation() = DriveSyncOperationEntity(
+        operationId = "operation-1",
+        userId = "user-A",
+        entityType = "VEHICLE",
+        recordId = "vehicle-1",
+        operationType = "CREATE_VEHICLE",
+        createdAt = 10,
+        updatedAt = 10
+    )
 
     private companion object {
         const val DATABASE_NAME = "migration-7-8-test.db"

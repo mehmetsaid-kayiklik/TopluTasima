@@ -97,6 +97,7 @@ android {
         // credentials never ship inside the binary.
         buildConfigField("String", "RMV_ACCESS_ID", "\"${requiredLocalProperty("RMV_ACCESS_ID").escapeBuildConfigString()}\"")
         buildConfigField("String", "ORS_API_KEY",   "\"${requiredLocalProperty("ORS_API_KEY").escapeBuildConfigString()}\"")
+        buildConfigField("boolean", "DRIVE_PERSON_DIRECTORY", "true")
     }
 
     lint {

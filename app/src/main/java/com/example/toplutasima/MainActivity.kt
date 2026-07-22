@@ -3,6 +3,7 @@ package com.example.toplutasima
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -10,6 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -17,12 +21,14 @@ import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.auth.CurrentUserProvider
 import com.example.toplutasima.auth.LoginActivity
 import com.example.toplutasima.model.ThemeMode
+import com.example.toplutasima.drive.ui.VehicleDeepLinkRoute
 import com.example.toplutasima.ui.navigation.MainAppScreen
 import com.example.toplutasima.ui.theme.TopluTasimaTheme
 import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
     private var displayedUserId: String? = null
+    private var deepLinkVehicleId by mutableStateOf<String?>(null)
     private val authStateListener = FirebaseAuth.AuthStateListener { auth ->
         val authenticatedUserId = auth.currentUser?.uid
         if (authenticatedUserId != displayedUserId) {
@@ -33,6 +39,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleDeepLink(intent)
 
         displayedUserId = CurrentUserProvider.currentUserIdOrNull()
         if (displayedUserId == null) {
@@ -65,7 +72,7 @@ class MainActivity : ComponentActivity() {
 
             TopluTasimaTheme(darkTheme = darkTheme, dynamicColor = useMaterialYou) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    MainAppScreen()
+                    MainAppScreen(initialVehicleId = deepLinkVehicleId)
                 }
             }
         }
@@ -74,6 +81,12 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
     }
 
     override fun onStop() {
@@ -89,5 +102,16 @@ class MainActivity : ComponentActivity() {
             )
         )
         finish()
+    }
+
+    private fun handleDeepLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        when (val route = VehicleDeepLinkRoute.parse(intent.data)) {
+            is VehicleDeepLinkRoute.ParseResult.Valid -> deepLinkVehicleId = route.vehicleId
+            VehicleDeepLinkRoute.ParseResult.Invalid -> {
+                deepLinkVehicleId = null
+                Toast.makeText(this, "Araç bağlantısı geçersiz.", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 }

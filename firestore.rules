@@ -1,8 +1,67 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function owns(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function safeId(value) {
+      return value is string && value.matches('^[^/]{1,128}$');
+    }
+
+    function assignmentFields() {
+      return [
+        'vehicleId',
+        'personId',
+        'schemaVersion',
+        'revision',
+        'operationId',
+        'source',
+        'clientUpdatedAt',
+        '_serverUpdatedAt',
+        'deletedAt'
+      ];
+    }
+
+    function validAssignmentShape(data, vehicleId) {
+      return data.keys().hasAll(assignmentFields())
+        && data.vehicleId == vehicleId
+        && safeId(data.vehicleId)
+        && data.schemaVersion is int
+        && data.schemaVersion == 1
+        && data.revision is int
+        && data.revision >= 0
+        && data.operationId is string
+        && data.operationId.matches('^[^/]{1,160}$')
+        && data.source in ['BELLEK', 'TOPLU_TASIMA', 'UNKNOWN']
+        && data.clientUpdatedAt is int
+        && data.clientUpdatedAt >= 0
+        && data._serverUpdatedAt == request.time
+        && (
+          (data.deletedAt == null && safeId(data.personId))
+          ||
+          (data.deletedAt is int && data.deletedAt >= 0
+            && (data.personId == null || safeId(data.personId)))
+        );
+    }
+
+    match /users/{userId}/vehicleAssignments/{vehicleId} {
+      allow read: if owns(userId);
+      allow create: if owns(userId)
+        && request.resource.data.keys().hasOnly(assignmentFields())
+        && validAssignmentShape(request.resource.data, vehicleId);
+      allow update: if owns(userId)
+        // Unknown fields written by a newer client may be preserved, never changed by v1.
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(assignmentFields())
+        && validAssignmentShape(request.resource.data, vehicleId)
+        && request.resource.data.revision >= resource.data.revision;
+      allow delete: if false;
+    }
+
+    // Existing per-user collections retain their prior owner-only boundary. The explicit
+    // exclusion prevents this recursive rule from bypassing vehicleAssignments validation.
+    match /users/{userId}/{collection}/{document=**} {
+      allow read, write: if collection != 'vehicleAssignments' && owns(userId);
     }
   }
 }

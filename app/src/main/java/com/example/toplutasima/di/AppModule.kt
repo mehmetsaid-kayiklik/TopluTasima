@@ -35,7 +35,7 @@ import org.koin.dsl.module
  * Uygulamanın tek Koin modülü.
  */
 val appModule = module {
-    includes(transitFeatureModule)
+    includes(transitFeatureModule, driveFeatureModule)
 
     // ── Remote Data Sources ─────────────────────────────────────────────────
     single { FirestoreTripRemoteDataSource() }

@@ -161,6 +161,176 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration8To9_preservesExistingRowsAndCreatesDriveSchema() {
+        runMigration(
+            databaseName = "migration_8_9.db",
+            startVersion = 8,
+            endVersion = 9,
+            migration = AppDatabase.MIGRATION_8_9,
+            createAndSeed = { db ->
+                db.execSQL(
+                    """
+                    CREATE TABLE `existing_v8_rows` (
+                        `id` TEXT NOT NULL PRIMARY KEY,
+                        `value` TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "INSERT INTO `existing_v8_rows` (`id`, `value`) VALUES ('legacy', 'kept')"
+                )
+            }
+        ) { db ->
+            db.query("SELECT value FROM existing_v8_rows WHERE id = 'legacy'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("kept", cursor.getString(0))
+            }
+            assertTrue(tableExists(db, "drive_vehicles"))
+            assertTrue(tableExists(db, "drive_trips"))
+            assertTrue(tableExists(db, "drive_sync_operations"))
+            assertEquals(
+                setOf(
+                    "id",
+                    "userId",
+                    "displayName",
+                    "brand",
+                    "model",
+                    "licensePlate",
+                    "modelYear",
+                    "fuelType",
+                    "initialOdometerKm",
+                    "currentOdometerKm",
+                    "assignedPersonId",
+                    "notes",
+                    "createdAt",
+                    "updatedAt",
+                    "deletedAt",
+                    "syncState"
+                ),
+                tableColumns(db, "drive_vehicles")
+            )
+            assertEquals(
+                setOf(
+                    "id",
+                    "userId",
+                    "vehicleId",
+                    "startedAt",
+                    "endedAt",
+                    "startOdometerKm",
+                    "endOdometerKm",
+                    "distanceKm",
+                    "purpose",
+                    "startLocationName",
+                    "endLocationName",
+                    "notes",
+                    "entrySource",
+                    "createdAt",
+                    "updatedAt",
+                    "deletedAt",
+                    "syncState"
+                ),
+                tableColumns(db, "drive_trips")
+            )
+            assertEquals(
+                setOf(
+                    "operationId",
+                    "userId",
+                    "entityType",
+                    "recordId",
+                    "operationType",
+                    "createdAt",
+                    "updatedAt",
+                    "attemptCount",
+                    "lastErrorCode",
+                    "retryEligible",
+                    "nextAttemptAt"
+                ),
+                tableColumns(db, "drive_sync_operations")
+            )
+        }
+    }
+
+    @Test
+    fun migration9To10_preservesExistingRowsAndCreatesDriveSyncSchema() {
+        runMigration(
+            databaseName = "migration_9_10.db",
+            startVersion = 9,
+            endVersion = 10,
+            migration = AppDatabase.MIGRATION_9_10,
+            createAndSeed = { db ->
+                db.execSQL(
+                    "CREATE TABLE `existing_v9_rows` " +
+                        "(`id` TEXT NOT NULL PRIMARY KEY, `value` TEXT NOT NULL)"
+                )
+                db.execSQL(
+                    "INSERT INTO `existing_v9_rows` (`id`, `value`) VALUES ('legacy', 'kept')"
+                )
+            }
+        ) { db ->
+            db.query("SELECT value FROM existing_v9_rows WHERE id = 'legacy'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("kept", cursor.getString(0))
+            }
+            assertTrue(tableExists(db, "drive_sync_metadata"))
+            assertTrue(tableExists(db, "drive_sync_receipts"))
+            assertTrue(tableExists(db, "drive_field_provenance"))
+        }
+    }
+
+    @Test
+    fun migration10To11_preservesRowsAndCreatesUidScopedAssignmentSchema() {
+        runMigration(
+            databaseName = "migration_10_11.db",
+            startVersion = 10,
+            endVersion = 11,
+            migration = AppDatabase.MIGRATION_10_11,
+            createAndSeed = { db ->
+                db.execSQL(
+                    "CREATE TABLE `existing_v10_rows` " +
+                        "(`id` TEXT NOT NULL PRIMARY KEY, `value` TEXT NOT NULL)"
+                )
+                db.execSQL(
+                    "INSERT INTO `existing_v10_rows` (`id`, `value`) VALUES ('legacy', 'kept')"
+                )
+            }
+        ) { db ->
+            db.query("SELECT value FROM existing_v10_rows WHERE id = 'legacy'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("kept", cursor.getString(0))
+            }
+            setOf(
+                "drive_vehicle_assignments",
+                "drive_assignment_operations",
+                "drive_assignment_sync_metadata",
+                "drive_assignment_sync_receipts"
+            ).forEach { assertTrue(tableExists(db, it)) }
+            db.execSQL(
+                """
+                INSERT INTO drive_vehicle_assignments (
+                  ownerUid, vehicleId, personId, schemaVersion, revision, operationId,
+                  source, clientUpdatedAt, serverUpdatedAtSeconds, serverUpdatedAtNanos,
+                  deletedAt, syncState, healthCode, conflictOperationId, lastErrorCode
+                ) VALUES
+                  ('uid-a', 'vehicle-1', 'person-a', 1, 1, 'op-a', 'BELLEK', 1,
+                   NULL, NULL, NULL, 'PENDING', NULL, NULL, NULL),
+                  ('uid-b', 'vehicle-1', 'person-b', 1, 1, 'op-b', 'TOPLU_TASIMA', 1,
+                   NULL, NULL, 2, 'SYNCED', NULL, NULL, NULL)
+                """.trimIndent()
+            )
+            db.query("SELECT COUNT(*) FROM drive_vehicle_assignments WHERE vehicleId = 'vehicle-1'")
+                .use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(2, cursor.getInt(0))
+                }
+            db.query("SELECT deletedAt FROM drive_vehicle_assignments WHERE ownerUid = 'uid-b'")
+                .use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(2L, cursor.getLong(0))
+                }
+        }
+    }
+
     private fun runMigration(
         databaseName: String,
         startVersion: Int,

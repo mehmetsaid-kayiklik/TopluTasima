@@ -14,6 +14,7 @@ import androidx.work.WorkManager
 import com.example.toplutasima.data.OfflineQueueStore
 import com.example.toplutasima.data.PrefsManager
 import com.example.toplutasima.di.appModule
+import com.example.toplutasima.drive.sync.DriveAccountScopeManager
 import com.example.toplutasima.diagnostics.RmvMesafeBackfillLogger
 import com.example.toplutasima.diagnostics.TransitTrackerLogger
 import com.example.toplutasima.service.PersonalTripActivityTransitionReceiver
@@ -37,7 +38,14 @@ class TopluTasimaApp : Application() {
         OfflineQueueStore.onAuthenticatedUserChanged(this, auth.currentUser?.uid)
     }
 
-    val database by lazy { com.example.toplutasima.data.local.AppDatabase.getDatabase(this) }
+    private val databaseDelegate = lazy {
+        com.example.toplutasima.data.local.AppDatabase.getDatabase(this)
+    }
+    val database: com.example.toplutasima.data.local.AppDatabase
+        get() = databaseDelegate.value
+
+    fun databaseIfInitialized(): com.example.toplutasima.data.local.AppDatabase? =
+        databaseDelegate.takeIf { it.isInitialized() }?.value
 
     override fun onCreate() {
         super.onCreate()
@@ -80,6 +88,7 @@ class TopluTasimaApp : Application() {
                 .setMinimumLoggingLevel(Log.DEBUG)
                 .build()
         )
+        koinApplication.koin.get<DriveAccountScopeManager>().start()
         // The former factory_selftest_ping launch job was debugging-only and intentionally
         // removed. Real Firestore/profile sync is scheduled solely by the unique periodic work below.
         val workManagerInstance = WorkManager.getInstance(this)

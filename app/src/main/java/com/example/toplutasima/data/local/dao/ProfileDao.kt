@@ -6,6 +6,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.toplutasima.data.local.entity.ProfileEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProfileDao {
@@ -42,6 +43,12 @@ interface ProfileDao {
 
     @Query("SELECT * FROM profiles WHERE userId = :userId AND archived = 0 AND sharedWithTransit = 1 ORDER BY displayName ASC")
     suspend fun getSharedWithTransitProfiles(userId: String): List<ProfileEntity>
+
+    @Query("SELECT * FROM profiles WHERE userId = :userId AND archived = 0 AND sharedWithTransit = 1 ORDER BY displayName ASC")
+    fun observeSharedWithTransitProfiles(userId: String): Flow<List<ProfileEntity>>
+
+    @Query("SELECT * FROM profiles WHERE userId = :userId AND id = :id LIMIT 1")
+    fun observeProfileById(userId: String, id: String): Flow<ProfileEntity?>
 
     @Query("SELECT * FROM profiles WHERE userId = :userId AND id = :id LIMIT 1")
     suspend fun getProfileById(userId: String, id: String): ProfileEntity?
