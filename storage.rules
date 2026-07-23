@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function owns(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function safeId(value) {
+      return value is string && value.matches('^[^/]{1,128}$');
+    }
+
+    match /users/{userId}/vehicles/{vehicleId}/photos/{fileName} {
+      allow read: if owns(userId);
+      allow create, update: if owns(userId)
+        && safeId(vehicleId)
+        && fileName.matches('^[^/]{1,128}\\.jpg$')
+        && request.resource.size > 0
+        && request.resource.size <= 5242880
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.metadata.keys().hasOnly([
+          'vehicleId', 'photoId', 'contentHash', 'schemaVersion'
+        ])
+        && request.resource.metadata.vehicleId == vehicleId
+        && safeId(request.resource.metadata.photoId)
+        && fileName == request.resource.metadata.photoId + '.jpg'
+        && request.resource.metadata.contentHash.matches('^[a-f0-9]{64}$')
+        && request.resource.metadata.schemaVersion == '1';
+      allow delete: if owns(userId);
+    }
+  }
+}

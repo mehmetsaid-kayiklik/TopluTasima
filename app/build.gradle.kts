@@ -98,6 +98,9 @@ android {
         buildConfigField("String", "RMV_ACCESS_ID", "\"${requiredLocalProperty("RMV_ACCESS_ID").escapeBuildConfigString()}\"")
         buildConfigField("String", "ORS_API_KEY",   "\"${requiredLocalProperty("ORS_API_KEY").escapeBuildConfigString()}\"")
         buildConfigField("boolean", "DRIVE_PERSON_DIRECTORY", "true")
+        buildConfigField("boolean", "DRIVE_VEHICLE_PHOTOS", "true")
+        buildConfigField("boolean", "DRIVE_EXTENDED_VEHICLE_PROFILE", "true")
+        buildConfigField("boolean", "DRIVE_VEHICLE_LEDGER", "true")
     }
 
     lint {
@@ -160,7 +163,14 @@ android {
                 java.directories.add("build/generated/ksp/$variant/java")
             }
         }
+        getByName("androidTest") {
+            assets.directories.add("$projectDir/schemas")
+        }
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 kotlin {
@@ -199,6 +209,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.storage.ktx)
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     // Dependency Injection — Koin
@@ -217,5 +228,7 @@ dependencies {
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.coil.compose)
+    androidTestImplementation(libs.room.runtime)
     ksp(libs.room.compiler)
 }

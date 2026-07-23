@@ -331,6 +331,101 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migration11To12_preservesRowsAndCreatesUidScopedPhotoSchema() {
+        runMigration(
+            databaseName = "migration_11_12.db",
+            startVersion = 11,
+            endVersion = 12,
+            migration = AppDatabase.MIGRATION_11_12,
+            createAndSeed = { db ->
+                db.execSQL(
+                    "CREATE TABLE `drive_vehicles` (" +
+                        "`id` TEXT NOT NULL, `userId` TEXT NOT NULL, `displayName` TEXT NOT NULL, " +
+                        "`brand` TEXT, `model` TEXT, `licensePlate` TEXT, `modelYear` INTEGER, " +
+                        "`fuelType` TEXT, `initialOdometerKm` REAL, `currentOdometerKm` REAL, " +
+                        "`assignedPersonId` TEXT, `notes` TEXT, `createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`userId`, `id`))"
+                )
+                db.execSQL(
+                    "INSERT INTO drive_vehicles " +
+                        "(id, userId, displayName, createdAt, updatedAt, syncState) " +
+                        "VALUES ('vehicle-kept', 'uid-a', 'Kept', 1, 2, 'SYNCED')"
+                )
+            }
+        ) { db ->
+            db.query("SELECT displayName, schemaVersion FROM drive_vehicles WHERE id = 'vehicle-kept'")
+                .use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("Kept", cursor.getString(0))
+                    assertEquals(2, cursor.getInt(1))
+                }
+            setOf(
+                "drive_vehicle_photos",
+                "drive_photo_operations",
+                "drive_photo_sync_metadata",
+                "drive_photo_sync_receipts"
+            ).forEach { assertTrue(tableExists(db, it)) }
+            db.execSQL(
+                """
+                INSERT INTO drive_vehicle_photos (
+                    ownerUid, photoId, vehicleId, sortOrder, isPrimary, schemaVersion,
+                    revision, operationId, source, clientUpdatedAt, deletedAt,
+                    uploadState, remoteState, createdAt, updatedAt
+                ) VALUES
+                    ('uid-a', 'photo-1', 'vehicle-kept', 0, 1, 1, 1, 'op-a',
+                     'TOPLU_TASIMA', 1, NULL, 'SYNCED', 'ACTIVE', 1, 1),
+                    ('uid-b', 'photo-1', 'vehicle-kept', 0, 0, 1, 2, 'op-b',
+                     'TOPLU_TASIMA', 2, 2, 'SYNCED', 'TOMBSTONE', 2, 2)
+                """.trimIndent()
+            )
+            db.query("SELECT COUNT(*) FROM drive_vehicle_photos WHERE photoId = 'photo-1'")
+                .use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(2, cursor.getInt(0))
+                }
+            db.query("SELECT deletedAt FROM drive_vehicle_photos WHERE ownerUid = 'uid-b'")
+                .use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(2L, cursor.getLong(0))
+                }
+        }
+    }
+
+    @Test
+    fun migration12To13_preservesExistingDriveDomainsAndCreatesLedgerSchema() {
+        runMigration(
+            databaseName = "migration_12_13.db",
+            startVersion = 12,
+            endVersion = 13,
+            migration = AppDatabase.MIGRATION_12_13,
+            createAndSeed = { db ->
+                db.execSQL("CREATE TABLE drive_vehicles (userId TEXT NOT NULL, id TEXT NOT NULL, displayName TEXT NOT NULL, PRIMARY KEY(userId,id))")
+                db.execSQL("CREATE TABLE drive_trips (userId TEXT NOT NULL, id TEXT NOT NULL, vehicleId TEXT NOT NULL, PRIMARY KEY(userId,id))")
+                db.execSQL("CREATE TABLE drive_vehicle_assignments (ownerUid TEXT NOT NULL, vehicleId TEXT NOT NULL, personId TEXT, PRIMARY KEY(ownerUid,vehicleId))")
+                db.execSQL("CREATE TABLE drive_vehicle_photos (ownerUid TEXT NOT NULL, photoId TEXT NOT NULL, vehicleId TEXT NOT NULL, PRIMARY KEY(ownerUid,photoId))")
+                db.execSQL("INSERT INTO drive_vehicles VALUES ('uid-a','vehicle-1','Kept')")
+                db.execSQL("INSERT INTO drive_trips VALUES ('uid-a','trip-1','vehicle-1')")
+                db.execSQL("INSERT INTO drive_vehicle_assignments VALUES ('uid-a','vehicle-1','person-1')")
+                db.execSQL("INSERT INTO drive_vehicle_photos VALUES ('uid-a','photo-1','vehicle-1')")
+            }
+        ) { db ->
+            assertEquals(1, rowCount(db, "drive_vehicles"))
+            assertEquals(1, rowCount(db, "drive_trips"))
+            assertEquals(1, rowCount(db, "drive_vehicle_assignments"))
+            assertEquals(1, rowCount(db, "drive_vehicle_photos"))
+            setOf(
+                "drive_odometer_entries", "drive_expenses", "drive_reminders",
+                "drive_ledger_operations", "drive_ledger_sync_metadata",
+                "drive_ledger_sync_receipts", "drive_ledger_conflicts"
+            ).forEach { assertTrue(tableExists(db, it)) }
+            val odometerIndices = indexNames(db, "drive_odometer_entries")
+            assertTrue(odometerIndices.contains("index_drive_odometer_entries_ownerUid_vehicleId_deletedAt_observedAt_odometerEntryId"))
+            assertTrue(odometerIndices.contains("index_drive_odometer_entries_ownerUid_operationId"))
+        }
+    }
+
     private fun runMigration(
         databaseName: String,
         startVersion: Int,
@@ -573,6 +668,20 @@ class DatabaseMigrationTest {
 
     private fun tableColumns(db: SupportSQLiteDatabase, tableName: String): Set<String> =
         db.query("PRAGMA table_info(`$tableName`)").use { cursor ->
+            buildSet {
+                val nameIndex = cursor.getColumnIndexOrThrow("name")
+                while (cursor.moveToNext()) add(cursor.getString(nameIndex))
+            }
+        }
+
+    private fun rowCount(db: SupportSQLiteDatabase, tableName: String): Int =
+        db.query("SELECT COUNT(*) FROM `$tableName`").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            cursor.getInt(0)
+        }
+
+    private fun indexNames(db: SupportSQLiteDatabase, tableName: String): Set<String> =
+        db.query("PRAGMA index_list(`$tableName`)").use { cursor ->
             buildSet {
                 val nameIndex = cursor.getColumnIndexOrThrow("name")
                 while (cursor.moveToNext()) add(cursor.getString(nameIndex))

@@ -21,6 +21,7 @@ class DriveAccountScopeManager(
     private val authChanges: kotlinx.coroutines.flow.Flow<String?> =
         DriveAuthSession.authenticatedUidChanges(),
     private val currentUserId: () -> String?,
+    private val onPhotoScopeChanged: suspend (String?) -> Unit = {},
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val enabled: Boolean = DriveFeatureFlags.DRIVE_CORE
 ) {
@@ -42,10 +43,21 @@ class DriveAccountScopeManager(
     }
 
     internal suspend fun purgeOutsideActiveAccount(userId: String?) {
-        val database = databaseProvider() ?: return
+        val database = databaseProvider()
         try {
-            database.withTransaction {
+            database?.withTransaction {
                 if (userId == null) {
+                    database.driveLedgerConflictDao().deleteAll()
+                    database.driveLedgerSyncReceiptDao().deleteAll()
+                    database.driveLedgerSyncMetadataDao().deleteAll()
+                    database.driveLedgerOperationDao().deleteAll()
+                    database.driveReminderDao().deleteAll()
+                    database.driveExpenseDao().deleteAll()
+                    database.driveOdometerEntryDao().deleteAll()
+                    database.drivePhotoOperationDao().deleteAll()
+                    database.drivePhotoSyncReceiptDao().deleteAll()
+                    database.drivePhotoSyncMetadataDao().deleteAll()
+                    database.driveVehiclePhotoDao().deleteAll()
                     database.driveAssignmentOperationDao().deleteAll()
                     database.driveAssignmentSyncReceiptDao().deleteAll()
                     database.driveAssignmentSyncMetadataDao().deleteAll()
@@ -57,6 +69,17 @@ class DriveAccountScopeManager(
                     database.driveTripDao().deleteAll()
                     database.driveVehicleDao().deleteAll()
                 } else {
+                    database.driveLedgerConflictDao().deleteAllExceptUser(userId)
+                    database.driveLedgerSyncReceiptDao().deleteAllExceptUser(userId)
+                    database.driveLedgerSyncMetadataDao().deleteAllExceptUser(userId)
+                    database.driveLedgerOperationDao().deleteAllExceptUser(userId)
+                    database.driveReminderDao().deleteAllExceptUser(userId)
+                    database.driveExpenseDao().deleteAllExceptUser(userId)
+                    database.driveOdometerEntryDao().deleteAllExceptUser(userId)
+                    database.drivePhotoOperationDao().deleteAllExceptUser(userId)
+                    database.drivePhotoSyncReceiptDao().deleteAllExceptUser(userId)
+                    database.drivePhotoSyncMetadataDao().deleteAllExceptUser(userId)
+                    database.driveVehiclePhotoDao().deleteAllExceptUser(userId)
                     database.driveAssignmentOperationDao().deleteAllExceptUser(userId)
                     database.driveAssignmentSyncReceiptDao().deleteAllExceptUser(userId)
                     database.driveAssignmentSyncMetadataDao().deleteAllExceptUser(userId)
@@ -69,6 +92,7 @@ class DriveAccountScopeManager(
                     database.driveVehicleDao().deleteAllExceptUser(userId)
                 }
             }
+            onPhotoScopeChanged(userId)
         } catch (cancelled: CancellationException) {
             throw cancelled
         }

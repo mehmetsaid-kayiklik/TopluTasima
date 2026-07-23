@@ -1,0 +1,2108 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 12,
+    "identityHash": "73f94c47f41a3a632fdd22f1e059e0f9",
+    "entities": [
+      {
+        "tableName": "trips",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `firestoreDocId` TEXT, `tarih` TEXT, `gun` TEXT, `tur` TEXT, `hat` TEXT, `yon` TEXT, `binisDuragi` TEXT, `planlananBinis` TEXT, `gercekBinis` TEXT, `gecikme` TEXT, `inisDuragi` TEXT, `planlananInis` TEXT, `gercekInis` TEXT, `gununTipi` TEXT, `havaDurumu` TEXT, `oturabildimMi` TEXT, `planlananYolSuresi` TEXT, `gercekYolSuresi` TEXT, `not` TEXT, `biletKontrolu` TEXT, `mesafe` TEXT, `orsMesafeKm` REAL, `orsMesafeText` TEXT, `rmvMesafeKm` REAL, `rmvMesafeMetre` INTEGER, `rmvMesafeText` TEXT, `rmvMesafeDurumu` TEXT, `rmvMesafeGuncellemeTarihi` TEXT, `rmvApiVersion` TEXT, `journeyRef` TEXT, `fromStopId` TEXT, `toStopId` TEXT, `durakSayisi` TEXT, `yearMonth` TEXT, `sortDate` TEXT, `seatmateUuid` TEXT NOT NULL, `userId` TEXT NOT NULL, PRIMARY KEY(`userId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firestoreDocId",
+            "columnName": "firestoreDocId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tarih",
+            "columnName": "tarih",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gun",
+            "columnName": "gun",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tur",
+            "columnName": "tur",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "hat",
+            "columnName": "hat",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "yon",
+            "columnName": "yon",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "binisDuragi",
+            "columnName": "binisDuragi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "planlananBinis",
+            "columnName": "planlananBinis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gercekBinis",
+            "columnName": "gercekBinis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gecikme",
+            "columnName": "gecikme",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "inisDuragi",
+            "columnName": "inisDuragi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "planlananInis",
+            "columnName": "planlananInis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gercekInis",
+            "columnName": "gercekInis",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gununTipi",
+            "columnName": "gununTipi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "havaDurumu",
+            "columnName": "havaDurumu",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "oturabildimMi",
+            "columnName": "oturabildimMi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "planlananYolSuresi",
+            "columnName": "planlananYolSuresi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "gercekYolSuresi",
+            "columnName": "gercekYolSuresi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "not",
+            "columnName": "not",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "biletKontrolu",
+            "columnName": "biletKontrolu",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mesafe",
+            "columnName": "mesafe",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "orsMesafeKm",
+            "columnName": "orsMesafeKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "orsMesafeText",
+            "columnName": "orsMesafeText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rmvMesafeKm",
+            "columnName": "rmvMesafeKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "rmvMesafeMetre",
+            "columnName": "rmvMesafeMetre",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "rmvMesafeText",
+            "columnName": "rmvMesafeText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rmvMesafeDurumu",
+            "columnName": "rmvMesafeDurumu",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rmvMesafeGuncellemeTarihi",
+            "columnName": "rmvMesafeGuncellemeTarihi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rmvApiVersion",
+            "columnName": "rmvApiVersion",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "journeyRef",
+            "columnName": "journeyRef",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fromStopId",
+            "columnName": "fromStopId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "toStopId",
+            "columnName": "toStopId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "durakSayisi",
+            "columnName": "durakSayisi",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "yearMonth",
+            "columnName": "yearMonth",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sortDate",
+            "columnName": "sortDate",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seatmateUuid",
+            "columnName": "seatmateUuid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trips_userId_yearMonth",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "yearMonth"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_userId_yearMonth` ON `${TABLE_NAME}` (`userId`, `yearMonth`)"
+          },
+          {
+            "name": "index_trips_userId_sortDate",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "sortDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_userId_sortDate` ON `${TABLE_NAME}` (`userId`, `sortDate`)"
+          },
+          {
+            "name": "index_trips_userId_firestoreDocId",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "firestoreDocId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_userId_firestoreDocId` ON `${TABLE_NAME}` (`userId`, `firestoreDocId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "profiles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `displayName` TEXT NOT NULL, `memoryNote` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `archived` INTEGER NOT NULL, `sharedWithTransit` INTEGER NOT NULL DEFAULT 0, `userId` TEXT NOT NULL, PRIMARY KEY(`userId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memoryNote",
+            "columnName": "memoryNote",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archived",
+            "columnName": "archived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sharedWithTransit",
+            "columnName": "sharedWithTransit",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "trip_profile_links",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `tripStableKey` TEXT NOT NULL, `profileId` TEXT NOT NULL, `seatmateNote` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `userId` TEXT NOT NULL, PRIMARY KEY(`userId`, `id`), FOREIGN KEY(`userId`, `profileId`) REFERENCES `profiles`(`userId`, `id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tripStableKey",
+            "columnName": "tripStableKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileId",
+            "columnName": "profileId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seatmateNote",
+            "columnName": "seatmateNote",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trip_profile_links_userId_tripStableKey",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "tripStableKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trip_profile_links_userId_tripStableKey` ON `${TABLE_NAME}` (`userId`, `tripStableKey`)"
+          },
+          {
+            "name": "index_trip_profile_links_userId_profileId",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "profileId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trip_profile_links_userId_profileId` ON `${TABLE_NAME}` (`userId`, `profileId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "profiles",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId",
+              "profileId"
+            ],
+            "referencedColumns": [
+              "userId",
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "drive_vehicles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `userId` TEXT NOT NULL, `displayName` TEXT NOT NULL, `brand` TEXT, `model` TEXT, `licensePlate` TEXT, `modelYear` INTEGER, `fuelType` TEXT, `initialOdometerKm` REAL, `currentOdometerKm` REAL, `assignedPersonId` TEXT, `notes` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, `countryCode` TEXT, `transmissionType` TEXT, `bodyType` TEXT, `color` TEXT, `vin` TEXT, `engineDisplacementCc` INTEGER, `enginePowerKw` INTEGER, `purchaseDate` INTEGER, `purchasePriceMinor` INTEGER, `currencyCode` TEXT, `primaryPhotoId` TEXT, `trimLevel` TEXT, `engineCode` TEXT, `registrationDate` INTEGER, `inspectionDueDate` INTEGER, `insuranceDueDate` INTEGER, `tireSize` TEXT, `schemaVersion` INTEGER NOT NULL DEFAULT 2, `primaryPhotoRevision` INTEGER NOT NULL DEFAULT 0, `primaryPhotoOperationId` TEXT, PRIMARY KEY(`userId`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "brand",
+            "columnName": "brand",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "licensePlate",
+            "columnName": "licensePlate",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modelYear",
+            "columnName": "modelYear",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fuelType",
+            "columnName": "fuelType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "initialOdometerKm",
+            "columnName": "initialOdometerKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "currentOdometerKm",
+            "columnName": "currentOdometerKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "assignedPersonId",
+            "columnName": "assignedPersonId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "countryCode",
+            "columnName": "countryCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "transmissionType",
+            "columnName": "transmissionType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bodyType",
+            "columnName": "bodyType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "color",
+            "columnName": "color",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "vin",
+            "columnName": "vin",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "engineDisplacementCc",
+            "columnName": "engineDisplacementCc",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "enginePowerKw",
+            "columnName": "enginePowerKw",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "purchaseDate",
+            "columnName": "purchaseDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "purchasePriceMinor",
+            "columnName": "purchasePriceMinor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "currencyCode",
+            "columnName": "currencyCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "primaryPhotoId",
+            "columnName": "primaryPhotoId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "trimLevel",
+            "columnName": "trimLevel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "engineCode",
+            "columnName": "engineCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "registrationDate",
+            "columnName": "registrationDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "inspectionDueDate",
+            "columnName": "inspectionDueDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "insuranceDueDate",
+            "columnName": "insuranceDueDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tireSize",
+            "columnName": "tireSize",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "2"
+          },
+          {
+            "fieldPath": "primaryPhotoRevision",
+            "columnName": "primaryPhotoRevision",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "primaryPhotoOperationId",
+            "columnName": "primaryPhotoOperationId",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_vehicles_userId_deletedAt_displayName",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "deletedAt",
+              "displayName"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicles_userId_deletedAt_displayName` ON `${TABLE_NAME}` (`userId`, `deletedAt`, `displayName`)"
+          },
+          {
+            "name": "index_drive_vehicles_userId_syncState_updatedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "syncState",
+              "updatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicles_userId_syncState_updatedAt` ON `${TABLE_NAME}` (`userId`, `syncState`, `updatedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_trips",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `userId` TEXT NOT NULL, `vehicleId` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER, `startOdometerKm` REAL, `endOdometerKm` REAL, `distanceKm` REAL NOT NULL, `purpose` TEXT NOT NULL, `startLocationName` TEXT, `endLocationName` TEXT, `notes` TEXT, `entrySource` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, PRIMARY KEY(`userId`, `id`), FOREIGN KEY(`userId`, `vehicleId`) REFERENCES `drive_vehicles`(`userId`, `id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "startOdometerKm",
+            "columnName": "startOdometerKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "endOdometerKm",
+            "columnName": "endOdometerKm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "distanceKm",
+            "columnName": "distanceKm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "purpose",
+            "columnName": "purpose",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startLocationName",
+            "columnName": "startLocationName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "endLocationName",
+            "columnName": "endLocationName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "entrySource",
+            "columnName": "entrySource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_trips_userId_vehicleId_deletedAt_startedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "vehicleId",
+              "deletedAt",
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_trips_userId_vehicleId_deletedAt_startedAt` ON `${TABLE_NAME}` (`userId`, `vehicleId`, `deletedAt`, `startedAt`)"
+          },
+          {
+            "name": "index_drive_trips_userId_syncState_updatedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "syncState",
+              "updatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_trips_userId_syncState_updatedAt` ON `${TABLE_NAME}` (`userId`, `syncState`, `updatedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "drive_vehicles",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "userId",
+              "vehicleId"
+            ],
+            "referencedColumns": [
+              "userId",
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "drive_sync_operations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`operationId` TEXT NOT NULL, `userId` TEXT NOT NULL, `entityType` TEXT NOT NULL, `recordId` TEXT NOT NULL, `operationType` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL, `lastErrorCode` TEXT, `retryEligible` INTEGER NOT NULL, `nextAttemptAt` INTEGER, PRIMARY KEY(`userId`, `entityType`, `recordId`))",
+        "fields": [
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entityType",
+            "columnName": "entityType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationType",
+            "columnName": "operationType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "retryEligible",
+            "columnName": "retryEligible",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "entityType",
+            "recordId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_sync_operations_userId_operationId",
+            "unique": true,
+            "columnNames": [
+              "userId",
+              "operationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_sync_operations_userId_operationId` ON `${TABLE_NAME}` (`userId`, `operationId`)"
+          },
+          {
+            "name": "index_drive_sync_operations_userId_retryEligible_nextAttemptAt_createdAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "retryEligible",
+              "nextAttemptAt",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_sync_operations_userId_retryEligible_nextAttemptAt_createdAt` ON `${TABLE_NAME}` (`userId`, `retryEligible`, `nextAttemptAt`, `createdAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_sync_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` TEXT NOT NULL, `initialHydrationCompleted` INTEGER NOT NULL, `vehicleCursorSeconds` INTEGER, `vehicleCursorNanos` INTEGER, `vehicleCursorDocumentId` TEXT, `tripCursorSeconds` INTEGER, `tripCursorNanos` INTEGER, `tripCursorDocumentId` TEXT, `lastSuccessfulPullAt` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`userId`))",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "initialHydrationCompleted",
+            "columnName": "initialHydrationCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleCursorSeconds",
+            "columnName": "vehicleCursorSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "vehicleCursorNanos",
+            "columnName": "vehicleCursorNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "vehicleCursorDocumentId",
+            "columnName": "vehicleCursorDocumentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tripCursorSeconds",
+            "columnName": "tripCursorSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tripCursorNanos",
+            "columnName": "tripCursorNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tripCursorDocumentId",
+            "columnName": "tripCursorDocumentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastSuccessfulPullAt",
+            "columnName": "lastSuccessfulPullAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId"
+          ]
+        }
+      },
+      {
+        "tableName": "drive_sync_receipts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` TEXT NOT NULL, `receiptId` TEXT NOT NULL, `kind` TEXT NOT NULL, `entityType` TEXT, `recordId` TEXT, `operationType` TEXT, `status` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `finishedAt` INTEGER, `attemptCount` INTEGER NOT NULL, `errorCode` TEXT, PRIMARY KEY(`userId`, `receiptId`))",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receiptId",
+            "columnName": "receiptId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entityType",
+            "columnName": "entityType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "operationType",
+            "columnName": "operationType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finishedAt",
+            "columnName": "finishedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "errorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "receiptId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_sync_receipts_userId_startedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_sync_receipts_userId_startedAt` ON `${TABLE_NAME}` (`userId`, `startedAt`)"
+          },
+          {
+            "name": "index_drive_sync_receipts_userId_status_startedAt",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "status",
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_sync_receipts_userId_status_startedAt` ON `${TABLE_NAME}` (`userId`, `status`, `startedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_field_provenance",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`userId` TEXT NOT NULL, `entityType` TEXT NOT NULL, `recordId` TEXT NOT NULL, `fieldName` TEXT NOT NULL, `source` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`userId`, `entityType`, `recordId`, `fieldName`))",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "entityType",
+            "columnName": "entityType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordId",
+            "columnName": "recordId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fieldName",
+            "columnName": "fieldName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "userId",
+            "entityType",
+            "recordId",
+            "fieldName"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_field_provenance_userId_entityType_recordId",
+            "unique": false,
+            "columnNames": [
+              "userId",
+              "entityType",
+              "recordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_field_provenance_userId_entityType_recordId` ON `${TABLE_NAME}` (`userId`, `entityType`, `recordId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_vehicle_assignments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `vehicleId` TEXT NOT NULL, `personId` TEXT, `schemaVersion` INTEGER NOT NULL, `revision` INTEGER NOT NULL, `operationId` TEXT NOT NULL, `source` TEXT NOT NULL, `clientUpdatedAt` INTEGER NOT NULL, `serverUpdatedAtSeconds` INTEGER, `serverUpdatedAtNanos` INTEGER, `deletedAt` INTEGER, `syncState` TEXT NOT NULL, `healthCode` TEXT, `conflictOperationId` TEXT, `lastErrorCode` TEXT, PRIMARY KEY(`ownerUid`, `vehicleId`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "personId",
+            "columnName": "personId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientUpdatedAt",
+            "columnName": "clientUpdatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverUpdatedAtSeconds",
+            "columnName": "serverUpdatedAtSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "serverUpdatedAtNanos",
+            "columnName": "serverUpdatedAtNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "healthCode",
+            "columnName": "healthCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "conflictOperationId",
+            "columnName": "conflictOperationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid",
+            "vehicleId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_vehicle_assignments_ownerUid_personId",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "personId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_assignments_ownerUid_personId` ON `${TABLE_NAME}` (`ownerUid`, `personId`)"
+          },
+          {
+            "name": "index_drive_vehicle_assignments_ownerUid_syncState_clientUpdatedAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "syncState",
+              "clientUpdatedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_assignments_ownerUid_syncState_clientUpdatedAt` ON `${TABLE_NAME}` (`ownerUid`, `syncState`, `clientUpdatedAt`)"
+          },
+          {
+            "name": "index_drive_vehicle_assignments_ownerUid_deletedAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "deletedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_assignments_ownerUid_deletedAt` ON `${TABLE_NAME}` (`ownerUid`, `deletedAt`)"
+          },
+          {
+            "name": "index_drive_vehicle_assignments_ownerUid_operationId",
+            "unique": true,
+            "columnNames": [
+              "ownerUid",
+              "operationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_vehicle_assignments_ownerUid_operationId` ON `${TABLE_NAME}` (`ownerUid`, `operationId`)"
+          },
+          {
+            "name": "index_drive_vehicle_assignments_ownerUid_healthCode",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "healthCode"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_assignments_ownerUid_healthCode` ON `${TABLE_NAME}` (`ownerUid`, `healthCode`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_assignment_operations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `operationId` TEXT NOT NULL, `vehicleId` TEXT NOT NULL, `personId` TEXT, `schemaVersion` INTEGER NOT NULL, `targetRevision` INTEGER NOT NULL, `source` TEXT NOT NULL, `clientUpdatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `state` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL, `nextAttemptAt` INTEGER, `lastErrorCode` TEXT, PRIMARY KEY(`ownerUid`, `operationId`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "personId",
+            "columnName": "personId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetRevision",
+            "columnName": "targetRevision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientUpdatedAt",
+            "columnName": "clientUpdatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid",
+            "operationId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_assignment_operations_ownerUid_vehicleId_targetRevision",
+            "unique": true,
+            "columnNames": [
+              "ownerUid",
+              "vehicleId",
+              "targetRevision"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_assignment_operations_ownerUid_vehicleId_targetRevision` ON `${TABLE_NAME}` (`ownerUid`, `vehicleId`, `targetRevision`)"
+          },
+          {
+            "name": "index_drive_assignment_operations_ownerUid_state_nextAttemptAt_createdAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "state",
+              "nextAttemptAt",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_assignment_operations_ownerUid_state_nextAttemptAt_createdAt` ON `${TABLE_NAME}` (`ownerUid`, `state`, `nextAttemptAt`, `createdAt`)"
+          },
+          {
+            "name": "index_drive_assignment_operations_ownerUid_vehicleId_createdAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "vehicleId",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_assignment_operations_ownerUid_vehicleId_createdAt` ON `${TABLE_NAME}` (`ownerUid`, `vehicleId`, `createdAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_assignment_sync_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `initialHydrationCompleted` INTEGER NOT NULL, `cursorSeconds` INTEGER, `cursorNanos` INTEGER, `cursorDocumentId` TEXT, `lastSuccessfulPullAt` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`ownerUid`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "initialHydrationCompleted",
+            "columnName": "initialHydrationCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursorSeconds",
+            "columnName": "cursorSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cursorNanos",
+            "columnName": "cursorNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cursorDocumentId",
+            "columnName": "cursorDocumentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastSuccessfulPullAt",
+            "columnName": "lastSuccessfulPullAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid"
+          ]
+        }
+      },
+      {
+        "tableName": "drive_assignment_sync_receipts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `receiptId` TEXT NOT NULL, `operationId` TEXT, `vehicleId` TEXT, `kind` TEXT NOT NULL, `status` TEXT NOT NULL, `source` TEXT, `revision` INTEGER, `winningOperationId` TEXT, `startedAt` INTEGER NOT NULL, `finishedAt` INTEGER, `attemptCount` INTEGER NOT NULL, `errorCode` TEXT, PRIMARY KEY(`ownerUid`, `receiptId`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receiptId",
+            "columnName": "receiptId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "winningOperationId",
+            "columnName": "winningOperationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finishedAt",
+            "columnName": "finishedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "errorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid",
+            "receiptId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_assignment_sync_receipts_ownerUid_operationId",
+            "unique": true,
+            "columnNames": [
+              "ownerUid",
+              "operationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_assignment_sync_receipts_ownerUid_operationId` ON `${TABLE_NAME}` (`ownerUid`, `operationId`)"
+          },
+          {
+            "name": "index_drive_assignment_sync_receipts_ownerUid_status_startedAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "status",
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_assignment_sync_receipts_ownerUid_status_startedAt` ON `${TABLE_NAME}` (`ownerUid`, `status`, `startedAt`)"
+          },
+          {
+            "name": "index_drive_assignment_sync_receipts_ownerUid_vehicleId_startedAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "vehicleId",
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_assignment_sync_receipts_ownerUid_vehicleId_startedAt` ON `${TABLE_NAME}` (`ownerUid`, `vehicleId`, `startedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_vehicle_photos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `photoId` TEXT NOT NULL, `vehicleId` TEXT NOT NULL, `localUri` TEXT, `localPreparedPath` TEXT, `storagePath` TEXT, `contentHash` TEXT, `mimeType` TEXT, `width` INTEGER, `height` INTEGER, `sizeBytes` INTEGER, `sortOrder` INTEGER NOT NULL, `isPrimary` INTEGER NOT NULL, `schemaVersion` INTEGER NOT NULL, `revision` INTEGER NOT NULL, `operationId` TEXT NOT NULL, `source` TEXT NOT NULL, `clientUpdatedAt` INTEGER NOT NULL, `serverUpdatedAtSeconds` INTEGER, `serverUpdatedAtNanos` INTEGER, `deletedAt` INTEGER, `uploadState` TEXT NOT NULL, `remoteState` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `lastErrorCode` TEXT, `healthCode` TEXT, PRIMARY KEY(`ownerUid`, `photoId`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "photoId",
+            "columnName": "photoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localUri",
+            "columnName": "localUri",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "localPreparedPath",
+            "columnName": "localPreparedPath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "storagePath",
+            "columnName": "storagePath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "contentHash",
+            "columnName": "contentHash",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mimeType",
+            "columnName": "mimeType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "width",
+            "columnName": "width",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "height",
+            "columnName": "height",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sizeBytes",
+            "columnName": "sizeBytes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isPrimary",
+            "columnName": "isPrimary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientUpdatedAt",
+            "columnName": "clientUpdatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverUpdatedAtSeconds",
+            "columnName": "serverUpdatedAtSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "serverUpdatedAtNanos",
+            "columnName": "serverUpdatedAtNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "uploadState",
+            "columnName": "uploadState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteState",
+            "columnName": "remoteState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "healthCode",
+            "columnName": "healthCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid",
+            "photoId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_vehicle_photos_ownerUid_vehicleId",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "vehicleId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_vehicleId` ON `${TABLE_NAME}` (`ownerUid`, `vehicleId`)"
+          },
+          {
+            "name": "index_drive_vehicle_photos_ownerUid_uploadState",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "uploadState"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_uploadState` ON `${TABLE_NAME}` (`ownerUid`, `uploadState`)"
+          },
+          {
+            "name": "index_drive_vehicle_photos_ownerUid_deletedAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "deletedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_deletedAt` ON `${TABLE_NAME}` (`ownerUid`, `deletedAt`)"
+          },
+          {
+            "name": "index_drive_vehicle_photos_ownerUid_vehicleId_sortOrder",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "vehicleId",
+              "sortOrder"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_vehicleId_sortOrder` ON `${TABLE_NAME}` (`ownerUid`, `vehicleId`, `sortOrder`)"
+          },
+          {
+            "name": "index_drive_vehicle_photos_ownerUid_contentHash",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "contentHash"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_contentHash` ON `${TABLE_NAME}` (`ownerUid`, `contentHash`)"
+          },
+          {
+            "name": "index_drive_vehicle_photos_ownerUid_serverUpdatedAtSeconds_serverUpdatedAtNanos_photoId",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "serverUpdatedAtSeconds",
+              "serverUpdatedAtNanos",
+              "photoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_serverUpdatedAtSeconds_serverUpdatedAtNanos_photoId` ON `${TABLE_NAME}` (`ownerUid`, `serverUpdatedAtSeconds`, `serverUpdatedAtNanos`, `photoId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_photo_operations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `operationId` TEXT NOT NULL, `photoId` TEXT NOT NULL, `vehicleId` TEXT NOT NULL, `type` TEXT NOT NULL, `targetRevision` INTEGER NOT NULL, `targetPrimaryPhotoId` TEXT, `expectedContentHash` TEXT, `state` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL, `nextAttemptAt` INTEGER NOT NULL, `claimedAt` INTEGER, `lastErrorCode` TEXT, PRIMARY KEY(`ownerUid`, `operationId`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "photoId",
+            "columnName": "photoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetRevision",
+            "columnName": "targetRevision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetPrimaryPhotoId",
+            "columnName": "targetPrimaryPhotoId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "expectedContentHash",
+            "columnName": "expectedContentHash",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "claimedAt",
+            "columnName": "claimedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid",
+            "operationId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_photo_operations_ownerUid_photoId",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "photoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_photoId` ON `${TABLE_NAME}` (`ownerUid`, `photoId`)"
+          },
+          {
+            "name": "index_drive_photo_operations_ownerUid_vehicleId",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "vehicleId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_vehicleId` ON `${TABLE_NAME}` (`ownerUid`, `vehicleId`)"
+          },
+          {
+            "name": "index_drive_photo_operations_ownerUid_state_nextAttemptAt_createdAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "state",
+              "nextAttemptAt",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_state_nextAttemptAt_createdAt` ON `${TABLE_NAME}` (`ownerUid`, `state`, `nextAttemptAt`, `createdAt`)"
+          },
+          {
+            "name": "index_drive_photo_operations_ownerUid_photoId_type_targetRevision",
+            "unique": true,
+            "columnNames": [
+              "ownerUid",
+              "photoId",
+              "type",
+              "targetRevision"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_photoId_type_targetRevision` ON `${TABLE_NAME}` (`ownerUid`, `photoId`, `type`, `targetRevision`)"
+          }
+        ]
+      },
+      {
+        "tableName": "drive_photo_sync_metadata",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `initialHydrationCompleted` INTEGER NOT NULL, `cursorSeconds` INTEGER, `cursorNanos` INTEGER, `cursorDocumentPath` TEXT, `lastSuccessfulPullAt` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`ownerUid`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "initialHydrationCompleted",
+            "columnName": "initialHydrationCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursorSeconds",
+            "columnName": "cursorSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cursorNanos",
+            "columnName": "cursorNanos",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cursorDocumentPath",
+            "columnName": "cursorDocumentPath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastSuccessfulPullAt",
+            "columnName": "lastSuccessfulPullAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid"
+          ]
+        }
+      },
+      {
+        "tableName": "drive_photo_sync_receipts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ownerUid` TEXT NOT NULL, `receiptId` TEXT NOT NULL, `operationId` TEXT NOT NULL, `photoId` TEXT NOT NULL, `vehicleId` TEXT NOT NULL, `kind` TEXT NOT NULL, `status` TEXT NOT NULL, `provenance` TEXT NOT NULL, `revision` INTEGER NOT NULL, `winningOperationId` TEXT, `attemptCount` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `finishedAt` INTEGER, `errorCode` TEXT, PRIMARY KEY(`ownerUid`, `receiptId`))",
+        "fields": [
+          {
+            "fieldPath": "ownerUid",
+            "columnName": "ownerUid",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receiptId",
+            "columnName": "receiptId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operationId",
+            "columnName": "operationId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "photoId",
+            "columnName": "photoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleId",
+            "columnName": "vehicleId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provenance",
+            "columnName": "provenance",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "winningOperationId",
+            "columnName": "winningOperationId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finishedAt",
+            "columnName": "finishedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "errorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "ownerUid",
+            "receiptId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_photo_sync_receipts_ownerUid_operationId",
+            "unique": true,
+            "columnNames": [
+              "ownerUid",
+              "operationId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_photo_sync_receipts_ownerUid_operationId` ON `${TABLE_NAME}` (`ownerUid`, `operationId`)"
+          },
+          {
+            "name": "index_drive_photo_sync_receipts_ownerUid_vehicleId_createdAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "vehicleId",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_photo_sync_receipts_ownerUid_vehicleId_createdAt` ON `${TABLE_NAME}` (`ownerUid`, `vehicleId`, `createdAt`)"
+          },
+          {
+            "name": "index_drive_photo_sync_receipts_ownerUid_status_createdAt",
+            "unique": false,
+            "columnNames": [
+              "ownerUid",
+              "status",
+              "createdAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_photo_sync_receipts_ownerUid_status_createdAt` ON `${TABLE_NAME}` (`ownerUid`, `status`, `createdAt`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '73f94c47f41a3a632fdd22f1e059e0f9')"
+    ]
+  }
+}

@@ -7,6 +7,8 @@ import com.example.toplutasima.drive.model.DriveTripEntrySource
 import com.example.toplutasima.drive.model.DriveTripPurpose
 import com.example.toplutasima.drive.model.DriveVehicleDraft
 import com.example.toplutasima.drive.model.VehicleFuelType
+import com.example.toplutasima.drive.model.VehicleBodyType
+import com.example.toplutasima.drive.model.VehicleTransmissionType
 import com.example.toplutasima.drive.sync.DriveRemoteWriteResult
 import com.example.toplutasima.drive.sync.DriveRemoteCursor
 import com.example.toplutasima.drive.sync.DriveRemotePullBatch
@@ -256,7 +258,27 @@ internal class FirestoreDriveRemoteDataSource(
             createdAt = epochMillisOrNull("createdAt") ?: updatedAt,
             updatedAt = updatedAt,
             deletedAt = deletedAt,
-            syncState = "SYNCED"
+            syncState = "SYNCED",
+            countryCode = getString("countryCode"),
+            transmissionType = getString("transmissionType"),
+            bodyType = getString("bodyType"),
+            color = getString("color"),
+            vin = getString("vin"),
+            engineDisplacementCc = getLong("engineDisplacementCc")?.toInt(),
+            enginePowerKw = getLong("enginePowerKw")?.toInt(),
+            purchaseDate = epochMillisOrNull("purchaseDate"),
+            purchasePriceMinor = getLong("purchasePriceMinor"),
+            currencyCode = getString("currencyCode"),
+            primaryPhotoId = getString("primaryPhotoId"),
+            trimLevel = getString("trimLevel"),
+            engineCode = getString("engineCode"),
+            registrationDate = epochMillisOrNull("registrationDate"),
+            inspectionDueDate = epochMillisOrNull("inspectionDueDate"),
+            insuranceDueDate = epochMillisOrNull("insuranceDueDate"),
+            tireSize = getString("tireSize"),
+            schemaVersion = getLong("schemaVersion")?.toInt() ?: 1,
+            primaryPhotoRevision = getLong("primaryPhotoRevision") ?: 0L,
+            primaryPhotoOperationId = getString("primaryPhotoOperationId")
         )
         require(deletedAt != null || DriveRemoteWriteValidator.isValid(entity)) {
             "Invalid remote drive vehicle"
@@ -357,7 +379,8 @@ internal class FirestoreDriveRemoteDataSource(
         }
     }
 
-    private fun DriveVehicleEntity.toFirestoreFields(ownerUid: String): Map<String, Any?> = mapOf(
+    private fun DriveVehicleEntity.toFirestoreFields(ownerUid: String): Map<String, Any?> {
+        val fields = mapOf(
         FIELD_ID to id,
         FIELD_OWNER_UID to ownerUid,
         "displayName" to displayName,
@@ -368,11 +391,36 @@ internal class FirestoreDriveRemoteDataSource(
         "fuelType" to fuelType,
         "initialOdometerKm" to initialOdometerKm,
         "currentOdometerKm" to currentOdometerKm,
+        "countryCode" to countryCode,
+        "transmissionType" to transmissionType,
+        "bodyType" to bodyType,
+        "color" to color,
+        "vin" to vin,
+        "engineDisplacementCc" to engineDisplacementCc,
+        "enginePowerKw" to enginePowerKw,
+        "purchaseDate" to purchaseDate,
+        "purchasePriceMinor" to purchasePriceMinor,
+        "currencyCode" to currencyCode,
+        "trimLevel" to trimLevel,
+        "engineCode" to engineCode,
+        "registrationDate" to registrationDate,
+        "inspectionDueDate" to inspectionDueDate,
+        "insuranceDueDate" to insuranceDueDate,
+        "tireSize" to tireSize,
+        "schemaVersion" to schemaVersion,
         "notes" to notes,
         "createdAt" to createdAt,
         FIELD_UPDATED_AT to updatedAt,
-        FIELD_DELETED_AT to null
-    )
+            FIELD_DELETED_AT to null
+        )
+        // Sprint 7A owns this compatibility mirror through a separate, revisioned operation.
+        // A stale vehicle editor snapshot must never overwrite the canonical odometer projection.
+        return if (com.example.toplutasima.drive.DriveFeatureFlags.DRIVE_VEHICLE_LEDGER) {
+            fields - "currentOdometerKm"
+        } else {
+            fields
+        }
+    }
 
     private fun DriveTripEntity.toFirestoreFields(ownerUid: String): Map<String, Any?> = mapOf(
         FIELD_ID to id,
@@ -422,7 +470,23 @@ internal object DriveRemoteWriteValidator {
             initialOdometerKm = vehicle.initialOdometerKm,
             currentOdometerKm = vehicle.currentOdometerKm,
             assignedPersonId = vehicle.assignedPersonId,
-            notes = vehicle.notes
+            notes = vehicle.notes,
+            countryCode = vehicle.countryCode,
+            transmissionType = VehicleTransmissionType.fromStorage(vehicle.transmissionType),
+            bodyType = VehicleBodyType.fromStorage(vehicle.bodyType),
+            color = vehicle.color,
+            vin = vehicle.vin,
+            engineDisplacementCc = vehicle.engineDisplacementCc,
+            enginePowerKw = vehicle.enginePowerKw,
+            purchaseDate = vehicle.purchaseDate?.let(Instant::ofEpochMilli),
+            purchasePriceMinor = vehicle.purchasePriceMinor,
+            currencyCode = vehicle.currencyCode,
+            trimLevel = vehicle.trimLevel,
+            engineCode = vehicle.engineCode,
+            registrationDate = vehicle.registrationDate?.let(Instant::ofEpochMilli),
+            inspectionDueDate = vehicle.inspectionDueDate?.let(Instant::ofEpochMilli),
+            insuranceDueDate = vehicle.insuranceDueDate?.let(Instant::ofEpochMilli),
+            tireSize = vehicle.tireSize
         )
     ).isEmpty()
 

@@ -63,6 +63,8 @@ internal fun DriveVehicleDetailScreen(
     onRemovePerson: () -> Unit,
     onAssignmentMessageShown: () -> Unit,
     onRetry: () -> Unit,
+    photoSection: @Composable () -> Unit = {},
+    ledgerSection: @Composable () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val language = LocaleManager.currentLanguage
@@ -124,6 +126,8 @@ internal fun DriveVehicleDetailScreen(
                 onAssignPerson = onAssignPerson,
                 onRemovePerson = onRemovePerson,
                 onAssignmentMessageShown = onAssignmentMessageShown,
+                photoSection = photoSection,
+                ledgerSection = ledgerSection,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -147,6 +151,8 @@ private fun DriveVehicleDetailContent(
     onAssignPerson: (String) -> Unit,
     onRemovePerson: () -> Unit,
     onAssignmentMessageShown: () -> Unit,
+    photoSection: @Composable () -> Unit,
+    ledgerSection: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -181,6 +187,78 @@ private fun DriveVehicleDetailContent(
                     horizontalArrangement = Arrangement.End
                 ) {
                     DriveSyncIndicator(vehicle.syncState, language)
+                }
+            }
+        }
+
+        if (com.example.toplutasima.drive.DriveFeatureFlags.DRIVE_VEHICLE_PHOTOS) {
+            item(key = "drive-vehicle-photos") { photoSection() }
+        }
+
+        if (com.example.toplutasima.drive.DriveFeatureFlags.DRIVE_VEHICLE_LEDGER) {
+            item(key = "drive-vehicle-ledger") { ledgerSection() }
+        }
+
+        if (com.example.toplutasima.drive.DriveFeatureFlags.DRIVE_EXTENDED_VEHICLE_PROFILE) {
+            item(key = "drive-vehicle-general-profile") {
+                DriveDetailCard(title = S.driveProfileGeneral(language)) {
+                    vehicle.countryCode?.takeIf(String::isNotBlank)?.let {
+                        DriveDetailLine(S.driveCountryCode(language), it)
+                    }
+                    DriveDetailLine(
+                        S.driveTransmission(language),
+                        vehicle.transmissionType.name.replace('_', ' ')
+                    )
+                    DriveDetailLine(S.driveBodyType(language), vehicle.bodyType.name.replace('_', ' '))
+                    vehicle.color?.takeIf(String::isNotBlank)?.let {
+                        DriveDetailLine(S.driveColor(language), it)
+                    }
+                    vehicle.trimLevel?.takeIf(String::isNotBlank)?.let {
+                        DriveDetailLine(S.driveTrimLevel(language), it)
+                    }
+                }
+            }
+            item(key = "drive-vehicle-technical-profile") {
+                DriveDetailCard(title = S.driveProfileTechnical(language)) {
+                    vehicle.vin?.takeIf(String::isNotBlank)?.let { DriveDetailLine(S.driveVin(language), it) }
+                    vehicle.engineCode?.takeIf(String::isNotBlank)?.let {
+                        DriveDetailLine(S.driveEngineCode(language), it)
+                    }
+                    vehicle.engineDisplacementCc?.let {
+                        DriveDetailLine(S.driveEngineDisplacement(language), "$it cc")
+                    }
+                    vehicle.enginePowerKw?.let {
+                        DriveDetailLine(S.driveEnginePower(language), "$it kW")
+                    }
+                    vehicle.tireSize?.takeIf(String::isNotBlank)?.let {
+                        DriveDetailLine(S.driveTireSize(language), it)
+                    }
+                    vehicle.registrationDate?.let {
+                        DriveDetailLine(S.driveRegistrationDate(language), formatDriveDate(it, language))
+                    }
+                    vehicle.inspectionDueDate?.let {
+                        DriveDetailLine(S.driveInspectionDueDate(language), formatDriveDate(it, language))
+                    }
+                    vehicle.insuranceDueDate?.let {
+                        DriveDetailLine(S.driveInsuranceDueDate(language), formatDriveDate(it, language))
+                    }
+                }
+            }
+            if (vehicle.purchaseDate != null || vehicle.purchasePriceMinor != null) {
+                item(key = "drive-vehicle-purchase-profile") {
+                    DriveDetailCard(title = S.driveProfilePurchase(language)) {
+                        vehicle.purchaseDate?.let {
+                            DriveDetailLine(S.drivePurchaseDate(language), formatDriveDate(it, language))
+                        }
+                        vehicle.purchasePriceMinor?.let { minor ->
+                            val amount = java.math.BigDecimal.valueOf(minor, 2)
+                                .stripTrailingZeros().toPlainString()
+                            DriveDetailLine(
+                                S.drivePurchasePrice(language),
+                                listOfNotNull(amount, vehicle.currencyCode).joinToString(" ")
+                            )
+                        }
+                    }
                 }
             }
         }

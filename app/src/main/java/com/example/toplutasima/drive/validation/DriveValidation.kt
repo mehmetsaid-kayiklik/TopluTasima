@@ -12,6 +12,10 @@ enum class DriveValidationCode {
     MODEL_YEAR_OUT_OF_RANGE,
     NEGATIVE_ODOMETER,
     CURRENT_ODOMETER_BEFORE_INITIAL,
+    NEGATIVE_PURCHASE_PRICE,
+    INVALID_CURRENCY_CODE,
+    INVALID_COUNTRY_CODE,
+    INVALID_ENGINE_VALUE,
     VEHICLE_REQUIRED,
     VEHICLE_NOT_FOUND,
     END_BEFORE_START,
@@ -64,6 +68,25 @@ class DriveVehicleValidator(
                     "currentOdometerKm"
                 )
             )
+        }
+        if (draft.purchasePriceMinor?.let { it < 0L } == true) {
+            add(DriveValidationIssue(DriveValidationCode.NEGATIVE_PURCHASE_PRICE, "purchasePriceMinor"))
+        }
+        draft.currencyCode?.trim()?.takeIf(String::isNotEmpty)?.let { code ->
+            if (!code.matches(Regex("^[A-Za-z]{3}$"))) {
+                add(DriveValidationIssue(DriveValidationCode.INVALID_CURRENCY_CODE, "currencyCode"))
+            }
+        }
+        draft.countryCode?.trim()?.takeIf(String::isNotEmpty)?.let { code ->
+            if (!code.matches(Regex("^[A-Za-z]{2}$"))) {
+                add(DriveValidationIssue(DriveValidationCode.INVALID_COUNTRY_CODE, "countryCode"))
+            }
+        }
+        if (draft.engineDisplacementCc?.let { it < 0 } == true) {
+            add(DriveValidationIssue(DriveValidationCode.INVALID_ENGINE_VALUE, "engineDisplacementCc"))
+        }
+        if (draft.enginePowerKw?.let { it < 0 } == true) {
+            add(DriveValidationIssue(DriveValidationCode.INVALID_ENGINE_VALUE, "enginePowerKw"))
         }
     }
 

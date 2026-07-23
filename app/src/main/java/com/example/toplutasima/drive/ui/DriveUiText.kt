@@ -112,6 +112,14 @@ internal fun formatDriveInstant(
     DateTimeFormatter.ofPattern("dd.MM.uuuu HH:mm", language.numberLocale())
 ) ?: S.driveNoUsage(language)
 
+internal fun formatDriveDate(
+    instant: Instant,
+    language: AppLanguage,
+    zoneId: ZoneId = ZoneId.systemDefault()
+): String = instant.atZone(zoneId).format(
+    DateTimeFormatter.ofPattern("dd.MM.uuuu", language.numberLocale())
+)
+
 internal fun DriveSyncState.displayText(language: AppLanguage): String = when (this) {
     DriveSyncState.LOCAL_PENDING -> S.driveSyncPending(language)
     DriveSyncState.SYNCING -> S.driveSyncing(language)
@@ -148,6 +156,7 @@ internal fun DriveFormError.displayText(language: AppLanguage): String = when (t
     DriveFormError.INVALID_NUMBER -> S.driveInvalidNumber(language)
     DriveFormError.INVALID_DATE -> S.driveInvalidDate(language)
     DriveFormError.INVALID_TIME -> S.driveInvalidTime(language)
+    DriveFormError.INVALID_CODE -> S.driveInvalidCode(language)
     DriveFormError.DISPLAY_NAME_REQUIRED -> S.driveDisplayNameRequired(language)
     DriveFormError.MODEL_YEAR_OUT_OF_RANGE -> S.driveModelYearInvalid(language)
     DriveFormError.NEGATIVE_ODOMETER -> S.driveNegativeOdometer(language)

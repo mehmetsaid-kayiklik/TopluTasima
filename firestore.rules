@@ -45,6 +45,161 @@ service cloud.firestore {
         );
     }
 
+    function photoFields() {
+      return [
+        'ownerUid',
+        'photoId',
+        'vehicleId',
+        'storagePath',
+        'contentHash',
+        'mimeType',
+        'width',
+        'height',
+        'sizeBytes',
+        'sortOrder',
+        'isPrimary',
+        'schemaVersion',
+        'revision',
+        'operationId',
+        'source',
+        'clientUpdatedAt',
+        '_serverUpdatedAt',
+        'deletedAt'
+      ];
+    }
+
+    function validPhotoShape(data, userId, vehicleId, photoId) {
+      return data.keys().hasAll(photoFields())
+        && data.ownerUid == userId
+        && data.photoId == photoId
+        && data.vehicleId == vehicleId
+        && safeId(data.ownerUid)
+        && safeId(data.photoId)
+        && safeId(data.vehicleId)
+        && data.storagePath == 'users/' + userId + '/vehicles/' + vehicleId + '/photos/' + photoId + '.jpg'
+        && data.contentHash is string
+        && data.contentHash.matches('^[a-f0-9]{64}$')
+        && data.mimeType == 'image/jpeg'
+        && data.width is int && data.width > 0 && data.width <= 2048
+        && data.height is int && data.height > 0 && data.height <= 2048
+        && data.sizeBytes is int && data.sizeBytes > 0 && data.sizeBytes <= 5242880
+        && data.sortOrder is int && data.sortOrder >= 0
+        && data.isPrimary is bool
+        && data.schemaVersion == 1
+        && data.revision is int && data.revision >= 0
+        && data.operationId is string && data.operationId.matches('^[^/]{1,160}$')
+        && data.source in ['TOPLU_TASIMA', 'UNKNOWN']
+        && data.clientUpdatedAt is int && data.clientUpdatedAt >= 0
+        && data._serverUpdatedAt == request.time
+        && (data.deletedAt == null || (data.deletedAt is int && data.deletedAt >= 0));
+    }
+
+    function ledgerCommonFields() {
+      return [
+        'ownerUid', 'vehicleId', 'schemaVersion', 'revision', 'operationId',
+        'source', 'createdAt', 'clientUpdatedAt', '_serverUpdatedAt', 'deletedAt'
+      ];
+    }
+
+    function validLedgerCommon(data, userId) {
+      return data.ownerUid == userId
+        && safeId(data.ownerUid)
+        && safeId(data.vehicleId)
+        && data.schemaVersion == 1
+        && data.revision is int && data.revision >= 1
+        && data.operationId is string
+        && data.operationId.matches('^[0-9a-fA-F-]{36}$')
+        && data.source in ['MANUAL', 'MIGRATED', 'SYSTEM_DERIVED', 'IMPORTED', 'UNKNOWN']
+        && data.createdAt is int && data.createdAt >= 0
+        && data.clientUpdatedAt is int && data.clientUpdatedAt >= 0
+        && data._serverUpdatedAt == request.time
+        && (data.deletedAt == null || (data.deletedAt is int && data.deletedAt >= 0));
+    }
+
+    function validLedgerRevision(data) {
+      return data.revision > resource.data.revision
+        || (data.revision == resource.data.revision
+          && data.operationId == resource.data.operationId);
+    }
+
+    function odometerFields() {
+      return ledgerCommonFields() + [
+        'odometerEntryId', 'observedAt', 'odometerMeters', 'quality', 'readingRole',
+        'odometerSeriesId', 'sourceRecordType', 'sourceRecordId',
+        'correctionOfEntryId', 'resetReason', 'notes'
+      ];
+    }
+
+    function validOdometer(data, userId, documentId) {
+      return validLedgerCommon(data, userId)
+        && data.odometerEntryId == documentId && safeId(data.odometerEntryId)
+        && data.odometerMeters is int && data.odometerMeters >= 0
+        && (data.observedAt is int
+          || (data.observedAt == null && data.source == 'MIGRATED' && data.readingRole == 'MIGRATED'))
+        && data.quality in ['CONFIRMED', 'ESTIMATED', 'UNKNOWN']
+        && data.readingRole in ['AT_EVENT', 'TRIP_START', 'TRIP_END', 'MANUAL', 'MIGRATED', 'UNKNOWN']
+        && safeId(data.odometerSeriesId)
+        && ((data.sourceRecordType == null && data.sourceRecordId == null)
+          || (safeId(data.sourceRecordType) && safeId(data.sourceRecordId)))
+        && (data.correctionOfEntryId == null || safeId(data.correctionOfEntryId));
+    }
+
+    function expenseFields() {
+      return ledgerCommonFields() + [
+        'expenseId', 'occurredAt', 'category', 'transactionKind', 'amountMinor',
+        'currencyCode', 'currencyExponent', 'vendorName', 'notes', 'referenceNumber',
+        'periodStartEpochDay', 'periodEndEpochDay', 'dueEpochDay', 'odometerEntryId',
+        'odometerMetersSnapshot', 'splitGroupId', 'duplicateFingerprint', 'relatedExpenseId'
+      ];
+    }
+
+    function validExpense(data, userId, documentId) {
+      return validLedgerCommon(data, userId)
+        && data.expenseId == documentId && safeId(data.expenseId)
+        && data.occurredAt is int && data.occurredAt >= 0
+        && data.category in [
+          'INSURANCE', 'TAX', 'REGISTRATION_FEE', 'ROAD_FEE', 'TOLL', 'PARKING',
+          'CAR_WASH', 'CHARGING_UNMETERED', 'ACCESSORY', 'FINE', 'OTHER', 'UNKNOWN'
+        ]
+        && data.transactionKind in ['EXPENSE', 'REFUND', 'CREDIT', 'UNKNOWN']
+        && data.amountMinor is int && data.amountMinor > 0
+        && data.currencyCode is string && data.currencyCode.matches('^[A-Z]{3}$')
+        && data.currencyExponent is int && data.currencyExponent >= 0 && data.currencyExponent <= 4
+        && (data.periodStartEpochDay == null || data.periodStartEpochDay is int)
+        && (data.periodEndEpochDay == null || data.periodEndEpochDay is int)
+        && (data.periodStartEpochDay == null || data.periodEndEpochDay == null
+          || data.periodEndEpochDay >= data.periodStartEpochDay)
+        && (data.odometerMetersSnapshot == null
+          || (data.odometerMetersSnapshot is int && data.odometerMetersSnapshot >= 0));
+    }
+
+    function reminderFields() {
+      return ledgerCommonFields() + [
+        'reminderId', 'title', 'reminderType', 'status', 'dueEpochDay',
+        'dueOdometerMeters', 'recurrenceMonths', 'recurrenceDistanceMeters',
+        'recurrenceAnchor', 'leadDays', 'leadDistanceMeters', 'snoozedUntilEpochDay',
+        'linkedServiceRecordId', 'lastCompletedServiceRecordId', 'lastCompletedAt',
+        'lastCompletedOdometerMeters', 'notes'
+      ];
+    }
+
+    function validReminder(data, userId, documentId) {
+      return validLedgerCommon(data, userId)
+        && data.reminderId == documentId && safeId(data.reminderId)
+        && data.title is string && data.title.size() > 0
+        && data.reminderType in ['MAINTENANCE', 'INSPECTION', 'INSURANCE', 'TAX', 'REGISTRATION', 'OTHER', 'UNKNOWN']
+        && data.status in ['ACTIVE', 'SNOOZED', 'DISABLED', 'COMPLETED', 'UNKNOWN']
+        && (data.dueEpochDay is int || (data.dueOdometerMeters is int && data.dueOdometerMeters >= 0))
+        && (data.recurrenceMonths == null || (data.recurrenceMonths is int && data.recurrenceMonths > 0))
+        && (data.recurrenceDistanceMeters == null
+          || (data.recurrenceDistanceMeters is int && data.recurrenceDistanceMeters > 0))
+        && data.recurrenceAnchor in ['LAST_COMPLETION', 'FIXED_SCHEDULE', 'UNKNOWN']
+        && (data.leadDays == null || (data.leadDays is int && data.leadDays >= 0))
+        && (data.leadDistanceMeters == null
+          || (data.leadDistanceMeters is int && data.leadDistanceMeters >= 0))
+        && (data.status != 'SNOOZED' || data.snoozedUntilEpochDay is int);
+    }
+
     match /users/{userId}/vehicleAssignments/{vehicleId} {
       allow read: if owns(userId);
       allow create: if owns(userId)
@@ -58,10 +213,74 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /users/{userId}/vehicles/{vehicleId}/photos/{photoId} {
+      allow read: if owns(userId);
+      allow create: if owns(userId)
+        && request.resource.data.keys().hasOnly(photoFields())
+        && validPhotoShape(request.resource.data, userId, vehicleId, photoId);
+      allow update: if owns(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(photoFields())
+        && validPhotoShape(request.resource.data, userId, vehicleId, photoId)
+        && request.resource.data.revision >= resource.data.revision;
+      allow delete: if false;
+    }
+
+    match /users/{userId}/vehicleOdometerEntries/{documentId} {
+      allow read: if owns(userId);
+      allow create: if owns(userId)
+        && request.resource.data.keys().hasOnly(odometerFields())
+        && request.resource.data.keys().hasAll(odometerFields())
+        && validOdometer(request.resource.data, userId, documentId);
+      allow update: if owns(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(odometerFields())
+        && request.resource.data.keys().hasAll(odometerFields())
+        && validOdometer(request.resource.data, userId, documentId)
+        && validLedgerRevision(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/vehicleExpenses/{documentId} {
+      allow read: if owns(userId);
+      allow create: if owns(userId)
+        && request.resource.data.keys().hasOnly(expenseFields())
+        && request.resource.data.keys().hasAll(expenseFields())
+        && validExpense(request.resource.data, userId, documentId);
+      allow update: if owns(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(expenseFields())
+        && request.resource.data.keys().hasAll(expenseFields())
+        && validExpense(request.resource.data, userId, documentId)
+        && validLedgerRevision(request.resource.data);
+      allow delete: if false;
+    }
+
+    match /users/{userId}/vehicleReminders/{documentId} {
+      allow read: if owns(userId);
+      allow create: if owns(userId)
+        && request.resource.data.keys().hasOnly(reminderFields())
+        && request.resource.data.keys().hasAll(reminderFields())
+        && validReminder(request.resource.data, userId, documentId);
+      allow update: if owns(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(reminderFields())
+        && request.resource.data.keys().hasAll(reminderFields())
+        && validReminder(request.resource.data, userId, documentId)
+        && validLedgerRevision(request.resource.data);
+      allow delete: if false;
+    }
+
     // Existing per-user collections retain their prior owner-only boundary. The explicit
     // exclusion prevents this recursive rule from bypassing vehicleAssignments validation.
-    match /users/{userId}/{collection}/{document=**} {
-      allow read, write: if collection != 'vehicleAssignments' && owns(userId);
+    match /users/{userId}/{collection}/{documentId} {
+      allow read, write: if collection != 'vehicleAssignments'
+        && collection != 'vehicleOdometerEntries'
+        && collection != 'vehicleExpenses'
+        && collection != 'vehicleReminders'
+        && owns(userId);
+    }
+
+    match /users/{userId}/{collection}/{documentId}/{subcollection}/{document=**} {
+      allow read, write: if owns(userId)
+        && collection != 'vehicleAssignments'
+        && !(collection == 'vehicles' && subcollection == 'photos');
     }
   }
 }

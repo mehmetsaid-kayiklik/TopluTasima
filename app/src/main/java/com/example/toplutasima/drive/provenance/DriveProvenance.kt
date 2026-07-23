@@ -16,7 +16,23 @@ object DriveProvenanceFields {
         "initialOdometerKm",
         "currentOdometerKm",
         "assignedPersonId",
-        "notes"
+        "notes",
+        "countryCode",
+        "transmissionType",
+        "bodyType",
+        "color",
+        "vin",
+        "engineDisplacementCc",
+        "enginePowerKw",
+        "purchaseDate",
+        "purchasePriceMinor",
+        "currencyCode",
+        "trimLevel",
+        "engineCode",
+        "registrationDate",
+        "inspectionDueDate",
+        "insuranceDueDate",
+        "tireSize"
     )
 
     val TRIP_FIELDS = setOf(

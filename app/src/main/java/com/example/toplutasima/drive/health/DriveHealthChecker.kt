@@ -9,6 +9,9 @@ import com.example.toplutasima.drive.model.DriveVehicle
 import com.example.toplutasima.drive.provenance.DriveProvenanceFields
 import com.example.toplutasima.drive.assignment.VehicleAssignment
 import com.example.toplutasima.drive.assignment.VehicleAssignmentHealthCode
+import com.example.toplutasima.drive.photo.DriveVehiclePhoto
+import com.example.toplutasima.drive.photo.VehiclePhotoHealthCode
+import shared.vehiclephoto.contract.VehiclePhotoContractSpec
 import java.util.Locale
 import kotlin.math.abs
 
@@ -20,7 +23,8 @@ object DriveHealthChecker {
         vehicles: List<DriveVehicle>,
         trips: List<DriveTrip>,
         provenance: List<DriveFieldProvenance> = emptyList(),
-        assignments: List<VehicleAssignment> = emptyList()
+        assignments: List<VehicleAssignment> = emptyList(),
+        photos: List<DriveVehiclePhoto> = emptyList()
     ): List<DriveHealthIssue> {
         val issues = mutableListOf<DriveHealthIssue>()
         val vehicleIds = vehicles.mapTo(hashSetOf(), DriveVehicle::id)
@@ -113,6 +117,62 @@ object DriveHealthChecker {
                         DriveHealthSeverity.WARNING
                     }
                 )
+            }
+        }
+
+        val activePhotos = photos.filter { it.deletedAt == null }
+        activePhotos.forEach { photo ->
+            if (photo.vehicleId !in vehicleIds) {
+                issues += issue("PHOTO", photo.photoId, photo.vehicleId,
+                    DriveHealthCode.PHOTO_ORPHANED_FROM_VEHICLE, DriveHealthSeverity.WARNING)
+            }
+            if (photo.width == null || photo.height == null ||
+                photo.width !in 1..VehiclePhotoContractSpec.MAX_LONG_EDGE_PX ||
+                photo.height !in 1..VehiclePhotoContractSpec.MAX_LONG_EDGE_PX
+            ) {
+                issues += issue("PHOTO", photo.photoId, photo.vehicleId,
+                    DriveHealthCode.PHOTO_INVALID_DIMENSIONS, DriveHealthSeverity.WARNING)
+            }
+            if (photo.sizeBytes == null || photo.sizeBytes !in 1..VehiclePhotoContractSpec.MAX_PREPARED_BYTES) {
+                issues += issue("PHOTO", photo.photoId, photo.vehicleId,
+                    DriveHealthCode.PHOTO_INVALID_SIZE, DriveHealthSeverity.WARNING)
+            }
+            if (photo.mimeType != VehiclePhotoContractSpec.OUTPUT_MIME_TYPE) {
+                issues += issue("PHOTO", photo.photoId, photo.vehicleId,
+                    DriveHealthCode.PHOTO_UNSUPPORTED_MIME_TYPE, DriveHealthSeverity.CRITICAL)
+            }
+            photo.healthCode?.let { code ->
+                issues += issue(
+                    "PHOTO",
+                    photo.photoId,
+                    photo.vehicleId,
+                    DriveHealthCode.valueOf(code.name),
+                    if (code == VehiclePhotoHealthCode.PHOTO_UNSUPPORTED_SCHEMA) {
+                        DriveHealthSeverity.CRITICAL
+                    } else {
+                        DriveHealthSeverity.WARNING
+                    }
+                )
+            }
+        }
+        activePhotos.filter { !it.contentHash.isNullOrBlank() }
+            .groupBy { it.contentHash }
+            .values.filter { it.size > 1 }
+            .flatten().forEach { photo ->
+                issues += issue("PHOTO", photo.photoId, photo.vehicleId,
+                    DriveHealthCode.PHOTO_DUPLICATE_CONTENT, DriveHealthSeverity.INFO)
+            }
+        activePhotos.groupBy { it.vehicleId }.forEach { (vehicleId, vehiclePhotos) ->
+            val vehicle = vehicles.firstOrNull { it.id == vehicleId }
+            val projectedPrimary = vehiclePhotos.filter(DriveVehiclePhoto::isPrimary)
+            val mirrorMismatch = vehicle?.primaryPhotoId?.let { primaryId ->
+                projectedPrimary.singleOrNull()?.photoId != primaryId
+            } ?: projectedPrimary.isNotEmpty()
+            if (projectedPrimary.size > 1 || mirrorMismatch) {
+                vehiclePhotos.forEach { photo ->
+                    issues += issue("PHOTO", photo.photoId, vehicleId,
+                        DriveHealthCode.PHOTO_PRIMARY_CONFLICT, DriveHealthSeverity.WARNING)
+                }
             }
         }
 

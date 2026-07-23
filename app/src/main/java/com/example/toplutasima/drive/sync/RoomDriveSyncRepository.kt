@@ -18,6 +18,9 @@ import com.example.toplutasima.drive.repository.DriveSyncRunResult
 import com.example.toplutasima.drive.DriveFeatureFlags
 import com.example.toplutasima.drive.assignment.RoomVehicleAssignmentSyncCoordinator
 import com.example.toplutasima.drive.assignment.VehicleAssignmentSyncCoordinator
+import com.example.toplutasima.drive.photo.VehiclePhotoPullCoordinator
+import com.example.toplutasima.drive.ledger.RoomVehicleLedgerSyncCoordinator
+import com.example.toplutasima.drive.ledger.VehicleLedgerSyncCoordinator
 import kotlinx.coroutines.CancellationException
 
 internal fun interface DriveSyncTransactionRunner {
@@ -43,7 +46,9 @@ class RoomDriveSyncRepository internal constructor(
     private val pullCoordinator: DrivePullCoordinator = DrivePullCoordinator.NO_OP,
     private val receiptStore: DriveSyncReceiptStore = DriveSyncReceiptStore.NO_OP,
     private val assignmentSyncCoordinator: VehicleAssignmentSyncCoordinator =
-        VehicleAssignmentSyncCoordinator.NoOp
+        VehicleAssignmentSyncCoordinator.NoOp,
+    private val photoPullCoordinator: VehiclePhotoPullCoordinator = VehiclePhotoPullCoordinator.NoOp,
+    private val ledgerSyncCoordinator: VehicleLedgerSyncCoordinator = VehicleLedgerSyncCoordinator.NoOp
 ) : DriveSyncRepository {
     internal constructor(
         database: AppDatabase,
@@ -53,6 +58,16 @@ class RoomDriveSyncRepository internal constructor(
                 RoomVehicleAssignmentSyncCoordinator(database)
             } else {
                 VehicleAssignmentSyncCoordinator.NoOp
+            },
+        photoPullCoordinator: VehiclePhotoPullCoordinator = VehiclePhotoPullCoordinator.NoOp,
+        ledgerSyncCoordinator: VehicleLedgerSyncCoordinator =
+            if (DriveFeatureFlags.DRIVE_VEHICLE_LEDGER) {
+                RoomVehicleLedgerSyncCoordinator(
+                    database = database,
+                    currentUserId = CurrentUserProvider::currentUserIdOrNull
+                )
+            } else {
+                VehicleLedgerSyncCoordinator.NoOp
             }
     ) : this(
         vehicleDao = database.driveVehicleDao(),
@@ -75,7 +90,9 @@ class RoomDriveSyncRepository internal constructor(
             now = System::currentTimeMillis
         ),
         receiptStore = RoomDriveSyncReceiptStore(database.driveSyncReceiptDao()),
-        assignmentSyncCoordinator = assignmentSyncCoordinator
+        assignmentSyncCoordinator = assignmentSyncCoordinator,
+        photoPullCoordinator = photoPullCoordinator,
+        ledgerSyncCoordinator = ledgerSyncCoordinator
     )
 
     override suspend fun synchronize(ownerUid: String): DriveSyncRunResult {
@@ -103,12 +120,26 @@ class RoomDriveSyncRepository internal constructor(
             )
         }
 
-        val assignmentPush = assignmentSyncCoordinator.pushAndReconcile(ownerUid)
+        val photoPull = photoPullCoordinator.pull(ownerUid)
+        if (photoPull.retryRequired || photoPull.permanentFailureCount > 0) {
+            return DriveSyncRunResult(
+                processedCount = assignmentPull.processedCount,
+                retryRequired = photoPull.retryRequired,
+                permanentFailureCount = assignmentPull.permanentFailureCount +
+                    pullResult.permanentFailureCount + photoPull.permanentFailureCount,
+                pulledCount = assignmentPull.pulledCount + pullResult.pulledCount + photoPull.pulledCount
+            )
+        }
 
-        var processedCount = assignmentPull.processedCount + assignmentPush.processedCount
-        var retryRequired = assignmentPush.retryRequired
+        val assignmentPush = assignmentSyncCoordinator.pushAndReconcile(ownerUid)
+        val ledgerSync = ledgerSyncCoordinator.synchronize(ownerUid)
+
+        var processedCount = assignmentPull.processedCount + assignmentPush.processedCount +
+            ledgerSync.processedCount
+        var retryRequired = assignmentPush.retryRequired || ledgerSync.retryRequired
         var permanentFailureCount =
-            assignmentPull.permanentFailureCount + assignmentPush.permanentFailureCount
+            assignmentPull.permanentFailureCount + assignmentPush.permanentFailureCount +
+                ledgerSync.permanentFailureCount
 
         while (true) {
             assertAuthenticatedOwner(ownerUid)
@@ -162,7 +193,8 @@ class RoomDriveSyncRepository internal constructor(
             processedCount = processedCount,
             retryRequired = retryRequired,
             permanentFailureCount = permanentFailureCount,
-            pulledCount = assignmentPull.pulledCount + pullResult.pulledCount
+            pulledCount = assignmentPull.pulledCount + pullResult.pulledCount + photoPull.pulledCount +
+                ledgerSync.pulledCount
         )
     }
 

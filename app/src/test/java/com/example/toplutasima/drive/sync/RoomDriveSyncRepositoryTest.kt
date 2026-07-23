@@ -380,6 +380,11 @@ class RoomDriveSyncRepositoryTest {
             id: String
         ): Flow<DriveVehicleEntity?> = flowOf(rows[key(userId, id)]?.takeIf { it.deletedAt == null })
 
+        override fun observeVehicleIncludingDeleted(
+            userId: String,
+            id: String
+        ): Flow<DriveVehicleEntity?> = flowOf(rows[key(userId, id)])
+
         override suspend fun getVehicle(userId: String, id: String): DriveVehicleEntity? =
             rows[key(userId, id)]
 
@@ -396,6 +401,16 @@ class RoomDriveSyncRepositoryTest {
         ): Int {
             val current = rows[key(userId, vehicleId)] ?: return 0
             rows[key(userId, vehicleId)] = current.copy(assignedPersonId = personId)
+            return 1
+        }
+
+        override suspend fun setCurrentOdometerMirror(
+            userId: String,
+            vehicleId: String,
+            currentOdometerKm: Double?
+        ): Int {
+            val current = rows[key(userId, vehicleId)] ?: return 0
+            rows[key(userId, vehicleId)] = current.copy(currentOdometerKm = currentOdometerKm)
             return 1
         }
 

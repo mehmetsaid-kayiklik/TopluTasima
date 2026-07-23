@@ -22,6 +22,8 @@ import com.example.toplutasima.drive.management.DriveVehicleListProcessor
 import com.example.toplutasima.drive.model.DriveVehicleAssignmentFilter
 import com.example.toplutasima.drive.model.DriveVehicleSort
 import com.example.toplutasima.drive.model.VehicleFuelType
+import com.example.toplutasima.drive.model.VehicleTransmissionType
+import com.example.toplutasima.drive.model.VehicleBodyType
 import com.example.toplutasima.drive.sync.DriveSyncEntityType
 import java.math.BigDecimal
 import java.time.Clock
@@ -520,6 +522,33 @@ class DriveViewModel(
             FIELD_CURRENT_ODOMETER,
             errors
         )
+        val engineDisplacement = parseOptionalInt(
+            form.engineDisplacementCc,
+            FIELD_ENGINE_DISPLACEMENT,
+            errors
+        )
+        val enginePower = parseOptionalInt(form.enginePowerKw, FIELD_ENGINE_POWER, errors)
+        val purchasePriceMinor = parseOptionalMoneyMinor(
+            form.purchasePrice,
+            FIELD_PURCHASE_PRICE,
+            errors
+        )
+        val purchaseDate = parseOptionalDate(form.purchaseDate, FIELD_PURCHASE_DATE, errors)
+        val registrationDate = parseOptionalDate(
+            form.registrationDate,
+            FIELD_REGISTRATION_DATE,
+            errors
+        )
+        val inspectionDueDate = parseOptionalDate(
+            form.inspectionDueDate,
+            FIELD_INSPECTION_DUE_DATE,
+            errors
+        )
+        val insuranceDueDate = parseOptionalDate(
+            form.insuranceDueDate,
+            FIELD_INSURANCE_DUE_DATE,
+            errors
+        )
         val draft = DriveVehicleDraft(
             displayName = form.displayName.trim(),
             brand = form.brand.trimToNull(),
@@ -530,7 +559,23 @@ class DriveViewModel(
             initialOdometerKm = initialOdometer,
             currentOdometerKm = currentOdometer,
             assignedPersonId = form.assignedPersonId,
-            notes = form.notes.trimToNull()
+            notes = form.notes.trimToNull(),
+            countryCode = form.countryCode.trimToNull(),
+            transmissionType = form.transmissionType,
+            bodyType = form.bodyType,
+            color = form.color.trimToNull(),
+            vin = form.vin.trimToNull(),
+            engineDisplacementCc = engineDisplacement,
+            enginePowerKw = enginePower,
+            purchaseDate = purchaseDate,
+            purchasePriceMinor = purchasePriceMinor,
+            currencyCode = form.currencyCode.trimToNull(),
+            trimLevel = form.trimLevel.trimToNull(),
+            engineCode = form.engineCode.trimToNull(),
+            registrationDate = registrationDate,
+            inspectionDueDate = inspectionDueDate,
+            insuranceDueDate = insuranceDueDate,
+            tireSize = form.tireSize.trimToNull()
         )
         vehicleValidator.validate(draft).forEach { issue ->
             issue.toFormError()?.let { errors.putIfAbsent(issue.field, it) }
@@ -614,6 +659,46 @@ class DriveViewModel(
     ) {
         _uiState.update {
             it.copy(tripForm = form.copy(fieldErrors = errors), notice = null)
+        }
+    }
+
+    private fun parseOptionalInt(
+        raw: String,
+        field: String,
+        errors: MutableMap<String, DriveFormError>
+    ): Int? {
+        if (raw.isBlank()) return null
+        return raw.trim().toIntOrNull().also { if (it == null) errors[field] = DriveFormError.INVALID_NUMBER }
+    }
+
+    private fun parseOptionalMoneyMinor(
+        raw: String,
+        field: String,
+        errors: MutableMap<String, DriveFormError>
+    ): Long? {
+        if (raw.isBlank()) return null
+        return try {
+            BigDecimal(raw.trim().replace(',', '.')).movePointRight(2).longValueExact()
+        } catch (_: ArithmeticException) {
+            errors[field] = DriveFormError.INVALID_NUMBER
+            null
+        } catch (_: NumberFormatException) {
+            errors[field] = DriveFormError.INVALID_NUMBER
+            null
+        }
+    }
+
+    private fun parseOptionalDate(
+        raw: String,
+        field: String,
+        errors: MutableMap<String, DriveFormError>
+    ): Instant? {
+        if (raw.isBlank()) return null
+        return try {
+            LocalDate.parse(raw.trim(), DATE_FORMATTER).atStartOfDay(clock.zone).toInstant()
+        } catch (_: DateTimeParseException) {
+            errors[field] = DriveFormError.INVALID_DATE
+            null
         }
     }
 
@@ -900,6 +985,10 @@ class DriveViewModel(
         DriveValidationCode.NEGATIVE_ODOMETER -> DriveFormError.NEGATIVE_ODOMETER
         DriveValidationCode.CURRENT_ODOMETER_BEFORE_INITIAL ->
             DriveFormError.CURRENT_ODOMETER_BEFORE_INITIAL
+        DriveValidationCode.NEGATIVE_PURCHASE_PRICE,
+        DriveValidationCode.INVALID_ENGINE_VALUE -> DriveFormError.INVALID_NUMBER
+        DriveValidationCode.INVALID_CURRENCY_CODE,
+        DriveValidationCode.INVALID_COUNTRY_CODE -> DriveFormError.INVALID_CODE
         DriveValidationCode.VEHICLE_REQUIRED -> DriveFormError.VEHICLE_REQUIRED
         DriveValidationCode.VEHICLE_NOT_FOUND -> DriveFormError.VEHICLE_NOT_FOUND
         DriveValidationCode.END_BEFORE_START -> DriveFormError.END_BEFORE_START
@@ -928,7 +1017,23 @@ class DriveViewModel(
         initialOdometerKm = initialOdometerKm.toEditableDecimal(),
         currentOdometerKm = currentOdometerKm.toEditableDecimal(),
         assignedPersonId = assignedPersonId,
-        notes = notes.orEmpty()
+        notes = notes.orEmpty(),
+        countryCode = countryCode.orEmpty(),
+        transmissionType = transmissionType,
+        bodyType = bodyType,
+        color = color.orEmpty(),
+        vin = vin.orEmpty(),
+        engineDisplacementCc = engineDisplacementCc?.toString().orEmpty(),
+        enginePowerKw = enginePowerKw?.toString().orEmpty(),
+        purchaseDate = purchaseDate?.let { formatDate(it, clock.zone) }.orEmpty(),
+        purchasePrice = purchasePriceMinor.toEditableMoney(),
+        currencyCode = currencyCode.orEmpty(),
+        trimLevel = trimLevel.orEmpty(),
+        engineCode = engineCode.orEmpty(),
+        registrationDate = registrationDate?.let { formatDate(it, clock.zone) }.orEmpty(),
+        inspectionDueDate = inspectionDueDate?.let { formatDate(it, clock.zone) }.orEmpty(),
+        insuranceDueDate = insuranceDueDate?.let { formatDate(it, clock.zone) }.orEmpty(),
+        tireSize = tireSize.orEmpty()
     )
 
     private fun DriveTrip.toFormState(zoneId: ZoneId): DriveTripFormState = DriveTripFormState(
@@ -953,6 +1058,10 @@ class DriveViewModel(
         BigDecimal.valueOf(it).stripTrailingZeros().toPlainString()
     }.orEmpty()
 
+    private fun Long?.toEditableMoney(): String = this?.let {
+        BigDecimal.valueOf(it, 2).stripTrailingZeros().toPlainString()
+    }.orEmpty()
+
     private fun String.trimToNull(): String? = trim().takeIf(String::isNotEmpty)
 
     private data class DriveDetailSnapshot(
@@ -973,6 +1082,13 @@ class DriveViewModel(
         const val FIELD_INITIAL_ODOMETER = "initialOdometerKm"
         const val FIELD_CURRENT_ODOMETER = "currentOdometerKm"
         const val FIELD_ASSIGNED_PERSON_ID = "assignedPersonId"
+        const val FIELD_ENGINE_DISPLACEMENT = "engineDisplacementCc"
+        const val FIELD_ENGINE_POWER = "enginePowerKw"
+        const val FIELD_PURCHASE_DATE = "purchaseDate"
+        const val FIELD_PURCHASE_PRICE = "purchasePriceMinor"
+        const val FIELD_REGISTRATION_DATE = "registrationDate"
+        const val FIELD_INSPECTION_DUE_DATE = "inspectionDueDate"
+        const val FIELD_INSURANCE_DUE_DATE = "insuranceDueDate"
         const val FIELD_STARTED_DATE = "startedDate"
         const val FIELD_STARTED_TIME = "startedTime"
         const val FIELD_ENDED_DATE = "endedDate"

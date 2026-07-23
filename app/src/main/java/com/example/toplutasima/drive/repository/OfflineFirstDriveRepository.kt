@@ -50,6 +50,7 @@ import com.example.toplutasima.drive.assignment.VehicleAssignmentFailure
 import com.example.toplutasima.drive.assignment.VehicleAssignmentMutationResult
 import com.example.toplutasima.drive.assignment.VehicleAssignmentRepository
 import com.example.toplutasima.drive.assignment.toDomain as assignmentToDomain
+import com.example.toplutasima.drive.photo.toDomain as photoToDomain
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class OfflineFirstDriveRepository(
@@ -159,14 +160,16 @@ class OfflineFirstDriveRepository(
                     vehicleDao.observeActiveVehicles(uid),
                     tripDao.observeActiveTrips(uid),
                     provenanceDao.observeForUser(uid),
-                    assignmentDao.observeAll(uid)
-                ) { vehicles, trips, provenance, assignments ->
+                    assignmentDao.observeAll(uid),
+                    database.driveVehiclePhotoDao().observeAll(uid)
+                ) { vehicles, trips, provenance, assignments, photos ->
                     withContext(calculationDispatcher) {
                         DriveHealthChecker.scan(
                             vehicles = vehicles.map { it.toDomain() },
                             trips = trips.map { it.toDomain() },
                             provenance = provenance.map { it.provenanceToDomain() },
-                            assignments = assignments.map { it.assignmentToDomain() }
+                            assignments = assignments.map { it.assignmentToDomain() },
+                            photos = photos.map { it.photoToDomain() }
                         )
                     }
                 }
@@ -233,7 +236,23 @@ class OfflineFirstDriveRepository(
             notes = draft.notes,
             createdAt = Instant.ofEpochMilli(timestamp),
             updatedAt = Instant.ofEpochMilli(timestamp),
-            syncState = DriveSyncState.LOCAL_PENDING
+            syncState = DriveSyncState.LOCAL_PENDING,
+            countryCode = draft.countryCode,
+            transmissionType = draft.transmissionType,
+            bodyType = draft.bodyType,
+            color = draft.color,
+            vin = draft.vin,
+            engineDisplacementCc = draft.engineDisplacementCc,
+            enginePowerKw = draft.enginePowerKw,
+            purchaseDate = draft.purchaseDate,
+            purchasePriceMinor = draft.purchasePriceMinor,
+            currencyCode = draft.currencyCode,
+            trimLevel = draft.trimLevel,
+            engineCode = draft.engineCode,
+            registrationDate = draft.registrationDate,
+            inspectionDueDate = draft.inspectionDueDate,
+            insuranceDueDate = draft.insuranceDueDate,
+            tireSize = draft.tireSize
         )
         database.withTransaction {
             vehicleDao.upsert(vehicle.toEntity())
@@ -271,8 +290,28 @@ class OfflineFirstDriveRepository(
                 modelYear = draft.modelYear,
                 fuelType = draft.fuelType,
                 initialOdometerKm = draft.initialOdometerKm,
-                currentOdometerKm = draft.currentOdometerKm,
+                currentOdometerKm = if (DriveFeatureFlags.DRIVE_VEHICLE_LEDGER) {
+                    existing.currentOdometerKm
+                } else {
+                    draft.currentOdometerKm
+                },
                 notes = draft.notes,
+                countryCode = draft.countryCode,
+                transmissionType = draft.transmissionType,
+                bodyType = draft.bodyType,
+                color = draft.color,
+                vin = draft.vin,
+                engineDisplacementCc = draft.engineDisplacementCc,
+                enginePowerKw = draft.enginePowerKw,
+                purchaseDate = draft.purchaseDate,
+                purchasePriceMinor = draft.purchasePriceMinor,
+                currencyCode = draft.currencyCode,
+                trimLevel = draft.trimLevel,
+                engineCode = draft.engineCode,
+                registrationDate = draft.registrationDate,
+                inspectionDueDate = draft.inspectionDueDate,
+                insuranceDueDate = draft.insuranceDueDate,
+                tireSize = draft.tireSize,
                 updatedAt = Instant.ofEpochMilli(timestamp),
                 syncState = DriveSyncState.LOCAL_PENDING
             )

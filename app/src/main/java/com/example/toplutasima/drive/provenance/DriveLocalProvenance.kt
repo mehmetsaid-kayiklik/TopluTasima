@@ -17,6 +17,22 @@ fun changedVehicleFields(
     if (before.currentOdometerKm != after.currentOdometerKm) add("currentOdometerKm")
     if (before.assignedPersonId != after.assignedPersonId) add("assignedPersonId")
     if (before.notes != after.notes) add("notes")
+    if (before.countryCode != after.countryCode) add("countryCode")
+    if (before.transmissionType != after.transmissionType) add("transmissionType")
+    if (before.bodyType != after.bodyType) add("bodyType")
+    if (before.color != after.color) add("color")
+    if (before.vin != after.vin) add("vin")
+    if (before.engineDisplacementCc != after.engineDisplacementCc) add("engineDisplacementCc")
+    if (before.enginePowerKw != after.enginePowerKw) add("enginePowerKw")
+    if (before.purchaseDate != after.purchaseDate) add("purchaseDate")
+    if (before.purchasePriceMinor != after.purchasePriceMinor) add("purchasePriceMinor")
+    if (before.currencyCode != after.currencyCode) add("currencyCode")
+    if (before.trimLevel != after.trimLevel) add("trimLevel")
+    if (before.engineCode != after.engineCode) add("engineCode")
+    if (before.registrationDate != after.registrationDate) add("registrationDate")
+    if (before.inspectionDueDate != after.inspectionDueDate) add("inspectionDueDate")
+    if (before.insuranceDueDate != after.insuranceDueDate) add("insuranceDueDate")
+    if (before.tireSize != after.tireSize) add("tireSize")
 }
 
 fun changedTripFields(before: DriveTripEntity, after: DriveTripEntity): Set<String> = buildSet {

@@ -12,7 +12,7 @@ import { deleteDoc, doc, serverTimestamp, setDoc } from "firebase/firestore";
 const here = dirname(fileURLToPath(import.meta.url));
 const rules = await readFile(resolve(here, "..", "firestore.rules"), "utf8");
 const environment = await initializeTestEnvironment({
-  projectId: "toplutasima-sprint6a-test",
+  projectId: "toplutasima-sprint6b-test",
   firestore: { rules }
 });
 

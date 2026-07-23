@@ -37,7 +37,7 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun `migration 7 to 11 attributes legacy rows and preserves them`() = runBlocking {
+    fun `migration 7 to 13 attributes legacy rows and preserves them`() = runBlocking {
         createVersion7Database()
 
         val database = Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
@@ -45,7 +45,9 @@ class AppDatabaseMigrationTest {
                 AppDatabase.migration7To8("user-A"),
                 AppDatabase.MIGRATION_8_9,
                 AppDatabase.MIGRATION_9_10,
-                AppDatabase.MIGRATION_10_11
+                AppDatabase.MIGRATION_10_11,
+                AppDatabase.MIGRATION_11_12,
+                AppDatabase.MIGRATION_12_13
             )
             .allowMainThreadQueries()
             .build()
@@ -65,14 +67,16 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun `migration 8 to 11 creates drive tables without changing existing rows`() = runBlocking {
+    fun `migration 8 to 13 creates drive tables without changing existing rows`() = runBlocking {
         createVersion8Database()
 
         val database = Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
             .addMigrations(
                 AppDatabase.MIGRATION_8_9,
                 AppDatabase.MIGRATION_9_10,
-                AppDatabase.MIGRATION_10_11
+                AppDatabase.MIGRATION_10_11,
+                AppDatabase.MIGRATION_11_12,
+                AppDatabase.MIGRATION_12_13
             )
             .allowMainThreadQueries()
             .build()
@@ -100,11 +104,16 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun `migration 9 to 11 preserves drive rows and creates sync metadata`() = runBlocking {
+    fun `migration 9 to 13 preserves drive rows and creates sync metadata`() = runBlocking {
         createVersion9Database()
 
         val database = Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
-            .addMigrations(AppDatabase.MIGRATION_9_10, AppDatabase.MIGRATION_10_11)
+            .addMigrations(
+                AppDatabase.MIGRATION_9_10,
+                AppDatabase.MIGRATION_10_11,
+                AppDatabase.MIGRATION_11_12,
+                AppDatabase.MIGRATION_12_13
+            )
             .allowMainThreadQueries()
             .build()
         database.openHelper.writableDatabase
@@ -124,6 +133,77 @@ class AppDatabaseMigrationTest {
             .observeRecent("user-A", 10).first())
         database.close()
     }
+
+    @Test
+    fun `migration 12 to 13 preserves drive assignment and photo rows and creates ledger`() = runBlocking {
+        createVersion12Database()
+
+        val database = Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
+            .addMigrations(AppDatabase.MIGRATION_12_13)
+            .allowMainThreadQueries()
+            .build()
+        val sqlite = database.openHelper.writableDatabase
+
+        assertEquals("Vehicle", database.driveVehicleDao()
+            .getVehicle("user-A", "vehicle-1")?.displayName)
+        assertEquals("vehicle-1", database.driveTripDao()
+            .getTrip("user-A", "trip-kept")?.vehicleId)
+        assertEquals(1, count(sqlite, "drive_vehicle_assignments"))
+        assertEquals(1, count(sqlite, "drive_vehicle_photos"))
+        listOf(
+            "drive_odometer_entries", "drive_expenses", "drive_reminders",
+            "drive_ledger_operations", "drive_ledger_sync_metadata",
+            "drive_ledger_sync_receipts", "drive_ledger_conflicts"
+        ).forEach { table -> assertEquals(0, count(sqlite, table)) }
+        database.close()
+    }
+
+    private fun createVersion12Database() {
+        createVersion9Database()
+        val openHelper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(DATABASE_NAME)
+                .callback(object : SupportSQLiteOpenHelper.Callback(12) {
+                    override fun onCreate(db: SupportSQLiteDatabase) = Unit
+
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {
+                        check(oldVersion == 9 && newVersion == 12)
+                        AppDatabase.MIGRATION_9_10.migrate(db)
+                        AppDatabase.MIGRATION_10_11.migrate(db)
+                        AppDatabase.MIGRATION_11_12.migrate(db)
+                        db.execSQL(
+                            "INSERT INTO drive_trips " +
+                                "(id,userId,vehicleId,startedAt,distanceKm,purpose,entrySource," +
+                                "createdAt,updatedAt,syncState) VALUES " +
+                                "('trip-kept','user-A','vehicle-1',1,1.0,'PERSONAL','MANUAL',1,1,'SYNCED')"
+                        )
+                        db.execSQL(
+                            "INSERT INTO drive_vehicle_assignments " +
+                                "(ownerUid,vehicleId,personId,schemaVersion,revision,operationId," +
+                                "source,clientUpdatedAt,syncState) VALUES " +
+                                "('user-A','vehicle-1','person-1',1,1,'assignment-op'," +
+                                "'TOPLU_TASIMA',1,'SYNCED')"
+                        )
+                        db.execSQL(
+                            "INSERT INTO drive_vehicle_photos " +
+                                "(ownerUid,photoId,vehicleId,sortOrder,isPrimary,schemaVersion," +
+                                "revision,operationId,source,clientUpdatedAt,uploadState,remoteState," +
+                                "createdAt,updatedAt) VALUES " +
+                                "('user-A','photo-1','vehicle-1',0,1,1,1,'photo-op'," +
+                                "'TOPLU_TASIMA',1,'SYNCED','ACTIVE',1,1)"
+                        )
+                    }
+                }).build()
+        )
+        openHelper.writableDatabase
+        openHelper.close()
+    }
+
+    private fun count(database: SupportSQLiteDatabase, table: String): Int =
+        database.query("SELECT COUNT(*) FROM `$table`").use { cursor ->
+            check(cursor.moveToFirst())
+            cursor.getInt(0)
+        }
 
     private fun createVersion9Database() {
         createVersion8Database()

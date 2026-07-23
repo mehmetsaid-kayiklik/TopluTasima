@@ -30,6 +30,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.toplutasima.drive.model.VehicleFuelType
+import com.example.toplutasima.drive.model.VehicleTransmissionType
+import com.example.toplutasima.drive.model.VehicleBodyType
+import com.example.toplutasima.drive.DriveFeatureFlags
 import com.example.toplutasima.ui.LocaleManager
 import com.example.toplutasima.ui.S
 
@@ -122,15 +125,161 @@ internal fun DriveVehicleEditorScreen(
                     suffix = { Text("km") }
                 )
             }
-            item(key = "drive-vehicle-current-odometer") {
-                DriveFormTextField(
-                    value = form.currentOdometerKm,
-                    onValueChange = { onFormChange(form.copy(currentOdometerKm = it)) },
-                    label = S.driveManualCurrentOdometer(language),
-                    error = form.fieldErrors["currentOdometerKm"],
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    suffix = { Text("km") }
-                )
+            if (!DriveFeatureFlags.DRIVE_VEHICLE_LEDGER) {
+                item(key = "drive-vehicle-current-odometer") {
+                    DriveFormTextField(
+                        value = form.currentOdometerKm,
+                        onValueChange = { onFormChange(form.copy(currentOdometerKm = it)) },
+                        label = S.driveManualCurrentOdometer(language),
+                        error = form.fieldErrors["currentOdometerKm"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        suffix = { Text("km") }
+                    )
+                }
+            } else {
+                item(key = "drive-vehicle-current-odometer-ledger-info") {
+                    Text(
+                        if (language == com.example.toplutasima.ui.AppLanguage.TR) {
+                            "Güncel kilometre, araç detayındaki kilometre geçmişinden yönetilir."
+                        } else {
+                            "Current odometer is managed from the odometer history on vehicle details."
+                        }
+                    )
+                }
+            }
+            if (DriveFeatureFlags.DRIVE_EXTENDED_VEHICLE_PROFILE) {
+                item(key = "drive-profile-general-heading") {
+                    Text(S.driveProfileGeneral(language), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                }
+                item(key = "drive-vehicle-country") {
+                    DriveFormTextField(
+                        value = form.countryCode,
+                        onValueChange = { onFormChange(form.copy(countryCode = it)) },
+                        label = S.driveCountryCode(language),
+                        error = form.fieldErrors["countryCode"],
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+                    )
+                }
+                item(key = "drive-vehicle-transmission") {
+                    DriveEnumSelector(
+                        label = S.driveTransmission(language),
+                        selected = form.transmissionType,
+                        values = VehicleTransmissionType.entries,
+                        onSelected = { onFormChange(form.copy(transmissionType = it)) }
+                    )
+                }
+                item(key = "drive-vehicle-body") {
+                    DriveEnumSelector(
+                        label = S.driveBodyType(language),
+                        selected = form.bodyType,
+                        values = VehicleBodyType.entries,
+                        onSelected = { onFormChange(form.copy(bodyType = it)) }
+                    )
+                }
+                item(key = "drive-vehicle-color") {
+                    DriveFormTextField(form.color, { onFormChange(form.copy(color = it)) }, S.driveColor(language))
+                }
+                item(key = "drive-vehicle-trim") {
+                    DriveFormTextField(form.trimLevel, { onFormChange(form.copy(trimLevel = it)) }, S.driveTrimLevel(language))
+                }
+                item(key = "drive-profile-technical-heading") {
+                    Text(S.driveProfileTechnical(language), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                }
+                item(key = "drive-vehicle-vin") {
+                    DriveFormTextField(
+                        form.vin,
+                        { onFormChange(form.copy(vin = it)) },
+                        S.driveVin(language),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+                    )
+                }
+                item(key = "drive-vehicle-engine-code") {
+                    DriveFormTextField(form.engineCode, { onFormChange(form.copy(engineCode = it)) }, S.driveEngineCode(language))
+                }
+                item(key = "drive-vehicle-engine-cc") {
+                    DriveFormTextField(
+                        form.engineDisplacementCc,
+                        { onFormChange(form.copy(engineDisplacementCc = it)) },
+                        S.driveEngineDisplacement(language),
+                        error = form.fieldErrors["engineDisplacementCc"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        suffix = { Text("cc") }
+                    )
+                }
+                item(key = "drive-vehicle-engine-power") {
+                    DriveFormTextField(
+                        form.enginePowerKw,
+                        { onFormChange(form.copy(enginePowerKw = it)) },
+                        S.driveEnginePower(language),
+                        error = form.fieldErrors["enginePowerKw"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        suffix = { Text("kW") }
+                    )
+                }
+                item(key = "drive-vehicle-tire-size") {
+                    DriveFormTextField(form.tireSize, { onFormChange(form.copy(tireSize = it)) }, S.driveTireSize(language))
+                }
+                item(key = "drive-vehicle-registration-date") {
+                    DriveFormTextField(
+                        form.registrationDate,
+                        { onFormChange(form.copy(registrationDate = it)) },
+                        S.driveRegistrationDate(language),
+                        error = form.fieldErrors["registrationDate"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        placeholder = S.driveDateHint(language)
+                    )
+                }
+                item(key = "drive-profile-purchase-heading") {
+                    Text(S.driveProfilePurchase(language), style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+                }
+                item(key = "drive-vehicle-purchase-date") {
+                    DriveFormTextField(
+                        form.purchaseDate,
+                        { onFormChange(form.copy(purchaseDate = it)) },
+                        S.drivePurchaseDate(language),
+                        error = form.fieldErrors["purchaseDate"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        placeholder = S.driveDateHint(language)
+                    )
+                }
+                item(key = "drive-vehicle-purchase-price") {
+                    DriveFormTextField(
+                        form.purchasePrice,
+                        { onFormChange(form.copy(purchasePrice = it)) },
+                        S.drivePurchasePrice(language),
+                        error = form.fieldErrors["purchasePriceMinor"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                }
+                item(key = "drive-vehicle-currency") {
+                    DriveFormTextField(
+                        form.currencyCode,
+                        { onFormChange(form.copy(currencyCode = it)) },
+                        S.driveCurrencyCode(language),
+                        error = form.fieldErrors["currencyCode"],
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters)
+                    )
+                }
+                item(key = "drive-vehicle-inspection-date") {
+                    DriveFormTextField(
+                        form.inspectionDueDate,
+                        { onFormChange(form.copy(inspectionDueDate = it)) },
+                        S.driveInspectionDueDate(language),
+                        error = form.fieldErrors["inspectionDueDate"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        placeholder = S.driveDateHint(language)
+                    )
+                }
+                item(key = "drive-vehicle-insurance-date") {
+                    DriveFormTextField(
+                        form.insuranceDueDate,
+                        { onFormChange(form.copy(insuranceDueDate = it)) },
+                        S.driveInsuranceDueDate(language),
+                        error = form.fieldErrors["insuranceDueDate"],
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        placeholder = S.driveDateHint(language)
+                    )
+                }
             }
             item(key = "drive-vehicle-notes") {
                 DriveFormTextField(
@@ -157,6 +306,33 @@ internal fun DriveVehicleEditorScreen(
                         Text(S.save(language))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T : Enum<T>> DriveEnumSelector(
+    label: String,
+    selected: T,
+    values: List<T>,
+    onSelected: (T) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("$label: ${selected.name.replace('_', ' ')}", modifier = Modifier.weight(1f))
+            androidx.compose.material3.Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            values.forEach { value ->
+                DropdownMenuItem(
+                    text = { Text(value.name.replace('_', ' ')) },
+                    onClick = {
+                        expanded = false
+                        onSelected(value)
+                    }
+                )
             }
         }
     }

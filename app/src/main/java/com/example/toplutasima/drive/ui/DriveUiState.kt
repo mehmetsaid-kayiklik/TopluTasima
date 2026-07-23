@@ -8,6 +8,8 @@ import com.example.toplutasima.drive.model.DriveVehicle
 import com.example.toplutasima.drive.model.DriveVehicleOverview
 import com.example.toplutasima.drive.model.DriveVehicleSummary
 import com.example.toplutasima.drive.model.VehicleFuelType
+import com.example.toplutasima.drive.model.VehicleTransmissionType
+import com.example.toplutasima.drive.model.VehicleBodyType
 import com.example.toplutasima.drive.model.DriveFieldProvenance
 import com.example.toplutasima.drive.model.DriveHealthIssue
 import com.example.toplutasima.drive.model.DriveSyncReceipt
@@ -31,6 +33,7 @@ enum class DriveFormError {
     INVALID_NUMBER,
     INVALID_DATE,
     INVALID_TIME,
+    INVALID_CODE,
     DISPLAY_NAME_REQUIRED,
     MODEL_YEAR_OUT_OF_RANGE,
     NEGATIVE_ODOMETER,
@@ -81,6 +84,22 @@ data class DriveVehicleFormState(
     val currentOdometerKm: String = "",
     val assignedPersonId: String? = null,
     val notes: String = "",
+    val countryCode: String = "",
+    val transmissionType: VehicleTransmissionType = VehicleTransmissionType.UNKNOWN,
+    val bodyType: VehicleBodyType = VehicleBodyType.UNKNOWN,
+    val color: String = "",
+    val vin: String = "",
+    val engineDisplacementCc: String = "",
+    val enginePowerKw: String = "",
+    val purchaseDate: String = "",
+    val purchasePrice: String = "",
+    val currencyCode: String = "",
+    val trimLevel: String = "",
+    val engineCode: String = "",
+    val registrationDate: String = "",
+    val inspectionDueDate: String = "",
+    val insuranceDueDate: String = "",
+    val tireSize: String = "",
     val fieldErrors: Map<String, DriveFormError> = emptyMap()
 )
 
@@ -182,4 +201,9 @@ object DriveUiTestTags {
     const val SORT = "drive_vehicle_sort"
     const val SELECTION = "drive_vehicle_selection"
     const val BULK_DELETE = "drive_vehicle_bulk_delete"
+    const val PHOTO_SECTION = "drive_vehicle_photo_section"
+    const val PHOTO_EMPTY = "drive_vehicle_photo_empty"
+    const val PHOTO_ADD = "drive_vehicle_photo_add"
+    const val PHOTO_RETRY = "drive_vehicle_photo_retry"
+    const val PHOTO_PRIMARY = "drive_vehicle_photo_primary"
 }

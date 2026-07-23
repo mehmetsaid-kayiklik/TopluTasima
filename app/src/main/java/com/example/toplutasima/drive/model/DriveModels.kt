@@ -19,6 +19,38 @@ enum class VehicleFuelType {
     }
 }
 
+enum class VehicleTransmissionType {
+    MANUAL,
+    AUTOMATIC,
+    SEMI_AUTOMATIC,
+    CVT,
+    OTHER,
+    UNKNOWN;
+
+    companion object {
+        fun fromStorage(value: String?): VehicleTransmissionType =
+            entries.firstOrNull { it.name == value?.uppercase(Locale.ROOT) } ?: UNKNOWN
+    }
+}
+
+enum class VehicleBodyType {
+    HATCHBACK,
+    SEDAN,
+    STATION_WAGON,
+    SUV,
+    COUPE,
+    CONVERTIBLE,
+    VAN,
+    PICKUP,
+    OTHER,
+    UNKNOWN;
+
+    companion object {
+        fun fromStorage(value: String?): VehicleBodyType =
+            entries.firstOrNull { it.name == value?.uppercase(Locale.ROOT) } ?: UNKNOWN
+    }
+}
+
 enum class DriveTripPurpose {
     PERSONAL,
     BUSINESS,
@@ -75,7 +107,27 @@ data class DriveVehicle(
     val updatedAt: Instant,
     val deletedAt: Instant? = null,
     val deletePending: Boolean = false,
-    val syncState: DriveSyncState = DriveSyncState.LOCAL_PENDING
+    val syncState: DriveSyncState = DriveSyncState.LOCAL_PENDING,
+    val countryCode: String? = null,
+    val transmissionType: VehicleTransmissionType = VehicleTransmissionType.UNKNOWN,
+    val bodyType: VehicleBodyType = VehicleBodyType.UNKNOWN,
+    val color: String? = null,
+    val vin: String? = null,
+    val engineDisplacementCc: Int? = null,
+    val enginePowerKw: Int? = null,
+    val purchaseDate: Instant? = null,
+    val purchasePriceMinor: Long? = null,
+    val currencyCode: String? = null,
+    val primaryPhotoId: String? = null,
+    val trimLevel: String? = null,
+    val engineCode: String? = null,
+    val registrationDate: Instant? = null,
+    val inspectionDueDate: Instant? = null,
+    val insuranceDueDate: Instant? = null,
+    val tireSize: String? = null,
+    val schemaVersion: Int = DRIVE_VEHICLE_SCHEMA_VERSION,
+    val primaryPhotoRevision: Long = 0L,
+    val primaryPhotoOperationId: String? = null
 )
 
 data class DriveTrip(
@@ -109,8 +161,26 @@ data class DriveVehicleDraft(
     val initialOdometerKm: Double? = null,
     val currentOdometerKm: Double? = null,
     val assignedPersonId: String? = null,
-    val notes: String? = null
+    val notes: String? = null,
+    val countryCode: String? = null,
+    val transmissionType: VehicleTransmissionType = VehicleTransmissionType.UNKNOWN,
+    val bodyType: VehicleBodyType = VehicleBodyType.UNKNOWN,
+    val color: String? = null,
+    val vin: String? = null,
+    val engineDisplacementCc: Int? = null,
+    val enginePowerKw: Int? = null,
+    val purchaseDate: Instant? = null,
+    val purchasePriceMinor: Long? = null,
+    val currencyCode: String? = null,
+    val trimLevel: String? = null,
+    val engineCode: String? = null,
+    val registrationDate: Instant? = null,
+    val inspectionDueDate: Instant? = null,
+    val insuranceDueDate: Instant? = null,
+    val tireSize: String? = null
 )
+
+const val DRIVE_VEHICLE_SCHEMA_VERSION = 2
 
 data class DriveTripDraft(
     val vehicleId: String,

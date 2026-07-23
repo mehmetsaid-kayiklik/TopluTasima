@@ -2,6 +2,7 @@ package com.example.toplutasima.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.Index
+import androidx.room.ColumnInfo
 
 @Entity(
     tableName = "drive_vehicles",
@@ -27,5 +28,25 @@ data class DriveVehicleEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long? = null,
-    val syncState: String
+    val syncState: String,
+    val countryCode: String? = null,
+    val transmissionType: String? = null,
+    val bodyType: String? = null,
+    val color: String? = null,
+    val vin: String? = null,
+    val engineDisplacementCc: Int? = null,
+    val enginePowerKw: Int? = null,
+    val purchaseDate: Long? = null,
+    val purchasePriceMinor: Long? = null,
+    val currencyCode: String? = null,
+    val primaryPhotoId: String? = null,
+    val trimLevel: String? = null,
+    val engineCode: String? = null,
+    val registrationDate: Long? = null,
+    val inspectionDueDate: Long? = null,
+    val insuranceDueDate: Long? = null,
+    val tireSize: String? = null,
+    @ColumnInfo(defaultValue = "2") val schemaVersion: Int = 2,
+    @ColumnInfo(defaultValue = "0") val primaryPhotoRevision: Long = 0L,
+    val primaryPhotoOperationId: String? = null
 )

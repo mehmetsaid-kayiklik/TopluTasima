@@ -69,21 +69,39 @@ fun DriveVehiclesScreen(
         koinViewModel()
     } else {
         null
+    },
+    photoViewModel: VehiclePhotoViewModel? = if (DriveFeatureFlags.DRIVE_VEHICLE_PHOTOS) {
+        koinViewModel()
+    } else {
+        null
+    },
+    ledgerViewModel: VehicleLedgerViewModel? = if (DriveFeatureFlags.DRIVE_VEHICLE_LEDGER) {
+        koinViewModel()
+    } else {
+        null
     }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val assignmentState = assignmentViewModel?.uiState?.collectAsStateWithLifecycle()?.value
         ?: VehicleAssignmentUiState()
+    val photoState = photoViewModel?.state?.collectAsStateWithLifecycle()?.value
+        ?: VehiclePhotoUiState()
+    val ledgerState = ledgerViewModel?.state?.collectAsStateWithLifecycle()?.value
+        ?: VehicleLedgerUiState()
     LaunchedEffect(initialVehicleId) {
         initialVehicleId?.let(viewModel::openExternalVehicle)
     }
     LaunchedEffect(state.selectedVehicle?.id) {
         assignmentViewModel?.openVehicle(state.selectedVehicle?.id)
+        photoViewModel?.openVehicle(state.selectedVehicle?.id)
+        ledgerViewModel?.bindVehicle(state.selectedVehicle?.id)
     }
     BackHandler(
-        enabled = state.featureEnabled && state.destination != DriveDestination.VehicleList,
+        enabled = state.featureEnabled && ledgerState.page == null &&
+            state.destination != DriveDestination.VehicleList,
         onBack = viewModel::goBack
     )
+    BackHandler(enabled = ledgerState.page != null) { ledgerViewModel?.close() }
 
     if (!state.featureEnabled) return
 
@@ -92,7 +110,32 @@ fun DriveVehiclesScreen(
             .fillMaxSize()
             .testTag(DriveUiTestTags.ROOT)
     ) {
-        when (state.destination) {
+        if (ledgerState.page != null) {
+            VehicleLedgerPageScreen(
+                state = ledgerState,
+                onBack = { ledgerViewModel?.close() },
+                onSaveOdometer = { entryId, kilometers ->
+                    ledgerViewModel?.saveOdometer(entryId, kilometers)
+                },
+                onDeleteOdometer = { ledgerViewModel?.deleteOdometer(it) },
+                onRestoreOdometer = { ledgerViewModel?.restoreOdometer(it) },
+                onSaveExpense = { expenseId, amount, currency, exponent, category, kind, vendor, notes ->
+                    ledgerViewModel?.saveExpense(
+                        expenseId, amount, currency, exponent, category, kind, vendor, notes
+                    )
+                },
+                onDeleteExpense = { ledgerViewModel?.deleteExpense(it) },
+                onRestoreExpense = { ledgerViewModel?.restoreExpense(it) },
+                onSaveReminder = { reminderId, title, day, odometer, type ->
+                    ledgerViewModel?.saveReminder(reminderId, title, day, odometer, type)
+                },
+                onCompleteReminder = { ledgerViewModel?.completeReminder(it) },
+                onSnoozeReminder = { reminderId, day -> ledgerViewModel?.snoozeReminder(reminderId, day) },
+                onDisableReminder = { ledgerViewModel?.disableReminder(it) },
+                onDeleteReminder = { ledgerViewModel?.deleteReminder(it) },
+                onRetry = { ledgerViewModel?.retrySync() }
+            )
+        } else when (state.destination) {
             DriveDestination.VehicleList -> DriveVehicleListScreen(
                 state = state,
                 onVehicleClick = viewModel::openVehicle,
@@ -123,6 +166,23 @@ fun DriveVehiclesScreen(
                 onRetry = {
                     val vehicleId = (state.destination as DriveDestination.VehicleDetail).vehicleId
                     viewModel.openVehicle(vehicleId)
+                },
+                photoSection = {
+                    VehiclePhotoGallerySection(
+                        state = photoState,
+                        onAdd = { photoViewModel?.add(it) },
+                        onDelete = { photoViewModel?.delete(it) },
+                        onSetPrimary = { photoViewModel?.setPrimary(it) },
+                        onMove = { photoId, direction -> photoViewModel?.move(photoId, direction) },
+                        onRetry = { photoViewModel?.retry(it) },
+                        onMessageShown = { photoViewModel?.clearMessage() }
+                    )
+                },
+                ledgerSection = {
+                    VehicleLedgerDashboardSection(
+                        state = ledgerState,
+                        onOpen = { ledgerViewModel?.open(it) }
+                    )
                 }
             )
             is DriveDestination.VehicleEditor -> DriveVehicleEditorScreen(

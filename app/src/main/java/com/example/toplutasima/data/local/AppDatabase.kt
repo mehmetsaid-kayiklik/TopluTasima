@@ -14,9 +14,20 @@ import com.example.toplutasima.data.local.dao.DriveFieldProvenanceDao
 import com.example.toplutasima.data.local.dao.DriveTripDao
 import com.example.toplutasima.data.local.dao.DriveVehicleDao
 import com.example.toplutasima.data.local.dao.DriveVehicleAssignmentDao
+import com.example.toplutasima.data.local.dao.DriveVehiclePhotoDao
+import com.example.toplutasima.data.local.dao.DrivePhotoOperationDao
+import com.example.toplutasima.data.local.dao.DrivePhotoSyncMetadataDao
+import com.example.toplutasima.data.local.dao.DrivePhotoSyncReceiptDao
 import com.example.toplutasima.data.local.dao.DriveAssignmentOperationDao
 import com.example.toplutasima.data.local.dao.DriveAssignmentSyncMetadataDao
 import com.example.toplutasima.data.local.dao.DriveAssignmentSyncReceiptDao
+import com.example.toplutasima.data.local.dao.DriveExpenseDao
+import com.example.toplutasima.data.local.dao.DriveLedgerConflictDao
+import com.example.toplutasima.data.local.dao.DriveLedgerOperationDao
+import com.example.toplutasima.data.local.dao.DriveLedgerSyncMetadataDao
+import com.example.toplutasima.data.local.dao.DriveLedgerSyncReceiptDao
+import com.example.toplutasima.data.local.dao.DriveOdometerEntryDao
+import com.example.toplutasima.data.local.dao.DriveReminderDao
 import com.example.toplutasima.data.local.dao.ProfileDao
 import com.example.toplutasima.data.local.dao.TripDao
 import com.example.toplutasima.data.local.dao.TripProfileLinkDao
@@ -30,6 +41,17 @@ import com.example.toplutasima.data.local.entity.DriveVehicleAssignmentEntity
 import com.example.toplutasima.data.local.entity.DriveAssignmentOperationEntity
 import com.example.toplutasima.data.local.entity.DriveAssignmentSyncMetadataEntity
 import com.example.toplutasima.data.local.entity.DriveAssignmentSyncReceiptEntity
+import com.example.toplutasima.data.local.entity.DriveVehiclePhotoEntity
+import com.example.toplutasima.data.local.entity.DrivePhotoOperationEntity
+import com.example.toplutasima.data.local.entity.DrivePhotoSyncMetadataEntity
+import com.example.toplutasima.data.local.entity.DrivePhotoSyncReceiptEntity
+import com.example.toplutasima.data.local.entity.DriveExpenseEntity
+import com.example.toplutasima.data.local.entity.DriveLedgerConflictEntity
+import com.example.toplutasima.data.local.entity.DriveLedgerOperationEntity
+import com.example.toplutasima.data.local.entity.DriveLedgerSyncMetadataEntity
+import com.example.toplutasima.data.local.entity.DriveLedgerSyncReceiptEntity
+import com.example.toplutasima.data.local.entity.DriveOdometerEntryEntity
+import com.example.toplutasima.data.local.entity.DriveReminderEntity
 import com.example.toplutasima.data.local.entity.ProfileEntity
 import com.example.toplutasima.data.local.entity.TripEntity
 import com.example.toplutasima.data.local.entity.TripProfileLinkEntity
@@ -48,10 +70,21 @@ import com.example.toplutasima.data.local.entity.TripProfileLinkEntity
         DriveVehicleAssignmentEntity::class,
         DriveAssignmentOperationEntity::class,
         DriveAssignmentSyncMetadataEntity::class,
-        DriveAssignmentSyncReceiptEntity::class
+        DriveAssignmentSyncReceiptEntity::class,
+        DriveVehiclePhotoEntity::class,
+        DrivePhotoOperationEntity::class,
+        DrivePhotoSyncMetadataEntity::class,
+        DrivePhotoSyncReceiptEntity::class,
+        DriveOdometerEntryEntity::class,
+        DriveExpenseEntity::class,
+        DriveReminderEntity::class,
+        DriveLedgerOperationEntity::class,
+        DriveLedgerSyncMetadataEntity::class,
+        DriveLedgerSyncReceiptEntity::class,
+        DriveLedgerConflictEntity::class
     ],
-    version = 11,
-    exportSchema = false
+    version = 13,
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
@@ -68,6 +101,17 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun driveAssignmentOperationDao(): DriveAssignmentOperationDao
     abstract fun driveAssignmentSyncMetadataDao(): DriveAssignmentSyncMetadataDao
     abstract fun driveAssignmentSyncReceiptDao(): DriveAssignmentSyncReceiptDao
+    abstract fun driveVehiclePhotoDao(): DriveVehiclePhotoDao
+    abstract fun drivePhotoOperationDao(): DrivePhotoOperationDao
+    abstract fun drivePhotoSyncMetadataDao(): DrivePhotoSyncMetadataDao
+    abstract fun drivePhotoSyncReceiptDao(): DrivePhotoSyncReceiptDao
+    abstract fun driveOdometerEntryDao(): DriveOdometerEntryDao
+    abstract fun driveExpenseDao(): DriveExpenseDao
+    abstract fun driveReminderDao(): DriveReminderDao
+    abstract fun driveLedgerOperationDao(): DriveLedgerOperationDao
+    abstract fun driveLedgerSyncMetadataDao(): DriveLedgerSyncMetadataDao
+    abstract fun driveLedgerSyncReceiptDao(): DriveLedgerSyncReceiptDao
+    abstract fun driveLedgerConflictDao(): DriveLedgerConflictDao
 
     companion object {
         @Volatile
@@ -659,6 +703,373 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Sprint 6B: additive extended vehicle profile and UID-scoped photo outbox. */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf(
+                    "countryCode TEXT",
+                    "transmissionType TEXT",
+                    "bodyType TEXT",
+                    "color TEXT",
+                    "vin TEXT",
+                    "engineDisplacementCc INTEGER",
+                    "enginePowerKw INTEGER",
+                    "purchaseDate INTEGER",
+                    "purchasePriceMinor INTEGER",
+                    "currencyCode TEXT",
+                    "primaryPhotoId TEXT",
+                    "trimLevel TEXT",
+                    "engineCode TEXT",
+                    "registrationDate INTEGER",
+                    "inspectionDueDate INTEGER",
+                    "insuranceDueDate INTEGER",
+                    "tireSize TEXT",
+                    "schemaVersion INTEGER NOT NULL DEFAULT 2",
+                    "primaryPhotoRevision INTEGER NOT NULL DEFAULT 0",
+                    "primaryPhotoOperationId TEXT"
+                ).forEach { definition ->
+                    db.execSQL("ALTER TABLE `drive_vehicles` ADD COLUMN $definition")
+                }
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_vehicle_photos` (
+                        `ownerUid` TEXT NOT NULL,
+                        `photoId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `localUri` TEXT,
+                        `localPreparedPath` TEXT,
+                        `storagePath` TEXT,
+                        `contentHash` TEXT,
+                        `mimeType` TEXT,
+                        `width` INTEGER,
+                        `height` INTEGER,
+                        `sizeBytes` INTEGER,
+                        `sortOrder` INTEGER NOT NULL,
+                        `isPrimary` INTEGER NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `revision` INTEGER NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `clientUpdatedAt` INTEGER NOT NULL,
+                        `serverUpdatedAtSeconds` INTEGER,
+                        `serverUpdatedAtNanos` INTEGER,
+                        `deletedAt` INTEGER,
+                        `uploadState` TEXT NOT NULL,
+                        `remoteState` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `lastErrorCode` TEXT,
+                        `healthCode` TEXT,
+                        PRIMARY KEY(`ownerUid`, `photoId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_vehicleId` ON `drive_vehicle_photos` (`ownerUid`, `vehicleId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_uploadState` ON `drive_vehicle_photos` (`ownerUid`, `uploadState`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_deletedAt` ON `drive_vehicle_photos` (`ownerUid`, `deletedAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_vehicleId_sortOrder` ON `drive_vehicle_photos` (`ownerUid`, `vehicleId`, `sortOrder`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_contentHash` ON `drive_vehicle_photos` (`ownerUid`, `contentHash`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_vehicle_photos_ownerUid_serverUpdatedAtSeconds_serverUpdatedAtNanos_photoId` ON `drive_vehicle_photos` (`ownerUid`, `serverUpdatedAtSeconds`, `serverUpdatedAtNanos`, `photoId`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_photo_operations` (
+                        `ownerUid` TEXT NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `photoId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `targetRevision` INTEGER NOT NULL,
+                        `targetPrimaryPhotoId` TEXT,
+                        `expectedContentHash` TEXT,
+                        `state` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `attemptCount` INTEGER NOT NULL,
+                        `nextAttemptAt` INTEGER NOT NULL,
+                        `claimedAt` INTEGER,
+                        `lastErrorCode` TEXT,
+                        PRIMARY KEY(`ownerUid`, `operationId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_photoId` ON `drive_photo_operations` (`ownerUid`, `photoId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_vehicleId` ON `drive_photo_operations` (`ownerUid`, `vehicleId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_state_nextAttemptAt_createdAt` ON `drive_photo_operations` (`ownerUid`, `state`, `nextAttemptAt`, `createdAt`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_photo_operations_ownerUid_photoId_type_targetRevision` ON `drive_photo_operations` (`ownerUid`, `photoId`, `type`, `targetRevision`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_photo_sync_metadata` (
+                        `ownerUid` TEXT NOT NULL,
+                        `initialHydrationCompleted` INTEGER NOT NULL,
+                        `cursorSeconds` INTEGER,
+                        `cursorNanos` INTEGER,
+                        `cursorDocumentPath` TEXT,
+                        `lastSuccessfulPullAt` INTEGER,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`ownerUid`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_photo_sync_receipts` (
+                        `ownerUid` TEXT NOT NULL,
+                        `receiptId` TEXT NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `photoId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `provenance` TEXT NOT NULL,
+                        `revision` INTEGER NOT NULL,
+                        `winningOperationId` TEXT,
+                        `attemptCount` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `finishedAt` INTEGER,
+                        `errorCode` TEXT,
+                        PRIMARY KEY(`ownerUid`, `receiptId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_photo_sync_receipts_ownerUid_operationId` ON `drive_photo_sync_receipts` (`ownerUid`, `operationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_photo_sync_receipts_ownerUid_vehicleId_createdAt` ON `drive_photo_sync_receipts` (`ownerUid`, `vehicleId`, `createdAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_photo_sync_receipts_ownerUid_status_createdAt` ON `drive_photo_sync_receipts` (`ownerUid`, `status`, `createdAt`)")
+            }
+        }
+
+        /** Sprint 7A: additive UID-scoped vehicle ledger, odometer, expense and reminder core. */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_odometer_entries` (
+                        `ownerUid` TEXT NOT NULL,
+                        `odometerEntryId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `observedAt` INTEGER,
+                        `odometerMeters` INTEGER NOT NULL,
+                        `quality` TEXT NOT NULL,
+                        `readingRole` TEXT NOT NULL,
+                        `odometerSeriesId` TEXT NOT NULL,
+                        `sourceRecordType` TEXT,
+                        `sourceRecordId` TEXT,
+                        `correctionOfEntryId` TEXT,
+                        `resetReason` TEXT,
+                        `notes` TEXT,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `revision` INTEGER NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `clientUpdatedAt` INTEGER NOT NULL,
+                        `serverUpdatedAtSeconds` INTEGER,
+                        `serverUpdatedAtNanos` INTEGER,
+                        `deletedAt` INTEGER,
+                        `syncState` TEXT NOT NULL,
+                        `healthCode` TEXT,
+                        PRIMARY KEY(`ownerUid`, `odometerEntryId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_odometer_entries_ownerUid_vehicleId_deletedAt_observedAt_odometerEntryId` ON `drive_odometer_entries` (`ownerUid`, `vehicleId`, `deletedAt`, `observedAt`, `odometerEntryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_odometer_entries_ownerUid_vehicleId_odometerSeriesId_odometerMeters` ON `drive_odometer_entries` (`ownerUid`, `vehicleId`, `odometerSeriesId`, `odometerMeters`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_odometer_entries_ownerUid_sourceRecordType_sourceRecordId_readingRole` ON `drive_odometer_entries` (`ownerUid`, `sourceRecordType`, `sourceRecordId`, `readingRole`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_odometer_entries_ownerUid_syncState_clientUpdatedAt` ON `drive_odometer_entries` (`ownerUid`, `syncState`, `clientUpdatedAt`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_odometer_entries_ownerUid_operationId` ON `drive_odometer_entries` (`ownerUid`, `operationId`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_expenses` (
+                        `ownerUid` TEXT NOT NULL,
+                        `expenseId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `occurredAt` INTEGER NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `transactionKind` TEXT NOT NULL,
+                        `amountMinor` INTEGER NOT NULL,
+                        `currencyCode` TEXT NOT NULL,
+                        `currencyExponent` INTEGER NOT NULL,
+                        `vendorName` TEXT,
+                        `notes` TEXT,
+                        `referenceNumber` TEXT,
+                        `periodStartEpochDay` INTEGER,
+                        `periodEndEpochDay` INTEGER,
+                        `dueEpochDay` INTEGER,
+                        `odometerEntryId` TEXT,
+                        `odometerMetersSnapshot` INTEGER,
+                        `splitGroupId` TEXT,
+                        `duplicateFingerprint` TEXT,
+                        `relatedExpenseId` TEXT,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `revision` INTEGER NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `clientUpdatedAt` INTEGER NOT NULL,
+                        `serverUpdatedAtSeconds` INTEGER,
+                        `serverUpdatedAtNanos` INTEGER,
+                        `deletedAt` INTEGER,
+                        `syncState` TEXT NOT NULL,
+                        `healthCode` TEXT,
+                        PRIMARY KEY(`ownerUid`, `expenseId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_expenses_ownerUid_vehicleId_deletedAt_occurredAt_expenseId` ON `drive_expenses` (`ownerUid`, `vehicleId`, `deletedAt`, `occurredAt`, `expenseId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_expenses_ownerUid_vehicleId_category_occurredAt` ON `drive_expenses` (`ownerUid`, `vehicleId`, `category`, `occurredAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_expenses_ownerUid_vehicleId_currencyCode_currencyExponent_occurredAt` ON `drive_expenses` (`ownerUid`, `vehicleId`, `currencyCode`, `currencyExponent`, `occurredAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_expenses_ownerUid_syncState_clientUpdatedAt` ON `drive_expenses` (`ownerUid`, `syncState`, `clientUpdatedAt`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_expenses_ownerUid_operationId` ON `drive_expenses` (`ownerUid`, `operationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_expenses_ownerUid_duplicateFingerprint` ON `drive_expenses` (`ownerUid`, `duplicateFingerprint`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_reminders` (
+                        `ownerUid` TEXT NOT NULL,
+                        `reminderId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `reminderType` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `dueEpochDay` INTEGER,
+                        `dueOdometerMeters` INTEGER,
+                        `recurrenceMonths` INTEGER,
+                        `recurrenceDistanceMeters` INTEGER,
+                        `recurrenceAnchor` TEXT NOT NULL,
+                        `leadDays` INTEGER,
+                        `leadDistanceMeters` INTEGER,
+                        `snoozedUntilEpochDay` INTEGER,
+                        `linkedServiceRecordId` TEXT,
+                        `lastCompletedServiceRecordId` TEXT,
+                        `lastCompletedAt` INTEGER,
+                        `lastCompletedOdometerMeters` INTEGER,
+                        `notes` TEXT,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `revision` INTEGER NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `source` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `clientUpdatedAt` INTEGER NOT NULL,
+                        `serverUpdatedAtSeconds` INTEGER,
+                        `serverUpdatedAtNanos` INTEGER,
+                        `deletedAt` INTEGER,
+                        `syncState` TEXT NOT NULL,
+                        `healthCode` TEXT,
+                        PRIMARY KEY(`ownerUid`, `reminderId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_reminders_ownerUid_vehicleId_status_dueEpochDay` ON `drive_reminders` (`ownerUid`, `vehicleId`, `status`, `dueEpochDay`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_reminders_ownerUid_vehicleId_status_dueOdometerMeters` ON `drive_reminders` (`ownerUid`, `vehicleId`, `status`, `dueOdometerMeters`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_reminders_ownerUid_linkedServiceRecordId` ON `drive_reminders` (`ownerUid`, `linkedServiceRecordId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_reminders_ownerUid_syncState_clientUpdatedAt` ON `drive_reminders` (`ownerUid`, `syncState`, `clientUpdatedAt`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_reminders_ownerUid_operationId` ON `drive_reminders` (`ownerUid`, `operationId`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_ledger_operations` (
+                        `ownerUid` TEXT NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `logicalBatchId` TEXT NOT NULL,
+                        `entityType` TEXT NOT NULL,
+                        `recordId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `targetRevision` INTEGER NOT NULL,
+                        `state` TEXT NOT NULL,
+                        `attemptCount` INTEGER NOT NULL,
+                        `nextAttemptAt` INTEGER NOT NULL,
+                        `claimedAt` INTEGER,
+                        `claimedBy` TEXT,
+                        `safeErrorCode` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`ownerUid`, `operationId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_ledger_operations_ownerUid_entityType_recordId_targetRevision` ON `drive_ledger_operations` (`ownerUid`, `entityType`, `recordId`, `targetRevision`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_operations_ownerUid_state_nextAttemptAt_createdAt` ON `drive_ledger_operations` (`ownerUid`, `state`, `nextAttemptAt`, `createdAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_operations_ownerUid_vehicleId_createdAt` ON `drive_ledger_operations` (`ownerUid`, `vehicleId`, `createdAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_operations_ownerUid_logicalBatchId` ON `drive_ledger_operations` (`ownerUid`, `logicalBatchId`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_ledger_sync_metadata` (
+                        `ownerUid` TEXT NOT NULL,
+                        `collectionType` TEXT NOT NULL,
+                        `initialHydrationCompleted` INTEGER NOT NULL,
+                        `cursorSeconds` INTEGER,
+                        `cursorNanos` INTEGER,
+                        `cursorDocumentId` TEXT,
+                        `lastSuccessfulPullAt` INTEGER,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`ownerUid`, `collectionType`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_ledger_sync_receipts` (
+                        `ownerUid` TEXT NOT NULL,
+                        `receiptId` TEXT NOT NULL,
+                        `operationId` TEXT NOT NULL,
+                        `logicalBatchId` TEXT,
+                        `entityType` TEXT NOT NULL,
+                        `recordId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `kind` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `provenance` TEXT NOT NULL,
+                        `revision` INTEGER,
+                        `winningOperationId` TEXT,
+                        `attemptCount` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `finishedAt` INTEGER,
+                        `safeErrorCode` TEXT,
+                        PRIMARY KEY(`ownerUid`, `receiptId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_drive_ledger_sync_receipts_ownerUid_operationId` ON `drive_ledger_sync_receipts` (`ownerUid`, `operationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_sync_receipts_ownerUid_entityType_recordId_createdAt` ON `drive_ledger_sync_receipts` (`ownerUid`, `entityType`, `recordId`, `createdAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_sync_receipts_ownerUid_status_createdAt` ON `drive_ledger_sync_receipts` (`ownerUid`, `status`, `createdAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_sync_receipts_ownerUid_vehicleId_createdAt` ON `drive_ledger_sync_receipts` (`ownerUid`, `vehicleId`, `createdAt`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `drive_ledger_conflicts` (
+                        `ownerUid` TEXT NOT NULL,
+                        `conflictId` TEXT NOT NULL,
+                        `entityType` TEXT NOT NULL,
+                        `recordId` TEXT NOT NULL,
+                        `vehicleId` TEXT NOT NULL,
+                        `localOperationId` TEXT NOT NULL,
+                        `remoteOperationId` TEXT NOT NULL,
+                        `localRevision` INTEGER NOT NULL,
+                        `remoteRevision` INTEGER NOT NULL,
+                        `localSnapshotJson` TEXT NOT NULL,
+                        `remoteSnapshotJson` TEXT NOT NULL,
+                        `winnerOperationId` TEXT NOT NULL,
+                        `reason` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `resolvedAt` INTEGER,
+                        PRIMARY KEY(`ownerUid`, `conflictId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_conflicts_ownerUid_entityType_recordId_resolvedAt` ON `drive_ledger_conflicts` (`ownerUid`, `entityType`, `recordId`, `resolvedAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_conflicts_ownerUid_vehicleId_createdAt` ON `drive_ledger_conflicts` (`ownerUid`, `vehicleId`, `createdAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_conflicts_ownerUid_localOperationId` ON `drive_ledger_conflicts` (`ownerUid`, `localOperationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_drive_ledger_conflicts_ownerUid_remoteOperationId` ON `drive_ledger_conflicts` (`ownerUid`, `remoteOperationId`)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             val userId = CurrentUserProvider.requireUserId()
             return INSTANCE ?: synchronized(this) {
@@ -675,7 +1086,9 @@ abstract class AppDatabase : RoomDatabase() {
                     migration7To8(userId),
                     MIGRATION_8_9,
                     MIGRATION_9_10,
-                    MIGRATION_10_11
+                    MIGRATION_10_11,
+                    MIGRATION_11_12,
+                    MIGRATION_12_13
                 )
                 .build()
                 INSTANCE = instance

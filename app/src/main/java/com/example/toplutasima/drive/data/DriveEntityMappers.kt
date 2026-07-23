@@ -8,6 +8,8 @@ import com.example.toplutasima.drive.model.DriveTripEntrySource
 import com.example.toplutasima.drive.model.DriveTripPurpose
 import com.example.toplutasima.drive.model.DriveVehicle
 import com.example.toplutasima.drive.model.VehicleFuelType
+import com.example.toplutasima.drive.model.VehicleBodyType
+import com.example.toplutasima.drive.model.VehicleTransmissionType
 import java.time.Instant
 
 fun DriveVehicleEntity.toDomain(): DriveVehicle = DriveVehicle(
@@ -27,7 +29,27 @@ fun DriveVehicleEntity.toDomain(): DriveVehicle = DriveVehicle(
     updatedAt = Instant.ofEpochMilli(updatedAt),
     deletedAt = deletedAt?.let(Instant::ofEpochMilli),
     deletePending = deletedAt != null && syncState != DriveSyncState.SYNCED.name,
-    syncState = DriveSyncState.fromStorage(syncState)
+    syncState = DriveSyncState.fromStorage(syncState),
+    countryCode = countryCode,
+    transmissionType = VehicleTransmissionType.fromStorage(transmissionType),
+    bodyType = VehicleBodyType.fromStorage(bodyType),
+    color = color,
+    vin = vin,
+    engineDisplacementCc = engineDisplacementCc,
+    enginePowerKw = enginePowerKw,
+    purchaseDate = purchaseDate?.let(Instant::ofEpochMilli),
+    purchasePriceMinor = purchasePriceMinor,
+    currencyCode = currencyCode,
+    primaryPhotoId = primaryPhotoId,
+    trimLevel = trimLevel,
+    engineCode = engineCode,
+    registrationDate = registrationDate?.let(Instant::ofEpochMilli),
+    inspectionDueDate = inspectionDueDate?.let(Instant::ofEpochMilli),
+    insuranceDueDate = insuranceDueDate?.let(Instant::ofEpochMilli),
+    tireSize = tireSize,
+    schemaVersion = schemaVersion,
+    primaryPhotoRevision = primaryPhotoRevision,
+    primaryPhotoOperationId = primaryPhotoOperationId
 )
 
 fun DriveVehicle.toEntity(): DriveVehicleEntity = DriveVehicleEntity(
@@ -46,7 +68,27 @@ fun DriveVehicle.toEntity(): DriveVehicleEntity = DriveVehicleEntity(
     createdAt = createdAt.toEpochMilli(),
     updatedAt = updatedAt.toEpochMilli(),
     deletedAt = deletedAt?.toEpochMilli(),
-    syncState = syncState.name
+    syncState = syncState.name,
+    countryCode = countryCode.normalizedOrNull()?.uppercase(),
+    transmissionType = transmissionType.name,
+    bodyType = bodyType.name,
+    color = color.normalizedOrNull(),
+    vin = vin.normalizedOrNull()?.uppercase(),
+    engineDisplacementCc = engineDisplacementCc,
+    enginePowerKw = enginePowerKw,
+    purchaseDate = purchaseDate?.toEpochMilli(),
+    purchasePriceMinor = purchasePriceMinor,
+    currencyCode = currencyCode.normalizedOrNull()?.uppercase(),
+    primaryPhotoId = primaryPhotoId.normalizedOrNull(),
+    trimLevel = trimLevel.normalizedOrNull(),
+    engineCode = engineCode.normalizedOrNull(),
+    registrationDate = registrationDate?.toEpochMilli(),
+    inspectionDueDate = inspectionDueDate?.toEpochMilli(),
+    insuranceDueDate = insuranceDueDate?.toEpochMilli(),
+    tireSize = tireSize.normalizedOrNull(),
+    schemaVersion = schemaVersion,
+    primaryPhotoRevision = primaryPhotoRevision,
+    primaryPhotoOperationId = primaryPhotoOperationId.normalizedOrNull()
 )
 
 fun DriveTripEntity.toDomain(): DriveTrip = DriveTrip(

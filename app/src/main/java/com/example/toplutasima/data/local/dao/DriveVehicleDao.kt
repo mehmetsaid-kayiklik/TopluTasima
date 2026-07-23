@@ -39,6 +39,12 @@ interface DriveVehicleDao {
         "SELECT * FROM drive_vehicles " +
             "WHERE userId = :userId AND id = :id LIMIT 1"
     )
+    fun observeVehicleIncludingDeleted(userId: String, id: String): Flow<DriveVehicleEntity?>
+
+    @Query(
+        "SELECT * FROM drive_vehicles " +
+            "WHERE userId = :userId AND id = :id LIMIT 1"
+    )
     suspend fun getVehicle(userId: String, id: String): DriveVehicleEntity?
 
     @Query(
@@ -160,5 +166,16 @@ interface DriveVehicleDao {
         userId: String,
         vehicleId: String,
         personId: String?
+    ): Int
+
+    /** Best-effort compatibility projection from the canonical odometer ledger. */
+    @Query(
+        "UPDATE drive_vehicles SET currentOdometerKm = :currentOdometerKm " +
+            "WHERE userId = :userId AND id = :vehicleId"
+    )
+    suspend fun setCurrentOdometerMirror(
+        userId: String,
+        vehicleId: String,
+        currentOdometerKm: Double?
     ): Int
 }
